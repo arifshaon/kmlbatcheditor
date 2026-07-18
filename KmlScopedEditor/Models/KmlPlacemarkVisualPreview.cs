@@ -1,4 +1,6 @@
-using System.Windows.Media;
+using MediaBrush = System.Windows.Media.Brush;
+using MediaBrushes = System.Windows.Media.Brushes;
+using MediaImageSource = System.Windows.Media.ImageSource;
 
 namespace KmlScopedEditor.Models;
 
@@ -22,7 +24,7 @@ public sealed class KmlPlacemarkAppearancePreview
 
     public string? LocalIconPath { get; init; }
 
-    public ImageSource? IconImage { get; init; }
+    public MediaImageSource? IconImage { get; init; }
 
     public bool HasIconImage => IconImage is not null;
 
@@ -30,11 +32,11 @@ public sealed class KmlPlacemarkAppearancePreview
 
     public double LabelFontSize { get; init; } = 16d;
 
-    public Brush IconTintBrush { get; init; } = Brushes.Transparent;
+    public MediaBrush IconTintBrush { get; init; } = MediaBrushes.Transparent;
 
     public double IconTintOpacity { get; init; }
 
-    public Brush LabelBrush { get; init; } = Brushes.White;
+    public MediaBrush LabelBrush { get; init; } = MediaBrushes.White;
 
     public string KmlIconColor { get; init; } = "ffffffff";
 
