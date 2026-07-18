@@ -1,8 +1,6 @@
-using System.Windows.Controls;
-
 namespace KmlScopedEditor.Views;
 
-public partial class PlacemarkPreviewControl : UserControl
+public partial class PlacemarkPreviewControl : System.Windows.Controls.UserControl
 {
     public PlacemarkPreviewControl()
     {
