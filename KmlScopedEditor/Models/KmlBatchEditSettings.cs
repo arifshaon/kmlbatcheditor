@@ -1,3 +1,4 @@
+using System.IO;
 using KmlScopedEditor.ViewModels;
 
 namespace KmlScopedEditor.Models;
@@ -8,6 +9,8 @@ namespace KmlScopedEditor.Models;
 /// </summary>
 public sealed class KmlBatchEditSettings : ViewModelBase
 {
+    private bool _changeIconImage;
+    private string _iconFilePath = string.Empty;
     private bool _changeIconScale;
     private string _iconScaleText = "1";
     private bool _changeIconColor;
@@ -16,6 +19,31 @@ public sealed class KmlBatchEditSettings : ViewModelBase
     private string _labelScaleText = "1";
     private bool _changeLabelColor;
     private string _labelColorText = "#FFFFFF";
+
+    public bool ChangeIconImage
+    {
+        get => _changeIconImage;
+        set
+        {
+            if (SetProperty(ref _changeIconImage, value))
+                OnPropertyChanged(nameof(HasAnyChange));
+        }
+    }
+
+    public string IconFilePath
+    {
+        get => _iconFilePath;
+        set
+        {
+            if (SetProperty(ref _iconFilePath, value))
+                OnPropertyChanged(nameof(IconFileNameDisplay));
+        }
+    }
+
+    public string IconFileNameDisplay =>
+        string.IsNullOrWhiteSpace(IconFilePath)
+            ? "No icon file selected"
+            : Path.GetFileName(IconFilePath);
 
     public bool ChangeIconScale
     {
@@ -88,6 +116,7 @@ public sealed class KmlBatchEditSettings : ViewModelBase
     }
 
     public bool HasAnyChange =>
+        ChangeIconImage ||
         ChangeIconScale ||
         ChangeIconColor ||
         ChangeLabelScale ||
