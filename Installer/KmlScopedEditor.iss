@@ -1,9 +1,10 @@
 #define MyAppName "KML Scoped Editor"
 #ifndef MyAppVersion
-  #define MyAppVersion "1.0.0"
+  #define MyAppVersion "1.1.0"
 #endif
 #define MyAppExeName "KmlScopedEditor.exe"
 #define MyAppPublisher "Arif Shaon"
+#define MyAppDescription "Batch-edit KML and KMZ placemark styles, preview proposed changes, and bundle custom icons into KMZ files."
 
 [Setup]
 ; Do not change this AppId in future versions. Keeping it stable allows
@@ -13,6 +14,7 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+AppComments={#MyAppDescription}
 DefaultDirName={localappdata}\Programs\KML Scoped Editor
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
@@ -25,11 +27,13 @@ WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\{#MyAppExeName}
+UninstallDisplayName={#MyAppName} {#MyAppVersion}
 CloseApplications=yes
 RestartApplications=no
 VersionInfoVersion={#MyAppVersion}.0
 VersionInfoProductName={#MyAppName}
 VersionInfoProductVersion={#MyAppVersion}
+VersionInfoDescription={#MyAppDescription}
 VersionInfoCompany={#MyAppPublisher}
 UsePreviousAppDir=yes
 
@@ -40,7 +44,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
 
 [Files]
-; Include the complete self-contained publish output.
+; Include the complete self-contained publish output for the current source.
+; This includes the placemark preview UI and custom icon/KMZ support.
 Source: "..\artifacts\publish\win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
