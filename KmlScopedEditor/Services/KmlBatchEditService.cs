@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO;
 using System.Xml.Linq;
 using KmlScopedEditor.Models;
 
@@ -19,13 +20,14 @@ public sealed class KmlBatchEditService
         KmlDocumentContext context,
         KmlBatchEditSettings settings,
         IProgress<OperationProgress>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? iconHrefOverride = null)
     {
         ArgumentNullException.ThrowIfNull(placemarks);
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (!TryBuildChangeSet(settings, out var changes, out var error))
+        if (!TryBuildChangeSet(settings, iconHrefOverride, out var changes, out var error))
         {
             return new KmlBatchEditPreview
             {
@@ -120,13 +122,14 @@ public sealed class KmlBatchEditService
         KmlDocumentContext context,
         KmlBatchEditSettings settings,
         IProgress<OperationProgress>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? iconHrefOverride = null)
     {
         ArgumentNullException.ThrowIfNull(placemarks);
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(settings);
 
-        if (!TryBuildChangeSet(settings, out var changes, out var error))
+        if (!TryBuildChangeSet(settings, iconHrefOverride, out var changes, out var error))
             throw new InvalidOperationException(error);
 
         if (placemarks.Count == 0)
@@ -168,6 +171,7 @@ public sealed class KmlBatchEditService
 
     private static bool TryBuildChangeSet(
         KmlBatchEditSettings settings,
+        string? iconHrefOverride,
         out StyleChangeSet changes,
         out string error)
     {
@@ -180,10 +184,45 @@ public sealed class KmlBatchEditService
             return false;
         }
 
+        string? iconHref = null;
+        string? iconFileName = null;
         string? iconScale = null;
         string? labelScale = null;
         string? iconColor = null;
         string? labelColor = null;
+
+        if (settings.ChangeIconImage)
+        {
+            var iconPath = settings.IconFilePath?.Trim();
+
+            if (string.IsNullOrWhiteSpace(iconPath))
+            {
+                error = "Choose an icon image file first.";
+                return false;
+            }
+
+            if (!File.Exists(iconPath))
+            {
+                error = "The selected icon image could not be found.";
+                return false;
+            }
+
+            var supportedExtensions = new HashSet<string>(
+                new[] { ".png", ".jpg", ".jpeg", ".gif", ".bmp" },
+                StringComparer.OrdinalIgnoreCase);
+
+            if (!supportedExtensions.Contains(Path.GetExtension(iconPath)))
+            {
+                error = "The icon must be a PNG, JPG, JPEG, GIF, or BMP image.";
+                return false;
+            }
+
+            iconHref = !string.IsNullOrWhiteSpace(iconHrefOverride)
+                ? iconHrefOverride.Trim()
+                : new Uri(Path.GetFullPath(iconPath)).AbsoluteUri;
+
+            iconFileName = Path.GetFileName(iconPath);
+        }
 
         if (settings.ChangeIconScale &&
             !TryNormalizeScale(
@@ -227,6 +266,8 @@ public sealed class KmlBatchEditService
 
         changes = new StyleChangeSet
         {
+            IconHref = iconHref,
+            IconFileName = iconFileName,
             IconScale = iconScale,
             IconColor = iconColor,
             LabelScale = labelScale,
@@ -329,6 +370,9 @@ public sealed class KmlBatchEditService
     {
         var lines = new List<string>();
 
+        if (changes.IconHref is not null)
+            lines.Add($"• Icon image → {changes.IconFileName ?? changes.IconHref}");
+
         if (changes.IconScale is not null)
             lines.Add($"• Icon size → {changes.IconScale}");
 
@@ -373,6 +417,10 @@ public sealed class KmlBatchEditService
 
     private sealed class StyleChangeSet
     {
+        public string? IconHref { get; init; }
+
+        public string? IconFileName { get; init; }
+
         public string? IconScale { get; init; }
 
         public string? IconColor { get; init; }
@@ -606,10 +654,37 @@ public sealed class KmlBatchEditService
         XElement style,
         StyleChangeSet changes)
     {
-        if (changes.IconColor is not null ||
+        if (changes.IconHref is not null ||
+            changes.IconColor is not null ||
             changes.IconScale is not null)
         {
             var iconStyle = GetOrCreateSubStyle(style, "IconStyle");
+
+            if (changes.IconHref is not null)
+            {
+                var icon = GetOrCreateOrderedChild(
+                    iconStyle,
+                    "Icon",
+                    "color",
+                    "colorMode",
+                    "scale",
+                    "heading",
+                    "Icon",
+                    "hotSpot");
+
+                SetOrderedChildValue(
+                    icon,
+                    "href",
+                    changes.IconHref,
+                    "href",
+                    "refreshMode",
+                    "refreshInterval",
+                    "viewRefreshMode",
+                    "viewRefreshTime",
+                    "viewBoundScale",
+                    "viewFormat",
+                    "httpQuery");
+            }
 
             if (changes.IconColor is not null)
             {
@@ -703,6 +778,35 @@ public sealed class KmlBatchEditService
             nextElement.AddBeforeSelf(newElement);
         else
             style.Add(newElement);
+
+        return newElement;
+    }
+
+    private static XElement GetOrCreateOrderedChild(
+        XElement parent,
+        string localName,
+        params string[] order)
+    {
+        var existing = parent.Element(KmlNs + localName);
+
+        if (existing is not null)
+            return existing;
+
+        var newElement = new XElement(KmlNs + localName);
+        var targetIndex = Array.IndexOf(order, localName);
+
+        var nextElement = parent
+            .Elements()
+            .FirstOrDefault(element =>
+            {
+                var elementIndex = Array.IndexOf(order, element.Name.LocalName);
+                return elementIndex > targetIndex;
+            });
+
+        if (nextElement is not null)
+            nextElement.AddBeforeSelf(newElement);
+        else
+            parent.Add(newElement);
 
         return newElement;
     }
