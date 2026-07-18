@@ -1,9 +1,12 @@
 using System.Globalization;
 using System.IO;
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Xml.Linq;
 using KmlScopedEditor.Models;
+using MediaBrush = System.Windows.Media.Brush;
+using MediaColor = System.Windows.Media.Color;
+using MediaImageSource = System.Windows.Media.ImageSource;
+using MediaSolidColorBrush = System.Windows.Media.SolidColorBrush;
 
 namespace KmlScopedEditor.Services;
 
@@ -142,7 +145,7 @@ public sealed class KmlPreviewService
         };
     }
 
-    private static ImageSource? LoadImage(string? path)
+    private static MediaImageSource? LoadImage(string? path)
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
             return null;
@@ -223,7 +226,7 @@ public sealed class KmlPreviewService
         return $"{alpha}{blue}{green}{red}".ToLowerInvariant();
     }
 
-    private static Brush CreateBrush(string kmlColor)
+    private static MediaBrush CreateBrush(string kmlColor)
     {
         var color = NormalizeKmlColor(kmlColor);
 
@@ -232,7 +235,7 @@ public sealed class KmlPreviewService
         var green = byte.Parse(color.Substring(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
         var red = byte.Parse(color.Substring(6, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 
-        var brush = new SolidColorBrush(Color.FromArgb(alpha, red, green, blue));
+        var brush = new MediaSolidColorBrush(MediaColor.FromArgb(alpha, red, green, blue));
         brush.Freeze();
         return brush;
     }
