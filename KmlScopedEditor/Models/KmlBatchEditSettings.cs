@@ -11,6 +11,7 @@ public sealed class KmlBatchEditSettings : ViewModelBase
 {
     private bool _changeIconImage;
     private string _iconFilePath = string.Empty;
+    private string _iconFileNameDisplay = "No icon file selected";
     private bool _changeIconScale;
     private string _iconScaleText = "1";
     private bool _changeIconColor;
@@ -35,15 +36,24 @@ public sealed class KmlBatchEditSettings : ViewModelBase
         get => _iconFilePath;
         set
         {
-            if (SetProperty(ref _iconFilePath, value))
-                OnPropertyChanged(nameof(IconFileNameDisplay));
+            if (!SetProperty(ref _iconFilePath, value))
+                return;
+
+            IconFileNameDisplay = string.IsNullOrWhiteSpace(value)
+                ? "No icon file selected"
+                : Path.GetFileName(value);
         }
     }
 
-    public string IconFileNameDisplay =>
-        string.IsNullOrWhiteSpace(IconFilePath)
-            ? "No icon file selected"
-            : Path.GetFileName(IconFilePath);
+    /// <summary>
+    /// Read-only to the user, but settable for WPF binding compatibility.
+    /// The value is maintained automatically from IconFilePath.
+    /// </summary>
+    public string IconFileNameDisplay
+    {
+        get => _iconFileNameDisplay;
+        set => SetProperty(ref _iconFileNameDisplay, value);
+    }
 
     public bool ChangeIconScale
     {
