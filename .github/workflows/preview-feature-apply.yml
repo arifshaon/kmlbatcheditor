@@ -1,13 +1,60 @@
-name: Preview feature patch test
+name: Apply placemark preview feature
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - feature/placemark-preview-custom-icons
+    paths:
+      - '.github/preview-feature/**'
+      - '.github/workflows/preview-feature-apply.yml'
 
 permissions:
   contents: write
 
 jobs:
-  noop:
-    runs-on: ubuntu-latest
+  apply-and-build:
+    runs-on: windows-latest
+
     steps:
-      - run: echo "Workflow permission test"
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/placemark-preview-custom-icons
+          fetch-depth: 0
+
+      - name: Apply staged source patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          for patch in .github/preview-feature/*.patch; do
+            echo "Applying $patch"
+            git apply --check "$patch"
+            git apply "$patch"
+          done
+
+      - name: Validate XAML structure
+        shell: pwsh
+        run: |
+          [xml](Get-Content -Raw 'KmlScopedEditor/MainWindow.xaml') | Out-Null
+          [xml](Get-Content -Raw 'KmlScopedEditor/Views/PlacemarkPreviewControl.xaml') | Out-Null
+          Write-Host 'The XAML files are well-formed XML.'
+
+      - name: Build Windows application
+        shell: pwsh
+        run: |
+          dotnet build .\KmlScopedEditor.sln --configuration Release --nologo
+
+      - name: Remove temporary patch infrastructure
+        shell: bash
+        run: |
+          rm -rf .github/preview-feature
+          rm -f .github/workflows/preview-feature-apply.yml
+
+      - name: Commit applied feature
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Add placemark visual preview and custom KMZ icons"
+          git push origin HEAD:feature/placemark-preview-custom-icons
