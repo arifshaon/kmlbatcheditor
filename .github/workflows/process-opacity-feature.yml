@@ -27,9 +27,17 @@ jobs:
           $batch = Get-Content -Raw 'KmlScopedEditor/Services/KmlBatchEditService.cs'
           if ($batch.Contains('string? iconBgr = null;')) {
             Write-Host 'Opacity transformations are already present.'
+            exit 0
           }
-          else {
-            python .github/opacity-feature/apply.py 1>$null
+
+          python .github/opacity-feature/apply.py 1>$null 2>.github/opacity-transform-error.txt
+          if ($LASTEXITCODE -ne 0) {
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .github/opacity-transform-error.txt
+            git commit -m "Record opacity transformer error"
+            git push origin HEAD:feature/opacity-controls
+            throw "Opacity source transformation failed. See .github/opacity-transform-error.txt on the feature branch."
           }
 
       - name: Validate XAML
