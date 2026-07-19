@@ -30,6 +30,8 @@ public sealed class KmlPlacemarkAppearancePreview
 
     public double IconDisplaySize { get; init; } = 40d;
 
+    public double IconImageOpacity { get; init; } = 1d;
+
     public double LabelFontSize { get; init; } = 16d;
 
     public MediaBrush IconTintBrush { get; init; } = MediaBrushes.Transparent;
