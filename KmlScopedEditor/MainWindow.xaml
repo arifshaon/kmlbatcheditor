@@ -476,6 +476,8 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
 
                                 <CheckBox Grid.Row="0"
@@ -522,7 +524,7 @@
                                          IsEnabled="{Binding EditSettings.ChangeIconColor}"
                                          Margin="0,3,6,3"
                                          Padding="5"
-                                         ToolTip="Use #RRGGBB or #AARRGGBB" />
+                                         ToolTip="Use #RRGGBB. Existing opacity is preserved unless Change icon opacity is enabled." />
                                 <Button Grid.Row="2"
                                         Grid.Column="2"
                                         Content="Choose..."
@@ -532,11 +534,63 @@
                                         Margin="0,3,0,3" />
 
                                 <CheckBox Grid.Row="3"
+
+
+                                          Grid.Column="0"
+
+
+                                          Content="Change icon opacity"
+
+
+                                          IsChecked="{Binding EditSettings.ChangeIconOpacity}"
+
+
+                                          Margin="0,5,10,5" />
+
+
+                                <TextBox Grid.Row="3"
+
+
+                                         Grid.Column="1"
+
+
+                                         Text="{Binding EditSettings.IconOpacityText, UpdateSourceTrigger=PropertyChanged}"
+
+
+                                         IsEnabled="{Binding EditSettings.ChangeIconOpacity}"
+
+
+                                         Margin="0,3,6,3"
+
+
+                                         Padding="5"
+
+
+                                         ToolTip="Enter a percentage from 0 to 100" />
+
+
+                                <TextBlock Grid.Row="3"
+
+
+                                           Grid.Column="2"
+
+
+                                           Text="%"
+
+
+                                           VerticalAlignment="Center"
+
+
+                                           Margin="6,0,0,0" />
+
+
+
+                                <CheckBox Grid.Row="4"
                                           Grid.Column="0"
                                           Content="Change text size"
                                           IsChecked="{Binding EditSettings.ChangeLabelScale}"
                                           Margin="0,5,10,5" />
-                                <TextBox Grid.Row="3"
+                                <TextBox Grid.Row="4"
                                          Grid.Column="1"
                                          Text="{Binding EditSettings.LabelScaleText, UpdateSourceTrigger=PropertyChanged}"
                                          IsEnabled="{Binding EditSettings.ChangeLabelScale}"
@@ -544,28 +598,63 @@
                                          Padding="5"
                                          ToolTip="KML label scale, for example 0.8, 1 or 1.5" />
 
-                                <CheckBox Grid.Row="4"
+                                <CheckBox Grid.Row="5"
                                           Grid.Column="0"
                                           Content="Change text colour"
                                           IsChecked="{Binding EditSettings.ChangeLabelColor}"
                                           Margin="0,5,10,5" />
-                                <TextBox Grid.Row="4"
+                                <TextBox Grid.Row="5"
                                          Grid.Column="1"
                                          Text="{Binding EditSettings.LabelColorText, UpdateSourceTrigger=PropertyChanged}"
                                          IsEnabled="{Binding EditSettings.ChangeLabelColor}"
                                          Margin="0,3,6,3"
                                          Padding="5"
-                                         ToolTip="Use #RRGGBB or #AARRGGBB" />
-                                <Button Grid.Row="4"
+                                         ToolTip="Use #RRGGBB. Existing opacity is preserved unless Change text opacity is enabled." />
+                                <Button Grid.Row="5"
                                         Grid.Column="2"
                                         Content="Choose..."
                                         Command="{Binding PickLabelColorCommand}"
                                         IsEnabled="{Binding EditSettings.ChangeLabelColor}"
                                         MinWidth="78"
                                         Margin="0,3,0,3" />
+
+
+                                <CheckBox Grid.Row="6"
+
+                                          Grid.Column="0"
+
+                                          Content="Change text opacity"
+
+                                          IsChecked="{Binding EditSettings.ChangeLabelOpacity}"
+
+                                          Margin="0,5,10,5" />
+
+                                <TextBox Grid.Row="6"
+
+                                         Grid.Column="1"
+
+                                         Text="{Binding EditSettings.LabelOpacityText, UpdateSourceTrigger=PropertyChanged}"
+
+                                         IsEnabled="{Binding EditSettings.ChangeLabelOpacity}"
+
+                                         Margin="0,3,6,3"
+
+                                         Padding="5"
+
+                                         ToolTip="Enter a percentage from 0 to 100" />
+
+                                <TextBlock Grid.Row="6"
+
+                                           Grid.Column="2"
+
+                                           Text="%"
+
+                                           VerticalAlignment="Center"
+
+                                           Margin="6,0,0,0" />
                             </Grid>
 
-                            <TextBlock Text="Colors may be entered as #RRGGBB or #AARRGGBB. The app converts them to KML AABBGGRR format automatically."
+                            <TextBlock Text="Colours use #RRGGBB. Changing colour alone preserves each placemark's existing opacity. Enable the separate opacity option only when alpha should change."
                                        Foreground="Gray"
                                        FontSize="11"
                                        TextWrapping="Wrap"
