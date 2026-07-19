@@ -22,15 +22,10 @@ jobs:
           ref: feature/opacity-controls
           fetch-depth: 0
 
-      - name: Apply source patches
-        shell: bash
+      - name: Apply source transformations
+        shell: pwsh
         run: |
-          set -euo pipefail
-          for patch in .github/opacity-feature/*.patch; do
-            echo "Applying $patch"
-            git apply --check "$patch"
-            git apply "$patch"
-          done
+          python .github/opacity-feature/apply.py
 
       - name: Validate XAML
         shell: pwsh
@@ -43,7 +38,7 @@ jobs:
         run: |
           dotnet build .\KmlScopedEditor.sln --configuration Release --nologo
 
-      - name: Remove temporary patch files
+      - name: Remove temporary implementation files
         shell: bash
         run: |
           rm -rf .github/opacity-feature
