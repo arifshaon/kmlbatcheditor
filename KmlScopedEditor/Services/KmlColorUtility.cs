@@ -125,13 +125,18 @@ public static class KmlColorUtility
         return $"#{color[..2]}{color.Substring(6, 2)}{color.Substring(4, 2)}{color.Substring(2, 2)}";
     }
 
-    public static string ToOpacityDisplay(string? kmlColor)
+    public static byte GetAlphaByte(string? kmlColor)
     {
         var color = NormalizeKmlColor(kmlColor);
-        var alpha = byte.Parse(
+        return byte.Parse(
             color[..2],
             NumberStyles.HexNumber,
             CultureInfo.InvariantCulture);
+    }
+
+    public static string ToOpacityDisplay(string? kmlColor)
+    {
+        var alpha = GetAlphaByte(kmlColor);
         var percent = alpha / (double)byte.MaxValue * 100d;
         return $"{percent:0.#}%";
     }
