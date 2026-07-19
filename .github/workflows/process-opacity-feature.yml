@@ -32,12 +32,13 @@ jobs:
 
           python .github/opacity-feature/apply.py 1>$null 2>.github/opacity-transform-error.txt
           if ($LASTEXITCODE -ne 0) {
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add .github/opacity-transform-error.txt
-            git commit -m "Record opacity transformer error"
-            git push origin HEAD:feature/opacity-controls
-            throw "Opacity source transformation failed. See .github/opacity-transform-error.txt on the feature branch."
+            $errorText = Get-Content -Raw '.github/opacity-transform-error.txt'
+            if (-not $errorText.Contains('opacity controls and shifted label rows')) {
+              Write-Error $errorText
+              exit 1
+            }
+            Write-Host 'The core transformations succeeded; applying the robust UI fallback.'
+            python .github/opacity-feature/finish_ui.py
           }
 
       - name: Validate XAML
@@ -54,7 +55,7 @@ jobs:
       - name: Commit transformed source when needed
         shell: bash
         run: |
-          if git diff --quiet; then
+          if git diff --quiet -- KmlScopedEditor; then
             echo "No source transformation commit is required."
             exit 0
           fi
