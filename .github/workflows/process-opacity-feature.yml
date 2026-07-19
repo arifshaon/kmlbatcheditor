@@ -1,17 +1,17 @@
 name: Process opacity controls feature
 
 on:
-  push:
+  pull_request:
     branches:
       - main
-    paths:
-      - '.github/workflows/process-opacity-feature.yml'
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
 
 jobs:
   transform-build-and-commit:
+    if: github.head_ref == 'feature/opacity-controls'
     runs-on: windows-latest
 
     steps:
@@ -21,10 +21,16 @@ jobs:
           ref: feature/opacity-controls
           fetch-depth: 0
 
-      - name: Apply deterministic source transformations
+      - name: Apply deterministic source transformations once
         shell: pwsh
         run: |
-          python .github/opacity-feature/apply.py
+          $batch = Get-Content -Raw 'KmlScopedEditor/Services/KmlBatchEditService.cs'
+          if ($batch.Contains('string? iconBgr = null;')) {
+            Write-Host 'Opacity transformations are already present.'
+          }
+          else {
+            python .github/opacity-feature/apply.py
+          }
 
       - name: Validate XAML
         shell: pwsh
@@ -37,17 +43,15 @@ jobs:
         run: |
           dotnet build .\KmlScopedEditor.sln --configuration Release --nologo
 
-      - name: Remove temporary implementation files
+      - name: Commit transformed source when needed
         shell: bash
         run: |
-          rm -rf .github/opacity-feature
-          rm -f .github/workflows/apply-opacity-feature.yml
-
-      - name: Commit feature branch
-        shell: bash
-        run: |
+          if git diff --quiet; then
+            echo "No source transformation commit is required."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add KmlScopedEditor
           git commit -m "Add independent icon and text opacity controls"
           git push origin HEAD:feature/opacity-controls
