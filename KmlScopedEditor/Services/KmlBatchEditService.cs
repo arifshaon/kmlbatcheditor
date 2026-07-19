@@ -188,8 +188,14 @@ public sealed class KmlBatchEditService
         string? iconFileName = null;
         string? iconScale = null;
         string? labelScale = null;
-        string? iconColor = null;
-        string? labelColor = null;
+        string? iconBgr = null;
+        string? labelBgr = null;
+        string? iconAlpha = null;
+        string? labelAlpha = null;
+        string? iconColorDisplay = null;
+        string? labelColorDisplay = null;
+        string? iconOpacityDisplay = null;
+        string? labelOpacityDisplay = null;
 
         if (settings.ChangeIconImage)
         {
@@ -245,20 +251,44 @@ public sealed class KmlBatchEditService
         }
 
         if (settings.ChangeIconColor &&
-            !TryConvertDisplayColorToKml(
+            !KmlColorUtility.TryParseDisplayRgb(
                 settings.IconColorText,
                 "Icon color",
-                out iconColor,
+                out iconBgr,
+                out iconColorDisplay,
+                out error))
+        {
+            return false;
+        }
+
+        if (settings.ChangeIconOpacity &&
+            !KmlColorUtility.TryParseOpacityPercent(
+                settings.IconOpacityText,
+                "Icon opacity",
+                out iconAlpha,
+                out iconOpacityDisplay,
                 out error))
         {
             return false;
         }
 
         if (settings.ChangeLabelColor &&
-            !TryConvertDisplayColorToKml(
+            !KmlColorUtility.TryParseDisplayRgb(
                 settings.LabelColorText,
                 "Text color",
-                out labelColor,
+                out labelBgr,
+                out labelColorDisplay,
+                out error))
+        {
+            return false;
+        }
+
+        if (settings.ChangeLabelOpacity &&
+            !KmlColorUtility.TryParseOpacityPercent(
+                settings.LabelOpacityText,
+                "Text opacity",
+                out labelAlpha,
+                out labelOpacityDisplay,
                 out error))
         {
             return false;
@@ -269,15 +299,15 @@ public sealed class KmlBatchEditService
             IconHref = iconHref,
             IconFileName = iconFileName,
             IconScale = iconScale,
-            IconColor = iconColor,
+            IconBgr = iconBgr,
+            IconAlpha = iconAlpha,
             LabelScale = labelScale,
-            LabelColor = labelColor,
-            IconColorDisplay = settings.ChangeIconColor
-                ? NormalizeDisplayColor(settings.IconColorText)
-                : null,
-            LabelColorDisplay = settings.ChangeLabelColor
-                ? NormalizeDisplayColor(settings.LabelColorText)
-                : null
+            LabelBgr = labelBgr,
+            LabelAlpha = labelAlpha,
+            IconColorDisplay = iconColorDisplay,
+            LabelColorDisplay = labelColorDisplay,
+            IconOpacityDisplay = iconOpacityDisplay,
+            LabelOpacityDisplay = labelOpacityDisplay
         };
 
         return true;
@@ -327,45 +357,6 @@ public sealed class KmlBatchEditService
         return true;
     }
 
-    private static bool TryConvertDisplayColorToKml(
-        string? input,
-        string propertyName,
-        out string? kmlColor,
-        out string error)
-    {
-        kmlColor = null;
-        error = string.Empty;
-
-        var value = input?.Trim().TrimStart('#');
-
-        if (string.IsNullOrWhiteSpace(value) ||
-            (value.Length != 6 && value.Length != 8) ||
-            value.Any(character => !Uri.IsHexDigit(character)))
-        {
-            error =
-                $"{propertyName} must use #RRGGBB or #AARRGGBB format.";
-            return false;
-        }
-
-        value = value.ToUpperInvariant();
-
-        var alpha = value.Length == 8 ? value[..2] : "FF";
-        var rgbStart = value.Length == 8 ? 2 : 0;
-        var red = value.Substring(rgbStart, 2);
-        var green = value.Substring(rgbStart + 2, 2);
-        var blue = value.Substring(rgbStart + 4, 2);
-
-        // KML stores colours in AABBGGRR order.
-        kmlColor = $"{alpha}{blue}{green}{red}".ToLowerInvariant();
-        return true;
-    }
-
-    private static string NormalizeDisplayColor(string? input)
-    {
-        var value = input?.Trim().TrimStart('#').ToUpperInvariant() ?? string.Empty;
-        return $"#{value}";
-    }
-
     private static string BuildChangeSummary(StyleChangeSet changes)
     {
         var lines = new List<string>();
@@ -376,14 +367,20 @@ public sealed class KmlBatchEditService
         if (changes.IconScale is not null)
             lines.Add($"• Icon size → {changes.IconScale}");
 
-        if (changes.IconColor is not null)
+        if (changes.IconBgr is not null)
             lines.Add($"• Icon color → {changes.IconColorDisplay}");
+
+        if (changes.IconAlpha is not null)
+            lines.Add($"• Icon opacity → {changes.IconOpacityDisplay}");
 
         if (changes.LabelScale is not null)
             lines.Add($"• Text size → {changes.LabelScale}");
 
-        if (changes.LabelColor is not null)
+        if (changes.LabelBgr is not null)
             lines.Add($"• Text color → {changes.LabelColorDisplay}");
+
+        if (changes.LabelAlpha is not null)
+            lines.Add($"• Text opacity → {changes.LabelOpacityDisplay}");
 
         return string.Join(Environment.NewLine, lines);
     }
@@ -423,15 +420,23 @@ public sealed class KmlBatchEditService
 
         public string? IconScale { get; init; }
 
-        public string? IconColor { get; init; }
+        public string? IconBgr { get; init; }
+
+        public string? IconAlpha { get; init; }
 
         public string? LabelScale { get; init; }
 
-        public string? LabelColor { get; init; }
+        public string? LabelBgr { get; init; }
+
+        public string? LabelAlpha { get; init; }
 
         public string? IconColorDisplay { get; init; }
 
         public string? LabelColorDisplay { get; init; }
+
+        public string? IconOpacityDisplay { get; init; }
+
+        public string? LabelOpacityDisplay { get; init; }
     }
 
     private sealed class ApplyOperation
@@ -655,7 +660,8 @@ public sealed class KmlBatchEditService
         StyleChangeSet changes)
     {
         if (changes.IconHref is not null ||
-            changes.IconColor is not null ||
+            changes.IconBgr is not null ||
+            changes.IconAlpha is not null ||
             changes.IconScale is not null)
         {
             var iconStyle = GetOrCreateSubStyle(style, "IconStyle");
@@ -686,12 +692,18 @@ public sealed class KmlBatchEditService
                     "httpQuery");
             }
 
-            if (changes.IconColor is not null)
+            if (changes.IconBgr is not null || changes.IconAlpha is not null)
             {
+                var existingColor = iconStyle.Element(KmlNs + "color")?.Value;
+                var combinedColor = KmlColorUtility.Combine(
+                    existingColor,
+                    changes.IconBgr,
+                    changes.IconAlpha);
+
                 SetOrderedChildValue(
                     iconStyle,
                     "color",
-                    changes.IconColor,
+                    combinedColor,
                     "color",
                     "colorMode",
                     "scale",
@@ -715,17 +727,24 @@ public sealed class KmlBatchEditService
             }
         }
 
-        if (changes.LabelColor is not null ||
+        if (changes.LabelBgr is not null ||
+            changes.LabelAlpha is not null ||
             changes.LabelScale is not null)
         {
             var labelStyle = GetOrCreateSubStyle(style, "LabelStyle");
 
-            if (changes.LabelColor is not null)
+            if (changes.LabelBgr is not null || changes.LabelAlpha is not null)
             {
+                var existingColor = labelStyle.Element(KmlNs + "color")?.Value;
+                var combinedColor = KmlColorUtility.Combine(
+                    existingColor,
+                    changes.LabelBgr,
+                    changes.LabelAlpha);
+
                 SetOrderedChildValue(
                     labelStyle,
                     "color",
-                    changes.LabelColor,
+                    combinedColor,
                     "color",
                     "colorMode",
                     "scale");

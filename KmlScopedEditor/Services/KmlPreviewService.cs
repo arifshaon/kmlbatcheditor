@@ -68,13 +68,19 @@ public sealed class KmlPreviewService
             ? NormalizeScale(settings.LabelScaleText, currentLabelScale)
             : currentLabelScale;
 
-        var proposedIconColor = settings.ChangeIconColor
-            ? DisplayColorToKml(settings.IconColorText)
-            : currentIconColor;
+        var proposedIconColor = BuildProposedColor(
+            currentIconColor,
+            settings.ChangeIconColor,
+            settings.IconColorText,
+            settings.ChangeIconOpacity,
+            settings.IconOpacityText);
 
-        var proposedLabelColor = settings.ChangeLabelColor
-            ? DisplayColorToKml(settings.LabelColorText)
-            : currentLabelColor;
+        var proposedLabelColor = BuildProposedColor(
+            currentLabelColor,
+            settings.ChangeLabelColor,
+            settings.LabelColorText,
+            settings.ChangeLabelOpacity,
+            settings.LabelOpacityText);
 
         var name = placemark.Element(KmlNs + "name")?.Value?.Trim();
 
@@ -123,9 +129,11 @@ public sealed class KmlPreviewService
             Environment.NewLine,
             $"Icon: {iconName}",
             $"Icon size: {iconScaleText}",
-            $"Icon colour: {KmlColorToDisplay(iconColor)}",
+            $"Icon colour: {KmlColorUtility.ToDisplayRgb(iconColor)}",
+            $"Icon opacity: {KmlColorUtility.ToOpacityDisplay(iconColor)}",
             $"Text size: {labelScaleText}",
-            $"Text colour: {KmlColorToDisplay(labelColor)}");
+            $"Text colour: {KmlColorUtility.ToDisplayRgb(labelColor)}",
+            $"Text opacity: {KmlColorUtility.ToOpacityDisplay(labelColor)}");
 
         return new KmlPlacemarkAppearancePreview
         {
@@ -201,29 +209,42 @@ public sealed class KmlPreviewService
         return fallback;
     }
 
-    private static string NormalizeKmlColor(string? value)
+    private static string BuildProposedColor(
+        string currentKmlColor,
+        bool changeColor,
+        string? displayColor,
+        bool changeOpacity,
+        string? opacityText)
     {
-        var color = value?.Trim().TrimStart('#');
+        string? bgr = null;
+        string? alpha = null;
 
-        return color is { Length: 8 } && color.All(Uri.IsHexDigit)
-            ? color.ToLowerInvariant()
-            : "ffffffff";
+        if (changeColor)
+        {
+            KmlColorUtility.TryParseDisplayRgb(
+                displayColor,
+                "Colour",
+                out bgr,
+                out _,
+                out _);
+        }
+
+        if (changeOpacity)
+        {
+            KmlColorUtility.TryParseOpacityPercent(
+                opacityText,
+                "Opacity",
+                out alpha,
+                out _,
+                out _);
+        }
+
+        return KmlColorUtility.Combine(currentKmlColor, bgr, alpha);
     }
 
-    private static string DisplayColorToKml(string? value)
+    private static string NormalizeKmlColor(string? value)
     {
-        var color = value?.Trim().TrimStart('#') ?? string.Empty;
-
-        if (color.Length != 6 && color.Length != 8)
-            return "ffffffff";
-
-        var alpha = color.Length == 8 ? color[..2] : "FF";
-        var rgbStart = color.Length == 8 ? 2 : 0;
-        var red = color.Substring(rgbStart, 2);
-        var green = color.Substring(rgbStart + 2, 2);
-        var blue = color.Substring(rgbStart + 4, 2);
-
-        return $"{alpha}{blue}{green}{red}".ToLowerInvariant();
+        return KmlColorUtility.NormalizeKmlColor(value);
     }
 
     private static MediaBrush CreateBrush(string kmlColor)
@@ -238,12 +259,6 @@ public sealed class KmlPreviewService
         var brush = new MediaSolidColorBrush(MediaColor.FromArgb(alpha, red, green, blue));
         brush.Freeze();
         return brush;
-    }
-
-    private static string KmlColorToDisplay(string kmlColor)
-    {
-        var color = NormalizeKmlColor(kmlColor).ToUpperInvariant();
-        return $"#{color[..2]}{color.Substring(6, 2)}{color.Substring(4, 2)}{color.Substring(2, 2)}";
     }
 
     private static bool IsOpaqueWhite(string kmlColor)
