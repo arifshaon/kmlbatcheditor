@@ -1,7 +1,7 @@
 name: Apply opacity controls feature
 
 # The base-branch PR workflow performs the validated transformation.
-# This file remains only until the feature branch has been validated.
+# This temporary file will be removed after the feature build passes.
 on:
   push:
     branches:
