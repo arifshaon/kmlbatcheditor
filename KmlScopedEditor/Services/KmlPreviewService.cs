@@ -12,8 +12,9 @@ namespace KmlScopedEditor.Services;
 
 /// <summary>
 /// Builds the in-application before/after placemark preview. This preview
-/// approximates Google Earth by applying icon and label scale and colour to a
-/// map-like card. The external Google Earth preview remains the final check.
+/// approximates Google Earth by applying icon and label scale, colour, and
+/// opacity to a map-like card. The external Google Earth preview remains the
+/// final check.
 /// </summary>
 public sealed class KmlPreviewService
 {
@@ -57,8 +58,8 @@ public sealed class KmlPreviewService
 
         var currentIconScale = NormalizeScale(resolved.IconScale, 1d);
         var currentLabelScale = NormalizeScale(resolved.LabelScale, 1d);
-        var currentIconColor = NormalizeKmlColor(resolved.IconColor);
-        var currentLabelColor = NormalizeKmlColor(resolved.LabelColor);
+        var currentIconColor = KmlColorUtility.NormalizeKmlColor(resolved.IconColor);
+        var currentLabelColor = KmlColorUtility.NormalizeKmlColor(resolved.LabelColor);
 
         var proposedIconScale = settings.ChangeIconScale
             ? NormalizeScale(settings.IconScaleText, currentIconScale)
@@ -68,13 +69,64 @@ public sealed class KmlPreviewService
             ? NormalizeScale(settings.LabelScaleText, currentLabelScale)
             : currentLabelScale;
 
-        var proposedIconColor = settings.ChangeIconColor
-            ? DisplayColorToKml(settings.IconColorText)
-            : currentIconColor;
+        string? iconBgr = null;
+        string? iconAlpha = null;
+        string? labelBgr = null;
+        string? labelAlpha = null;
 
-        var proposedLabelColor = settings.ChangeLabelColor
-            ? DisplayColorToKml(settings.LabelColorText)
-            : currentLabelColor;
+        if (settings.ChangeIconColor &&
+            !KmlColorUtility.TryParseDisplayRgb(
+                settings.IconColorText,
+                "Icon colour",
+                out iconBgr,
+                out _,
+                out var iconColorError))
+        {
+            throw new InvalidOperationException(iconColorError);
+        }
+
+        if (settings.ChangeIconOpacity &&
+            !KmlColorUtility.TryParseOpacityPercent(
+                settings.IconOpacityText,
+                "Icon opacity",
+                out iconAlpha,
+                out _,
+                out var iconOpacityError))
+        {
+            throw new InvalidOperationException(iconOpacityError);
+        }
+
+        if (settings.ChangeLabelColor &&
+            !KmlColorUtility.TryParseDisplayRgb(
+                settings.LabelColorText,
+                "Text colour",
+                out labelBgr,
+                out _,
+                out var labelColorError))
+        {
+            throw new InvalidOperationException(labelColorError);
+        }
+
+        if (settings.ChangeLabelOpacity &&
+            !KmlColorUtility.TryParseOpacityPercent(
+                settings.LabelOpacityText,
+                "Text opacity",
+                out labelAlpha,
+                out _,
+                out var labelOpacityError))
+        {
+            throw new InvalidOperationException(labelOpacityError);
+        }
+
+        var proposedIconColor = KmlColorUtility.Combine(
+            currentIconColor,
+            iconBgr,
+            iconAlpha);
+
+        var proposedLabelColor = KmlColorUtility.Combine(
+            currentLabelColor,
+            labelBgr,
+            labelAlpha);
 
         var name = placemark.Element(KmlNs + "name")?.Value?.Trim();
 
@@ -111,6 +163,7 @@ public sealed class KmlPreviewService
         var iconImage = LoadImage(localIconPath);
         var iconBrush = CreateBrush(iconColor);
         var labelBrush = CreateBrush(labelColor);
+        var iconOpacity = KmlColorUtility.GetAlphaByte(iconColor) / 255d;
 
         var iconName = !string.IsNullOrWhiteSpace(localIconPath)
             ? Path.GetFileName(localIconPath)
@@ -123,9 +176,11 @@ public sealed class KmlPreviewService
             Environment.NewLine,
             $"Icon: {iconName}",
             $"Icon size: {iconScaleText}",
-            $"Icon colour: {KmlColorToDisplay(iconColor)}",
+            $"Icon colour: {KmlColorUtility.ToDisplayRgb(iconColor)}",
+            $"Icon opacity: {KmlColorUtility.ToOpacityDisplay(iconColor)}",
             $"Text size: {labelScaleText}",
-            $"Text colour: {KmlColorToDisplay(labelColor)}");
+            $"Text colour: {KmlColorUtility.ToDisplayRgb(labelColor)}",
+            $"Text opacity: {KmlColorUtility.ToOpacityDisplay(labelColor)}");
 
         return new KmlPlacemarkAppearancePreview
         {
@@ -136,6 +191,8 @@ public sealed class KmlPreviewService
             LabelFontSize = Math.Clamp(16d * labelScale, 8d, 48d),
             IconTintBrush = iconBrush,
             IconTintOpacity = IsOpaqueWhite(iconColor) ? 0d : 0.28d,
+            IconImageOpacity = iconOpacity,
+            IconFallbackOpacity = iconOpacity,
             LabelBrush = labelBrush,
             KmlIconColor = iconColor,
             KmlLabelColor = labelColor,
@@ -201,34 +258,9 @@ public sealed class KmlPreviewService
         return fallback;
     }
 
-    private static string NormalizeKmlColor(string? value)
-    {
-        var color = value?.Trim().TrimStart('#');
-
-        return color is { Length: 8 } && color.All(Uri.IsHexDigit)
-            ? color.ToLowerInvariant()
-            : "ffffffff";
-    }
-
-    private static string DisplayColorToKml(string? value)
-    {
-        var color = value?.Trim().TrimStart('#') ?? string.Empty;
-
-        if (color.Length != 6 && color.Length != 8)
-            return "ffffffff";
-
-        var alpha = color.Length == 8 ? color[..2] : "FF";
-        var rgbStart = color.Length == 8 ? 2 : 0;
-        var red = color.Substring(rgbStart, 2);
-        var green = color.Substring(rgbStart + 2, 2);
-        var blue = color.Substring(rgbStart + 4, 2);
-
-        return $"{alpha}{blue}{green}{red}".ToLowerInvariant();
-    }
-
     private static MediaBrush CreateBrush(string kmlColor)
     {
-        var color = NormalizeKmlColor(kmlColor);
+        var color = KmlColorUtility.NormalizeKmlColor(kmlColor);
 
         var alpha = byte.Parse(color[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
         var blue = byte.Parse(color.Substring(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
@@ -240,16 +272,10 @@ public sealed class KmlPreviewService
         return brush;
     }
 
-    private static string KmlColorToDisplay(string kmlColor)
-    {
-        var color = NormalizeKmlColor(kmlColor).ToUpperInvariant();
-        return $"#{color[..2]}{color.Substring(6, 2)}{color.Substring(4, 2)}{color.Substring(2, 2)}";
-    }
-
     private static bool IsOpaqueWhite(string kmlColor)
     {
         return string.Equals(
-            NormalizeKmlColor(kmlColor),
+            KmlColorUtility.NormalizeKmlColor(kmlColor),
             "ffffffff",
             StringComparison.OrdinalIgnoreCase);
     }
