@@ -16,10 +16,14 @@ public sealed class KmlBatchEditSettings : ViewModelBase
     private string _iconScaleText = "1";
     private bool _changeIconColor;
     private string _iconColorText = "#FFFFFF";
+    private bool _changeIconOpacity;
+    private string _iconOpacityText = "100";
     private bool _changeLabelScale;
     private string _labelScaleText = "1";
     private bool _changeLabelColor;
     private string _labelColorText = "#FFFFFF";
+    private bool _changeLabelOpacity;
+    private string _labelOpacityText = "100";
 
     public bool ChangeIconImage
     {
@@ -83,11 +87,28 @@ public sealed class KmlBatchEditSettings : ViewModelBase
 
     /// <summary>
     /// User-facing RGB or ARGB value, for example #FF0000 or #80FF0000.
+    /// Opacity is applied independently through IconOpacityText.
     /// </summary>
     public string IconColorText
     {
         get => _iconColorText;
         set => SetProperty(ref _iconColorText, value);
+    }
+
+    public bool ChangeIconOpacity
+    {
+        get => _changeIconOpacity;
+        set
+        {
+            if (SetProperty(ref _changeIconOpacity, value))
+                OnPropertyChanged(nameof(HasAnyChange));
+        }
+    }
+
+    public string IconOpacityText
+    {
+        get => _iconOpacityText;
+        set => SetProperty(ref _iconOpacityText, value);
     }
 
     public bool ChangeLabelScale
@@ -118,6 +139,7 @@ public sealed class KmlBatchEditSettings : ViewModelBase
 
     /// <summary>
     /// User-facing RGB or ARGB value, for example #FFFFFF or #80FFFFFF.
+    /// Opacity is applied independently through LabelOpacityText.
     /// </summary>
     public string LabelColorText
     {
@@ -125,10 +147,28 @@ public sealed class KmlBatchEditSettings : ViewModelBase
         set => SetProperty(ref _labelColorText, value);
     }
 
+    public bool ChangeLabelOpacity
+    {
+        get => _changeLabelOpacity;
+        set
+        {
+            if (SetProperty(ref _changeLabelOpacity, value))
+                OnPropertyChanged(nameof(HasAnyChange));
+        }
+    }
+
+    public string LabelOpacityText
+    {
+        get => _labelOpacityText;
+        set => SetProperty(ref _labelOpacityText, value);
+    }
+
     public bool HasAnyChange =>
         ChangeIconImage ||
         ChangeIconScale ||
         ChangeIconColor ||
+        ChangeIconOpacity ||
         ChangeLabelScale ||
-        ChangeLabelColor;
+        ChangeLabelColor ||
+        ChangeLabelOpacity;
 }
