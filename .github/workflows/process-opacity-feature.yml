@@ -1,0 +1,53 @@
+name: Process opacity controls feature
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/process-opacity-feature.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  transform-build-and-commit:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out opacity feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/opacity-controls
+          fetch-depth: 0
+
+      - name: Apply deterministic source transformations
+        shell: pwsh
+        run: |
+          python .github/opacity-feature/apply.py
+
+      - name: Validate XAML
+        shell: pwsh
+        run: |
+          [xml](Get-Content -Raw 'KmlScopedEditor/MainWindow.xaml') | Out-Null
+          Write-Host 'MainWindow.xaml is well-formed XML.'
+
+      - name: Build Windows application
+        shell: pwsh
+        run: |
+          dotnet build .\KmlScopedEditor.sln --configuration Release --nologo
+
+      - name: Remove temporary implementation files
+        shell: bash
+        run: |
+          rm -rf .github/opacity-feature
+          rm -f .github/workflows/apply-opacity-feature.yml
+
+      - name: Commit feature branch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Add independent icon and text opacity controls"
+          git push origin HEAD:feature/opacity-controls
