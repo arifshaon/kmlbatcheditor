@@ -1,184 +1,193 @@
 <UserControl x:Class="KmlScopedEditor.Views.PlacemarkPreviewControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:KmlScopedEditor.Views">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
     </UserControl.Resources>
 
-    <Border Visibility="{Binding HasPlacemarkVisualPreview, Converter={StaticResource BooleanToVisibilityConverter}}"
-            Background="#F3F7F9"
-            BorderBrush="#B7C8D1"
-            BorderThickness="1"
-            CornerRadius="6"
-            Padding="12"
-            Margin="0,0,0,12">
-        <StackPanel>
-            <DockPanel LastChildFill="True" Margin="0,0,0,8">
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                    <Button Content="Previous"
-                            Command="{Binding PreviousPreviewPlacemarkCommand}"
-                            MinWidth="78"
-                            Height="28" />
-                    <Button Content="Next"
-                            Command="{Binding NextPreviewPlacemarkCommand}"
-                            MinWidth="68"
-                            Height="28"
-                            Margin="6,0,0,0" />
-                </StackPanel>
+    <StackPanel>
+        <local:OpacityControls />
 
-                <StackPanel>
-                    <TextBlock Text="Placemark appearance preview"
-                               FontSize="16"
-                               FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding PreviewPlacemarkPosition}"
-                               Foreground="#52606D"
-                               FontSize="11" />
-                </StackPanel>
-            </DockPanel>
-
-            <TextBlock Text="{Binding PlacemarkVisualPreview.PlacemarkName}"
-                       FontWeight="SemiBold"
-                       TextWrapping="Wrap"
-                       Margin="0,0,0,8" />
-
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="14" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-
-                <Border Grid.Column="0"
-                        Background="White"
-                        BorderBrush="#C8CDD5"
-                        BorderThickness="1"
-                        CornerRadius="5"
-                        Padding="10">
-                    <StackPanel>
-                        <TextBlock Text="Current"
-                                   FontWeight="SemiBold"
-                                   FontSize="15"
-                                   Margin="0,0,0,8" />
-                        <Border Height="190"
-                                Background="#314D48"
-                                CornerRadius="4"
-                                Padding="8">
-                            <StackPanel VerticalAlignment="Center"
-                                        HorizontalAlignment="Center">
-                                <Grid Width="{Binding PlacemarkVisualPreview.Current.IconDisplaySize}"
-                                      Height="{Binding PlacemarkVisualPreview.Current.IconDisplaySize}">
-                                    <Image Source="{Binding PlacemarkVisualPreview.Current.IconImage}"
-                                           Stretch="Uniform" />
-                                    <Border Background="{Binding PlacemarkVisualPreview.Current.IconTintBrush}"
-                                            Opacity="{Binding PlacemarkVisualPreview.Current.IconTintOpacity}"
-                                            CornerRadius="3" />
-                                    <TextBlock Text="📍"
-                                               FontSize="36"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Visibility" Value="Visible" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding PlacemarkVisualPreview.Current.HasIconImage}"
-                                                                 Value="True">
-                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </Grid>
-                                <TextBlock Text="{Binding PlacemarkVisualPreview.PlacemarkName}"
-                                           Foreground="{Binding PlacemarkVisualPreview.Current.LabelBrush}"
-                                           FontSize="{Binding PlacemarkVisualPreview.Current.LabelFontSize}"
-                                           FontWeight="SemiBold"
-                                           TextAlignment="Center"
-                                           TextWrapping="Wrap"
-                                           MaxWidth="240"
-                                           Margin="0,8,0,0" />
-                            </StackPanel>
-                        </Border>
-                        <TextBlock Text="{Binding PlacemarkVisualPreview.Current.Details}"
-                                   TextWrapping="Wrap"
-                                   FontSize="11"
-                                   Foreground="#4B5563"
-                                   Margin="0,8,0,0" />
+        <Border Visibility="{Binding HasPlacemarkVisualPreview, Converter={StaticResource BooleanToVisibilityConverter}}"
+                Background="#F3F7F9"
+                BorderBrush="#B7C8D1"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="12"
+                Margin="0,0,0,12">
+            <StackPanel>
+                <DockPanel LastChildFill="True" Margin="0,0,0,8">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <Button Content="Previous"
+                                Command="{Binding PreviousPreviewPlacemarkCommand}"
+                                MinWidth="78"
+                                Height="28" />
+                        <Button Content="Next"
+                                Command="{Binding NextPreviewPlacemarkCommand}"
+                                MinWidth="68"
+                                Height="28"
+                                Margin="6,0,0,0" />
                     </StackPanel>
-                </Border>
 
-                <Border Grid.Column="2"
-                        Background="White"
-                        BorderBrush="#7BB58B"
-                        BorderThickness="2"
-                        CornerRadius="5"
-                        Padding="10">
                     <StackPanel>
-                        <TextBlock Text="Proposed"
-                                   FontWeight="SemiBold"
-                                   FontSize="15"
-                                   Foreground="#22633A"
-                                   Margin="0,0,0,8" />
-                        <Border Height="190"
-                                Background="#314D48"
-                                CornerRadius="4"
-                                Padding="8">
-                            <StackPanel VerticalAlignment="Center"
-                                        HorizontalAlignment="Center">
-                                <Grid Width="{Binding PlacemarkVisualPreview.Proposed.IconDisplaySize}"
-                                      Height="{Binding PlacemarkVisualPreview.Proposed.IconDisplaySize}">
-                                    <Image Source="{Binding PlacemarkVisualPreview.Proposed.IconImage}"
-                                           Stretch="Uniform" />
-                                    <Border Background="{Binding PlacemarkVisualPreview.Proposed.IconTintBrush}"
-                                            Opacity="{Binding PlacemarkVisualPreview.Proposed.IconTintOpacity}"
-                                            CornerRadius="3" />
-                                    <TextBlock Text="📍"
-                                               FontSize="36"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Visibility" Value="Visible" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding PlacemarkVisualPreview.Proposed.HasIconImage}"
-                                                                 Value="True">
-                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </Grid>
-                                <TextBlock Text="{Binding PlacemarkVisualPreview.PlacemarkName}"
-                                           Foreground="{Binding PlacemarkVisualPreview.Proposed.LabelBrush}"
-                                           FontSize="{Binding PlacemarkVisualPreview.Proposed.LabelFontSize}"
-                                           FontWeight="SemiBold"
-                                           TextAlignment="Center"
-                                           TextWrapping="Wrap"
-                                           MaxWidth="240"
-                                           Margin="0,8,0,0" />
-                            </StackPanel>
-                        </Border>
-                        <TextBlock Text="{Binding PlacemarkVisualPreview.Proposed.Details}"
-                                   TextWrapping="Wrap"
-                                   FontSize="11"
-                                   Foreground="#4B5563"
-                                   Margin="0,8,0,0" />
+                        <TextBlock Text="Placemark appearance preview"
+                                   FontSize="16"
+                                   FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding PreviewPlacemarkPosition}"
+                                   Foreground="#52606D"
+                                   FontSize="11" />
                     </StackPanel>
-                </Border>
-            </Grid>
+                </DockPanel>
 
-            <TextBlock Text="The built-in preview is an approximation. Use Google Earth preview to check the actual desktop rendering."
-                       Foreground="#52606D"
-                       FontSize="11"
-                       TextWrapping="Wrap"
-                       Margin="0,10,0,8" />
+                <TextBlock Text="{Binding PlacemarkVisualPreview.PlacemarkName}"
+                           FontWeight="SemiBold"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,8" />
 
-            <Button Content="Open Preview in Google Earth"
-                    Command="{Binding OpenPreviewInGoogleEarthCommand}"
-                    Width="210"
-                    Height="32"
-                    HorizontalAlignment="Left" />
-        </StackPanel>
-    </Border>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="14" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0"
+                            Background="White"
+                            BorderBrush="#C8CDD5"
+                            BorderThickness="1"
+                            CornerRadius="5"
+                            Padding="10">
+                        <StackPanel>
+                            <TextBlock Text="Current"
+                                       FontWeight="SemiBold"
+                                       FontSize="15"
+                                       Margin="0,0,0,8" />
+                            <Border Height="190"
+                                    Background="#314D48"
+                                    CornerRadius="4"
+                                    Padding="8">
+                                <StackPanel VerticalAlignment="Center"
+                                            HorizontalAlignment="Center">
+                                    <Grid Width="{Binding PlacemarkVisualPreview.Current.IconDisplaySize}"
+                                          Height="{Binding PlacemarkVisualPreview.Current.IconDisplaySize}">
+                                        <Image Source="{Binding PlacemarkVisualPreview.Current.IconImage}"
+                                               Opacity="{Binding PlacemarkVisualPreview.Current.IconImageOpacity}"
+                                               Stretch="Uniform" />
+                                        <Border Background="{Binding PlacemarkVisualPreview.Current.IconTintBrush}"
+                                                Opacity="{Binding PlacemarkVisualPreview.Current.IconTintOpacity}"
+                                                CornerRadius="3" />
+                                        <TextBlock Text="📍"
+                                                   Opacity="{Binding PlacemarkVisualPreview.Current.IconFallbackOpacity}"
+                                                   FontSize="36"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding PlacemarkVisualPreview.Current.HasIconImage}"
+                                                                     Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                    <TextBlock Text="{Binding PlacemarkVisualPreview.PlacemarkName}"
+                                               Foreground="{Binding PlacemarkVisualPreview.Current.LabelBrush}"
+                                               FontSize="{Binding PlacemarkVisualPreview.Current.LabelFontSize}"
+                                               FontWeight="SemiBold"
+                                               TextAlignment="Center"
+                                               TextWrapping="Wrap"
+                                               MaxWidth="240"
+                                               Margin="0,8,0,0" />
+                                </StackPanel>
+                            </Border>
+                            <TextBlock Text="{Binding PlacemarkVisualPreview.Current.Details}"
+                                       TextWrapping="Wrap"
+                                       FontSize="11"
+                                       Foreground="#4B5563"
+                                       Margin="0,8,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Column="2"
+                            Background="White"
+                            BorderBrush="#7BB58B"
+                            BorderThickness="2"
+                            CornerRadius="5"
+                            Padding="10">
+                        <StackPanel>
+                            <TextBlock Text="Proposed"
+                                       FontWeight="SemiBold"
+                                       FontSize="15"
+                                       Foreground="#22633A"
+                                       Margin="0,0,0,8" />
+                            <Border Height="190"
+                                    Background="#314D48"
+                                    CornerRadius="4"
+                                    Padding="8">
+                                <StackPanel VerticalAlignment="Center"
+                                            HorizontalAlignment="Center">
+                                    <Grid Width="{Binding PlacemarkVisualPreview.Proposed.IconDisplaySize}"
+                                          Height="{Binding PlacemarkVisualPreview.Proposed.IconDisplaySize}">
+                                        <Image Source="{Binding PlacemarkVisualPreview.Proposed.IconImage}"
+                                               Opacity="{Binding PlacemarkVisualPreview.Proposed.IconImageOpacity}"
+                                               Stretch="Uniform" />
+                                        <Border Background="{Binding PlacemarkVisualPreview.Proposed.IconTintBrush}"
+                                                Opacity="{Binding PlacemarkVisualPreview.Proposed.IconTintOpacity}"
+                                                CornerRadius="3" />
+                                        <TextBlock Text="📍"
+                                                   Opacity="{Binding PlacemarkVisualPreview.Proposed.IconFallbackOpacity}"
+                                                   FontSize="36"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding PlacemarkVisualPreview.Proposed.HasIconImage}"
+                                                                     Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                    <TextBlock Text="{Binding PlacemarkVisualPreview.PlacemarkName}"
+                                               Foreground="{Binding PlacemarkVisualPreview.Proposed.LabelBrush}"
+                                               FontSize="{Binding PlacemarkVisualPreview.Proposed.LabelFontSize}"
+                                               FontWeight="SemiBold"
+                                               TextAlignment="Center"
+                                               TextWrapping="Wrap"
+                                               MaxWidth="240"
+                                               Margin="0,8,0,0" />
+                                </StackPanel>
+                            </Border>
+                            <TextBlock Text="{Binding PlacemarkVisualPreview.Proposed.Details}"
+                                       TextWrapping="Wrap"
+                                       FontSize="11"
+                                       Foreground="#4B5563"
+                                       Margin="0,8,0,0" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <TextBlock Text="The built-in preview is an approximation. Use Google Earth preview to check the actual desktop rendering."
+                           Foreground="#52606D"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Margin="0,10,0,8" />
+
+                <Button Content="Open Preview in Google Earth"
+                        Command="{Binding OpenPreviewInGoogleEarthCommand}"
+                        Width="210"
+                        Height="32"
+                        HorizontalAlignment="Left" />
+            </StackPanel>
+        </Border>
+    </StackPanel>
 </UserControl>
