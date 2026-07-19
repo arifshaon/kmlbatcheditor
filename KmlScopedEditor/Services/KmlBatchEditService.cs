@@ -55,17 +55,14 @@ public sealed class KmlBatchEditService
         for (var index = 0; index < placemarks.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
             var placemark = placemarks[index];
-            var processed = index + 1;
 
-            if (processed % 250 == 0 || processed == placemarks.Count)
+            if ((index + 1) % 250 == 0 || index + 1 == placemarks.Count)
             {
-                var percent = processed / (double)Math.Max(placemarks.Count, 1) * 100d;
                 progress?.Report(new OperationProgress(
                     "Inspecting selected placemark styles...",
-                    $"{processed:N0} of {placemarks.Count:N0} placemarks",
-                    percent));
+                    $"{index + 1:N0} of {placemarks.Count:N0} placemarks",
+                    (index + 1) / (double)Math.Max(placemarks.Count, 1) * 100d));
             }
 
             if (placemark.Element(KmlNs + "Style") is not null)
@@ -85,24 +82,16 @@ public sealed class KmlBatchEditService
 
             var styleId = ExtractLocalId(styleUrl);
 
-            if (styleId is not null &&
-                context.StylesById.ContainsKey(styleId))
-            {
+            if (styleId is not null && context.StylesById.ContainsKey(styleId))
                 sharedStyleIds.Add(styleId);
-            }
-            else if (styleId is not null &&
-                     context.StyleMapsById.ContainsKey(styleId))
-            {
+            else if (styleId is not null && context.StyleMapsById.ContainsKey(styleId))
                 styleMapIds.Add(styleId);
-            }
             else
             {
                 unresolvedCount++;
                 newInlineCount++;
             }
         }
-
-        cancellationToken.ThrowIfCancellationRequested();
 
         return new KmlBatchEditPreview
         {
@@ -146,15 +135,12 @@ public sealed class KmlBatchEditService
             cancellationToken.ThrowIfCancellationRequested();
             operation.ApplyToPlacemark(distinctPlacemarks[index]);
 
-            var processed = index + 1;
-
-            if (processed % 250 == 0 || processed == distinctPlacemarks.Count)
+            if ((index + 1) % 250 == 0 || index + 1 == distinctPlacemarks.Count)
             {
-                var percent = processed / (double)Math.Max(distinctPlacemarks.Count, 1) * 90d;
                 progress?.Report(new OperationProgress(
                     "Applying scoped style changes...",
-                    $"{processed:N0} of {distinctPlacemarks.Count:N0} placemarks",
-                    percent));
+                    $"{index + 1:N0} of {distinctPlacemarks.Count:N0} placemarks",
+                    (index + 1) / (double)Math.Max(distinctPlacemarks.Count, 1) * 90d));
             }
         }
 
@@ -164,8 +150,6 @@ public sealed class KmlBatchEditService
             95));
 
         context.RebuildStyleIndexes();
-        cancellationToken.ThrowIfCancellationRequested();
-
         return operation.CreateResult();
     }
 
@@ -188,8 +172,14 @@ public sealed class KmlBatchEditService
         string? iconFileName = null;
         string? iconScale = null;
         string? labelScale = null;
-        string? iconColor = null;
-        string? labelColor = null;
+        string? iconBgr = null;
+        string? iconColorDisplay = null;
+        string? iconAlpha = null;
+        string? iconOpacityDisplay = null;
+        string? labelBgr = null;
+        string? labelColorDisplay = null;
+        string? labelAlpha = null;
+        string? labelOpacityDisplay = null;
 
         if (settings.ChangeIconImage)
         {
@@ -245,20 +235,44 @@ public sealed class KmlBatchEditService
         }
 
         if (settings.ChangeIconColor &&
-            !TryConvertDisplayColorToKml(
+            !KmlColorUtility.TryParseDisplayRgb(
                 settings.IconColorText,
-                "Icon color",
-                out iconColor,
+                "Icon colour",
+                out iconBgr,
+                out iconColorDisplay,
+                out error))
+        {
+            return false;
+        }
+
+        if (settings.ChangeIconOpacity &&
+            !KmlColorUtility.TryParseOpacityPercent(
+                settings.IconOpacityText,
+                "Icon opacity",
+                out iconAlpha,
+                out iconOpacityDisplay,
                 out error))
         {
             return false;
         }
 
         if (settings.ChangeLabelColor &&
-            !TryConvertDisplayColorToKml(
+            !KmlColorUtility.TryParseDisplayRgb(
                 settings.LabelColorText,
-                "Text color",
-                out labelColor,
+                "Text colour",
+                out labelBgr,
+                out labelColorDisplay,
+                out error))
+        {
+            return false;
+        }
+
+        if (settings.ChangeLabelOpacity &&
+            !KmlColorUtility.TryParseOpacityPercent(
+                settings.LabelOpacityText,
+                "Text opacity",
+                out labelAlpha,
+                out labelOpacityDisplay,
                 out error))
         {
             return false;
@@ -269,15 +283,15 @@ public sealed class KmlBatchEditService
             IconHref = iconHref,
             IconFileName = iconFileName,
             IconScale = iconScale,
-            IconColor = iconColor,
+            IconBgr = iconBgr,
+            IconAlpha = iconAlpha,
+            IconColorDisplay = iconColorDisplay,
+            IconOpacityDisplay = iconOpacityDisplay,
             LabelScale = labelScale,
-            LabelColor = labelColor,
-            IconColorDisplay = settings.ChangeIconColor
-                ? NormalizeDisplayColor(settings.IconColorText)
-                : null,
-            LabelColorDisplay = settings.ChangeLabelColor
-                ? NormalizeDisplayColor(settings.LabelColorText)
-                : null
+            LabelBgr = labelBgr,
+            LabelAlpha = labelAlpha,
+            LabelColorDisplay = labelColorDisplay,
+            LabelOpacityDisplay = labelOpacityDisplay
         };
 
         return true;
@@ -291,7 +305,6 @@ public sealed class KmlBatchEditService
     {
         normalized = null;
         error = string.Empty;
-
         var text = input?.Trim();
 
         if (string.IsNullOrWhiteSpace(text))
@@ -314,9 +327,7 @@ public sealed class KmlBatchEditService
                          ? currentValue
                          : double.NaN;
 
-        if (double.IsNaN(parsed) ||
-            double.IsInfinity(parsed) ||
-            parsed < 0)
+        if (!double.IsFinite(parsed) || parsed < 0d)
         {
             error =
                 $"{propertyName} must be a number greater than or equal to zero.";
@@ -327,63 +338,24 @@ public sealed class KmlBatchEditService
         return true;
     }
 
-    private static bool TryConvertDisplayColorToKml(
-        string? input,
-        string propertyName,
-        out string? kmlColor,
-        out string error)
-    {
-        kmlColor = null;
-        error = string.Empty;
-
-        var value = input?.Trim().TrimStart('#');
-
-        if (string.IsNullOrWhiteSpace(value) ||
-            (value.Length != 6 && value.Length != 8) ||
-            value.Any(character => !Uri.IsHexDigit(character)))
-        {
-            error =
-                $"{propertyName} must use #RRGGBB or #AARRGGBB format.";
-            return false;
-        }
-
-        value = value.ToUpperInvariant();
-
-        var alpha = value.Length == 8 ? value[..2] : "FF";
-        var rgbStart = value.Length == 8 ? 2 : 0;
-        var red = value.Substring(rgbStart, 2);
-        var green = value.Substring(rgbStart + 2, 2);
-        var blue = value.Substring(rgbStart + 4, 2);
-
-        // KML stores colours in AABBGGRR order.
-        kmlColor = $"{alpha}{blue}{green}{red}".ToLowerInvariant();
-        return true;
-    }
-
-    private static string NormalizeDisplayColor(string? input)
-    {
-        var value = input?.Trim().TrimStart('#').ToUpperInvariant() ?? string.Empty;
-        return $"#{value}";
-    }
-
     private static string BuildChangeSummary(StyleChangeSet changes)
     {
         var lines = new List<string>();
 
         if (changes.IconHref is not null)
             lines.Add($"• Icon image → {changes.IconFileName ?? changes.IconHref}");
-
         if (changes.IconScale is not null)
             lines.Add($"• Icon size → {changes.IconScale}");
-
-        if (changes.IconColor is not null)
-            lines.Add($"• Icon color → {changes.IconColorDisplay}");
-
+        if (changes.IconBgr is not null)
+            lines.Add($"• Icon colour → {changes.IconColorDisplay} (existing opacity preserved)");
+        if (changes.IconAlpha is not null)
+            lines.Add($"• Icon opacity → {changes.IconOpacityDisplay}");
         if (changes.LabelScale is not null)
             lines.Add($"• Text size → {changes.LabelScale}");
-
-        if (changes.LabelColor is not null)
-            lines.Add($"• Text color → {changes.LabelColorDisplay}");
+        if (changes.LabelBgr is not null)
+            lines.Add($"• Text colour → {changes.LabelColorDisplay} (existing opacity preserved)");
+        if (changes.LabelAlpha is not null)
+            lines.Add($"• Text opacity → {changes.LabelOpacityDisplay}");
 
         return string.Join(Environment.NewLine, lines);
     }
@@ -408,30 +380,23 @@ public sealed class KmlBatchEditService
         return null;
     }
 
-    private static string? CleanValue(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value)
-            ? null
-            : value.Trim();
-    }
+    private static string? CleanValue(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private sealed class StyleChangeSet
     {
         public string? IconHref { get; init; }
-
         public string? IconFileName { get; init; }
-
         public string? IconScale { get; init; }
-
-        public string? IconColor { get; init; }
-
-        public string? LabelScale { get; init; }
-
-        public string? LabelColor { get; init; }
-
+        public string? IconBgr { get; init; }
+        public string? IconAlpha { get; init; }
         public string? IconColorDisplay { get; init; }
-
+        public string? IconOpacityDisplay { get; init; }
+        public string? LabelScale { get; init; }
+        public string? LabelBgr { get; init; }
+        public string? LabelAlpha { get; init; }
         public string? LabelColorDisplay { get; init; }
+        public string? LabelOpacityDisplay { get; init; }
     }
 
     private sealed class ApplyOperation
@@ -477,18 +442,10 @@ public sealed class KmlBatchEditService
             var styleUrlElement = placemark.Element(KmlNs + "styleUrl");
             var styleId = ExtractLocalId(styleUrlElement?.Value);
 
-            if (styleId is not null &&
-                _context.StylesById.ContainsKey(styleId))
-            {
-                var cloneId = CloneSharedStyle(styleId);
-                styleUrlElement!.Value = $"#{cloneId}";
-            }
-            else if (styleId is not null &&
-                     _context.StyleMapsById.ContainsKey(styleId))
-            {
-                var cloneId = CloneStyleMap(styleId);
-                styleUrlElement!.Value = $"#{cloneId}";
-            }
+            if (styleId is not null && _context.StylesById.ContainsKey(styleId))
+                styleUrlElement!.Value = $"#{CloneSharedStyle(styleId)}";
+            else if (styleId is not null && _context.StyleMapsById.ContainsKey(styleId))
+                styleUrlElement!.Value = $"#{CloneStyleMap(styleId)}";
             else
             {
                 var createdStyle = CreateInlineStyle(placemark);
@@ -502,18 +459,15 @@ public sealed class KmlBatchEditService
             _placemarksChanged++;
         }
 
-        public KmlBatchEditResult CreateResult()
+        public KmlBatchEditResult CreateResult() => new()
         {
-            return new KmlBatchEditResult
-            {
-                PlacemarksChanged = _placemarksChanged,
-                InlineStylesUpdated = _inlineStylesUpdated,
-                SharedStylesCloned = _sharedStylesCloned,
-                StyleMapsCloned = _styleMapsCloned,
-                InlineStylesCreated = _inlineStylesCreated,
-                UnresolvedStyleOverrides = _unresolvedStyleOverrides
-            };
-        }
+            PlacemarksChanged = _placemarksChanged,
+            InlineStylesUpdated = _inlineStylesUpdated,
+            SharedStylesCloned = _sharedStylesCloned,
+            StyleMapsCloned = _styleMapsCloned,
+            InlineStylesCreated = _inlineStylesCreated,
+            UnresolvedStyleOverrides = _unresolvedStyleOverrides
+        };
 
         private string CloneSharedStyle(string originalId)
         {
@@ -531,7 +485,6 @@ public sealed class KmlBatchEditService
             _styleCloneIds.Add(originalId, newId);
             _context.StylesById[newId] = clone;
             _sharedStylesCloned++;
-
             return newId;
         }
 
@@ -545,9 +498,6 @@ public sealed class KmlBatchEditService
             var newId = CreateUniqueId($"{originalId}_edited");
 
             clone.SetAttributeValue("id", newId);
-
-            // Register before following nested maps so circular references
-            // cannot cause endless recursion.
             _styleMapCloneIds.Add(originalId, newId);
             _context.StyleMapsById[newId] = clone;
             original.AddAfterSelf(clone);
@@ -572,15 +522,13 @@ public sealed class KmlBatchEditService
             var styleUrlElement = pair.Element(KmlNs + "styleUrl");
             var styleId = ExtractLocalId(styleUrlElement?.Value);
 
-            if (styleId is not null &&
-                _context.StylesById.ContainsKey(styleId))
+            if (styleId is not null && _context.StylesById.ContainsKey(styleId))
             {
                 styleUrlElement!.Value = $"#{CloneSharedStyle(styleId)}";
                 return;
             }
 
-            if (styleId is not null &&
-                _context.StyleMapsById.ContainsKey(styleId))
+            if (styleId is not null && _context.StyleMapsById.ContainsKey(styleId))
             {
                 styleUrlElement!.Value = $"#{CloneStyleMap(styleId)}";
                 return;
@@ -602,10 +550,7 @@ public sealed class KmlBatchEditService
             var counter = 2;
 
             while (!_usedIds.Add(candidate))
-            {
-                candidate = $"{baseId}_{counter}";
-                counter++;
-            }
+                candidate = $"{baseId}_{counter++}";
 
             return candidate;
         }
@@ -625,7 +570,10 @@ public sealed class KmlBatchEditService
         var firstFollowingFeatureElement = placemark
             .Elements()
             .FirstOrDefault(element =>
-                IsAfterStyleSelectorInFeatureOrder(element.Name.LocalName));
+                element.Name.LocalName is
+                    "Region" or "ExtendedData" or "Point" or
+                    "LineString" or "LinearRing" or "Polygon" or
+                    "MultiGeometry" or "Model" or "Track" or "MultiTrack");
 
         if (firstFollowingFeatureElement is not null)
             firstFollowingFeatureElement.AddBeforeSelf(style);
@@ -635,27 +583,13 @@ public sealed class KmlBatchEditService
         return style;
     }
 
-    private static bool IsAfterStyleSelectorInFeatureOrder(string localName)
-    {
-        return localName is
-            "Region" or
-            "ExtendedData" or
-            "Point" or
-            "LineString" or
-            "LinearRing" or
-            "Polygon" or
-            "MultiGeometry" or
-            "Model" or
-            "Track" or
-            "MultiTrack";
-    }
-
     private static void ApplyChangesToStyle(
         XElement style,
         StyleChangeSet changes)
     {
         if (changes.IconHref is not null ||
-            changes.IconColor is not null ||
+            changes.IconBgr is not null ||
+            changes.IconAlpha is not null ||
             changes.IconScale is not null)
         {
             var iconStyle = GetOrCreateSubStyle(style, "IconStyle");
@@ -665,39 +599,29 @@ public sealed class KmlBatchEditService
                 var icon = GetOrCreateOrderedChild(
                     iconStyle,
                     "Icon",
-                    "color",
-                    "colorMode",
-                    "scale",
-                    "heading",
-                    "Icon",
-                    "hotSpot");
+                    "color", "colorMode", "scale", "heading", "Icon", "hotSpot");
 
                 SetOrderedChildValue(
                     icon,
                     "href",
                     changes.IconHref,
-                    "href",
-                    "refreshMode",
-                    "refreshInterval",
-                    "viewRefreshMode",
-                    "viewRefreshTime",
-                    "viewBoundScale",
-                    "viewFormat",
-                    "httpQuery");
+                    "href", "refreshMode", "refreshInterval", "viewRefreshMode",
+                    "viewRefreshTime", "viewBoundScale", "viewFormat", "httpQuery");
             }
 
-            if (changes.IconColor is not null)
+            if (changes.IconBgr is not null || changes.IconAlpha is not null)
             {
+                var existingColor = iconStyle.Element(KmlNs + "color")?.Value;
+                var combined = KmlColorUtility.Combine(
+                    existingColor,
+                    changes.IconBgr,
+                    changes.IconAlpha);
+
                 SetOrderedChildValue(
                     iconStyle,
                     "color",
-                    changes.IconColor,
-                    "color",
-                    "colorMode",
-                    "scale",
-                    "heading",
-                    "Icon",
-                    "hotSpot");
+                    combined,
+                    "color", "colorMode", "scale", "heading", "Icon", "hotSpot");
             }
 
             if (changes.IconScale is not null)
@@ -706,29 +630,29 @@ public sealed class KmlBatchEditService
                     iconStyle,
                     "scale",
                     changes.IconScale,
-                    "color",
-                    "colorMode",
-                    "scale",
-                    "heading",
-                    "Icon",
-                    "hotSpot");
+                    "color", "colorMode", "scale", "heading", "Icon", "hotSpot");
             }
         }
 
-        if (changes.LabelColor is not null ||
+        if (changes.LabelBgr is not null ||
+            changes.LabelAlpha is not null ||
             changes.LabelScale is not null)
         {
             var labelStyle = GetOrCreateSubStyle(style, "LabelStyle");
 
-            if (changes.LabelColor is not null)
+            if (changes.LabelBgr is not null || changes.LabelAlpha is not null)
             {
+                var existingColor = labelStyle.Element(KmlNs + "color")?.Value;
+                var combined = KmlColorUtility.Combine(
+                    existingColor,
+                    changes.LabelBgr,
+                    changes.LabelAlpha);
+
                 SetOrderedChildValue(
                     labelStyle,
                     "color",
-                    changes.LabelColor,
-                    "color",
-                    "colorMode",
-                    "scale");
+                    combined,
+                    "color", "colorMode", "scale");
             }
 
             if (changes.LabelScale is not null)
@@ -737,9 +661,7 @@ public sealed class KmlBatchEditService
                     labelStyle,
                     "scale",
                     changes.LabelScale,
-                    "color",
-                    "colorMode",
-                    "scale");
+                    "color", "colorMode", "scale");
             }
         }
     }
@@ -749,37 +671,16 @@ public sealed class KmlBatchEditService
         string localName)
     {
         var existing = style.Element(KmlNs + localName);
-
         if (existing is not null)
             return existing;
 
         var order = new[]
         {
-            "IconStyle",
-            "LabelStyle",
-            "LineStyle",
-            "PolyStyle",
-            "BalloonStyle",
-            "ListStyle"
+            "IconStyle", "LabelStyle", "LineStyle", "PolyStyle",
+            "BalloonStyle", "ListStyle"
         };
 
-        var newElement = new XElement(KmlNs + localName);
-        var targetIndex = Array.IndexOf(order, localName);
-
-        var nextElement = style
-            .Elements()
-            .FirstOrDefault(element =>
-            {
-                var elementIndex = Array.IndexOf(order, element.Name.LocalName);
-                return elementIndex > targetIndex;
-            });
-
-        if (nextElement is not null)
-            nextElement.AddBeforeSelf(newElement);
-        else
-            style.Add(newElement);
-
-        return newElement;
+        return InsertOrderedElement(style, localName, order);
     }
 
     private static XElement GetOrCreateOrderedChild(
@@ -788,20 +689,22 @@ public sealed class KmlBatchEditService
         params string[] order)
     {
         var existing = parent.Element(KmlNs + localName);
+        return existing ?? InsertOrderedElement(parent, localName, order);
+    }
 
-        if (existing is not null)
-            return existing;
-
+    private static XElement InsertOrderedElement(
+        XElement parent,
+        string localName,
+        params string[] order)
+    {
         var newElement = new XElement(KmlNs + localName);
         var targetIndex = Array.IndexOf(order, localName);
 
-        var nextElement = parent
-            .Elements()
-            .FirstOrDefault(element =>
-            {
-                var elementIndex = Array.IndexOf(order, element.Name.LocalName);
-                return elementIndex > targetIndex;
-            });
+        var nextElement = parent.Elements().FirstOrDefault(element =>
+        {
+            var elementIndex = Array.IndexOf(order, element.Name.LocalName);
+            return elementIndex > targetIndex;
+        });
 
         if (nextElement is not null)
             nextElement.AddBeforeSelf(newElement);
@@ -825,20 +728,7 @@ public sealed class KmlBatchEditService
             return;
         }
 
-        var newElement = new XElement(KmlNs + localName, value);
-        var targetIndex = Array.IndexOf(order, localName);
-
-        var nextElement = parent
-            .Elements()
-            .FirstOrDefault(element =>
-            {
-                var elementIndex = Array.IndexOf(order, element.Name.LocalName);
-                return elementIndex > targetIndex;
-            });
-
-        if (nextElement is not null)
-            nextElement.AddBeforeSelf(newElement);
-        else
-            parent.Add(newElement);
+        var newElement = InsertOrderedElement(parent, localName, order);
+        newElement.Value = value;
     }
 }
