@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "D:\a\kmlbatcheditor\kmlbatcheditor\.github\opacity-feature\apply.py", line 510, in <module>
+    replace_once(
+  File "D:\a\kmlbatcheditor\kmlbatcheditor\.github\opacity-feature\apply.py", line 12, in replace_once
+    raise RuntimeError(
+RuntimeError: opacity controls and shifted label rows: expected exactly one matching block in D:\a\kmlbatcheditor\kmlbatcheditor\KmlScopedEditor\MainWindow.xaml, found 0.
