@@ -28,6 +28,7 @@ public partial class MainWindow : System.Windows.Window
     private void ArrangeEditorSections()
     {
         MoveActionButtonsBelowOpacityControls();
+        InsertPlacemarkNameSelectionPanel();
         MakeStyleDiagnosticsCollapsible();
     }
 
@@ -63,6 +64,31 @@ public partial class MainWindow : System.Windows.Window
         var targetIndex = Math.Min(1, previewRoot.Children.Count);
         previewRoot.Children.Insert(targetIndex, actionPanel);
         actionPanel.Margin = new Thickness(0, 0, 0, 12);
+    }
+
+    private void InsertPlacemarkNameSelectionPanel()
+    {
+        var calculateButton = FindLogicalDescendants<System.Windows.Controls.Button>(this)
+            .FirstOrDefault(button => string.Equals(
+                button.Content?.ToString(),
+                "Calculate Selection",
+                StringComparison.Ordinal));
+
+        if (calculateButton is null ||
+            System.Windows.LogicalTreeHelper.GetParent(calculateButton) is not
+                System.Windows.Controls.StackPanel parent ||
+            parent.Children.OfType<PlacemarkNameSelectionControl>().Any())
+        {
+            return;
+        }
+
+        var buttonIndex = parent.Children.IndexOf(calculateButton);
+        if (buttonIndex < 0)
+            return;
+
+        parent.Children.Insert(
+            buttonIndex,
+            new PlacemarkNameSelectionControl());
     }
 
     private void MakeStyleDiagnosticsCollapsible()

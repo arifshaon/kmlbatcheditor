@@ -12,7 +12,7 @@ using Forms = System.Windows.Forms;
 
 namespace KmlScopedEditor.ViewModels;
 
-public class MainViewModel : ViewModelBase, IDisposable
+public partial class MainViewModel : ViewModelBase, IDisposable
 {
     private static readonly XNamespace KmlNs =
         "http://www.opengis.net/kml/2.2";
@@ -402,6 +402,11 @@ public class MainViewModel : ViewModelBase, IDisposable
             },
             new SelectionModeOption
             {
+                Value = PlacemarkSelectionMode.PlacemarkName,
+                Label = "Placemark name"
+            },
+            new SelectionModeOption
+            {
                 Value = PlacemarkSelectionMode.IconImage,
                 Label = "Icon image"
             },
@@ -526,6 +531,7 @@ public class MainViewModel : ViewModelBase, IDisposable
         var selectedIconTypes = IconTypes
             .Where(option => option.IsSelected)
             .ToList();
+        var selectedPlacemarkNames = GetSelectedPlacemarkNameOptions();
 
         if (selectionMode == PlacemarkSelectionMode.Folder &&
             selectedNode is null)
@@ -535,7 +541,16 @@ public class MainViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        if (selectionMode != PlacemarkSelectionMode.Folder &&
+        if (selectionMode == PlacemarkSelectionMode.PlacemarkName &&
+            selectedPlacemarkNames.Count == 0)
+        {
+            SelectionSummary = "Select at least one placemark name.";
+            ShowNotification(SelectionSummary, NotificationKind.Warning);
+            return;
+        }
+
+        if ((selectionMode == PlacemarkSelectionMode.IconImage ||
+             selectionMode == PlacemarkSelectionMode.IconVariant) &&
             selectedIconTypes.Count == 0)
         {
             SelectionSummary =
@@ -554,16 +569,24 @@ public class MainViewModel : ViewModelBase, IDisposable
             operation: async (progress, cancellationToken) =>
             {
                 calculatedSelection = await Task.Run(
-                    () => selectionMode == PlacemarkSelectionMode.Folder
-                        ? _selectionService.GetPlacemarksForFolder(
-                            selectedNode!,
-                            includeSubfolders,
-                            progress,
-                            cancellationToken)
-                        : _selectionService.GetPlacemarksForIconTypes(
+                    () => selectionMode switch
+                    {
+                        PlacemarkSelectionMode.Folder =>
+                            _selectionService.GetPlacemarksForFolder(
+                                selectedNode!,
+                                includeSubfolders,
+                                progress,
+                                cancellationToken),
+                        PlacemarkSelectionMode.PlacemarkName =>
+                            _placemarkNameSelectionService.GetPlacemarksForNames(
+                                selectedPlacemarkNames,
+                                progress,
+                                cancellationToken),
+                        _ => _selectionService.GetPlacemarksForIconTypes(
                             selectedIconTypes,
                             progress,
-                            cancellationToken),
+                            cancellationToken)
+                    },
                     cancellationToken);
             });
 
@@ -584,6 +607,12 @@ public class MainViewModel : ViewModelBase, IDisposable
             SelectionSummary =
                 $"{MatchedPlacemarkCount:N0} placemarks matched in " +
                 $"“{selectedNode!.Name}”, {scopeDescription}.";
+        }
+        else if (selectionMode == PlacemarkSelectionMode.PlacemarkName)
+        {
+            SelectionSummary =
+                $"{MatchedPlacemarkCount:N0} placemarks matched across " +
+                $"{selectedPlacemarkNames.Count:N0} selected names.";
         }
         else
         {
@@ -1199,6 +1228,8 @@ public class MainViewModel : ViewModelBase, IDisposable
 
         foreach (var option in source)
             IconTypes.Add(option);
+
+        RefreshVisiblePlacemarkNameOptions();
     }
 
     private async Task<bool> RunBusyOperationAsync(
