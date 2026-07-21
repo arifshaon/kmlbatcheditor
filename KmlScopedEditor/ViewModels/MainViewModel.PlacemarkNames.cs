@@ -69,6 +69,12 @@ public partial class MainViewModel
     private IReadOnlyList<PlacemarkNameOption>
         GetSelectedPlacemarkNameOptions()
     {
+        if (SelectedSelectionMode.Value !=
+            PlacemarkSelectionMode.PlacemarkName)
+        {
+            return Array.Empty<PlacemarkNameOption>();
+        }
+
         EnsurePlacemarkNameInventory();
         return _placemarkNameInventory
             .Where(option => option.IsSelected)
