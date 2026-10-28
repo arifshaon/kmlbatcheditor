@@ -82,6 +82,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public IReadOnlyList<XElement> CurrentSelection => _currentSelection;
 
+    public KmlDocumentContext? DocumentContext => _documentContext;
+
+    public bool HasLoadedDocument => _documentContext is not null;
+
     public KmlBatchEditSettings EditSettings { get; } = new();
 
     public SelectionModeOption SelectedSelectionMode
@@ -1105,6 +1109,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _documentContext = newContext;
         newContext = null;
 
+        OnPropertyChanged(nameof(DocumentContext));
+        OnPropertyChanged(nameof(HasLoadedDocument));
+
         _iconImageInventory = iconImages;
         _iconVariantInventory = iconVariants;
 
@@ -1138,6 +1145,147 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             _ = Task.Run(previousContext.Dispose);
         }
+    }
+
+
+    public async Task ApplyLineEditorDocumentAsync(XDocument editedDocument)
+    {
+        ArgumentNullException.ThrowIfNull(editedDocument);
+
+        if (_documentContext is null)
+            return;
+
+        if (editedDocument.Root is null)
+        {
+            ShowNotification(
+                "The line editor did not return a valid KML document.",
+                NotificationKind.Error);
+            return;
+        }
+
+        var originalDocument = new XDocument(_documentContext.Document);
+        IReadOnlyList<IconTypeOption>? iconImages = null;
+        IReadOnlyList<IconTypeOption>? iconVariants = null;
+        var lineCount = 0;
+        var stopwatch = Stopwatch.StartNew();
+
+        var completed = await RunBusyOperationAsync(
+            title: "Applying line edits",
+            initialMessage: "Updating the KML geometry...",
+            canCancel: false,
+            operation: async (progress, _) =>
+            {
+                await Task.Run(() =>
+                {
+                    try
+                    {
+                        ReplaceDocumentContents(
+                            _documentContext.Document,
+                            editedDocument);
+
+                        _loader.RefreshContext(
+                            _documentContext,
+                            progress,
+                            CancellationToken.None);
+
+                        progress.Report(new OperationProgress(
+                            "Refreshing selection inventories...",
+                            null,
+                            88));
+
+                        iconImages =
+                            _selectionService.BuildIconImageInventory(
+                                _documentContext,
+                                _styleInspector,
+                                progress,
+                                CancellationToken.None);
+
+                        iconVariants =
+                            _selectionService.BuildIconVariantInventory(
+                                _documentContext,
+                                _styleInspector,
+                                progress,
+                                CancellationToken.None);
+
+                        lineCount = _documentContext.Document
+                            .Descendants(KmlNs + "LineString")
+                            .Count();
+                    }
+                    catch
+                    {
+                        ReplaceDocumentContents(
+                            _documentContext.Document,
+                            originalDocument);
+
+                        _loader.RefreshContext(
+                            _documentContext,
+                            progress,
+                            CancellationToken.None);
+
+                        throw;
+                    }
+                });
+            });
+
+        stopwatch.Stop();
+
+        if (!completed ||
+            iconImages is null ||
+            iconVariants is null)
+        {
+            return;
+        }
+
+        SubscribeToIconOptions(iconImages);
+        SubscribeToIconOptions(iconVariants);
+
+        _iconImageInventory = iconImages;
+        _iconVariantInventory = iconVariants;
+
+        InvalidatePlacemarkNameInventory();
+
+        RootNodes.Clear();
+        RootNodes.Add(_documentContext.RootNode);
+
+        SelectedNode = _documentContext.RootNode;
+        RefreshVisibleIconOptions();
+
+        HasUnsavedChanges = true;
+        HasLoadSummary = false;
+        ResetCalculatedSelection();
+
+        StatusText =
+            $"Line edits applied: {lineCount:N0} LineString segment(s) remain. " +
+            $"Use Save As to create the edited output. " +
+            $"Completed in {FormatElapsed(stopwatch.Elapsed)}.";
+
+        ShowNotification(
+            "Line edits applied to the working document. Use Save As when you are ready to create the edited KML/KMZ.",
+            NotificationKind.Success);
+
+        RaiseCommandStates();
+    }
+
+    private static void ReplaceDocumentContents(
+        XDocument target,
+        XDocument source)
+    {
+        if (source.Root is null)
+        {
+            throw new InvalidOperationException(
+                "The edited KML document does not contain a root element.");
+        }
+
+        var replacementRoot = new XElement(source.Root);
+
+        if (target.Root is null)
+            target.Add(replacementRoot);
+        else
+            target.Root.ReplaceWith(replacementRoot);
+
+        target.Declaration = source.Declaration is null
+            ? null
+            : new XDeclaration(source.Declaration);
     }
 
     private async Task SaveAsAsync()
