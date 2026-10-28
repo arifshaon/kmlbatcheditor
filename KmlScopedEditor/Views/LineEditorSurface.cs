@@ -149,7 +149,7 @@ public sealed class LineEditorSurface : FrameworkElement
             var text = new FormattedText(
                 "No KML LineStrings were found.",
                 System.Globalization.CultureInfo.CurrentCulture,
-                FlowDirection.LeftToRight,
+                System.Windows.FlowDirection.LeftToRight,
                 new Typeface("Segoe UI"),
                 16d,
                 Brushes.Gray,
