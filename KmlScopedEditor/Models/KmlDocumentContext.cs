@@ -23,7 +23,7 @@ public sealed class KmlDocumentContext : IDisposable
 
     public required XDocument Document { get; init; }
 
-    public required KmlTreeNode RootNode { get; init; }
+    public required KmlTreeNode RootNode { get; set; }
 
     public bool IsKmz { get; init; }
 
@@ -42,7 +42,7 @@ public sealed class KmlDocumentContext : IDisposable
     /// </summary>
     public int EmbeddedResourceCount { get; init; }
 
-    public IReadOnlyList<XElement> Placemarks { get; init; }
+    public IReadOnlyList<XElement> Placemarks { get; set; }
         = Array.Empty<XElement>();
 
     /// <summary>
