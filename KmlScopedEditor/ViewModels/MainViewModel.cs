@@ -1285,7 +1285,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         target.Declaration = source.Declaration is null
             ? null
-            : new XDeclaration(source.Declaration);
+            : new XDeclaration(
+                source.Declaration.Version,
+                source.Declaration.Encoding,
+                source.Declaration.Standalone);
     }
 
     private async Task SaveAsAsync()
