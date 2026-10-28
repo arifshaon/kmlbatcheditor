@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Experimental Line Editor for KML/KMZ LineString geometry.
+- Draw-across selection: a freehand stroke selects every contour line or cut fragment it crosses.
+- Batch deletion of selected lines/fragments, with Clear Selection and Invert Selection.
+- Draw-across Cut tool that splits open and closed LineStrings at actual stroke intersections.
+- Undo for cut and delete operations.
+- Mouse-wheel zoom, right/middle-button pan, and Fit to View.
+- Line edits are made on a working copy and are committed to the loaded document only with Apply & Close.
+- Document tree, placemark, style, icon, and placemark-name indexes are rebuilt after structural line edits.
+
 ## 1.1.0
 
 ### Added
