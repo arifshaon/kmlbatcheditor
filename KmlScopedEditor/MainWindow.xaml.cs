@@ -170,6 +170,36 @@ public partial class MainWindow : System.Windows.Window
         }
     }
 
+    private async void OnLineEditorClick(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel viewModel ||
+            viewModel.DocumentContext is null)
+        {
+            System.Windows.MessageBox.Show(
+                "Open a KML or KMZ file first.",
+                "Line Editor",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+            return;
+        }
+
+        var editor = new LineEditorWindow(
+            viewModel.DocumentContext.Document,
+            System.IO.Path.GetFileName(
+                viewModel.DocumentContext.SourcePath))
+        {
+            Owner = this
+        };
+
+        if (editor.ShowDialog() != true)
+            return;
+
+        await viewModel.ApplyLineEditorDocumentAsync(
+            editor.EditedDocument);
+    }
+
     private void OnTreeViewItemSelected(
         object sender,
         RoutedEventArgs e)
