@@ -159,6 +159,81 @@ public class KmlLoader
         };
     }
 
+
+    /// <summary>
+    /// Rebuilds the tree and placemark/style indexes after structural edits
+    /// have changed the in-memory KML document.
+    /// </summary>
+    public void RefreshContext(
+        KmlDocumentContext context,
+        IProgress<OperationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var root = context.Document.Root
+            ?? throw new InvalidOperationException(
+                "Invalid KML: missing root element.");
+
+        if (root.Name.LocalName != "kml")
+        {
+            throw new InvalidOperationException(
+                "Invalid KML: the root element is not <kml>.");
+        }
+
+        Report(progress, "Refreshing the folder and placemark tree...", null, 20);
+
+        var rootNode = new KmlTreeNode
+        {
+            Name = Path.GetFileNameWithoutExtension(context.SourcePath),
+            NodeType = KmlNodeType.Document,
+            SourceElement = root,
+            IsExpanded = true,
+            IsChecked = false
+        };
+
+        var parsedNodeCount = 0;
+
+        foreach (var child in root.Elements())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var node = ParseElement(
+                child,
+                cancellationToken,
+                progress,
+                ref parsedNodeCount);
+
+            if (node is not null)
+            {
+                node.Parent = rootNode;
+                rootNode.Children.Add(node);
+            }
+        }
+
+        UpdatePlacemarkCounts(rootNode, cancellationToken);
+
+        Report(progress, "Re-indexing placemarks...", null, 55);
+
+        var placemarks = context.Document
+            .Descendants(KmlNs + "Placemark")
+            .ToList();
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        context.RootNode = rootNode;
+        context.Placemarks = placemarks;
+
+        Report(progress, "Re-indexing styles...", null, 75);
+        context.RebuildStyleIndexes();
+
+        Report(
+            progress,
+            "Document indexes refreshed.",
+            $"{placemarks.Count:N0} placemarks indexed",
+            85);
+    }
+
     private KmlTreeNode? ParseElement(
         XElement element,
         CancellationToken cancellationToken,
