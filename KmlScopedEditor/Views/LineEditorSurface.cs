@@ -2,6 +2,18 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Xml.Linq;
+using Point = System.Windows.Point;
+using Rect = System.Windows.Rect;
+using MouseEventArgs = System.Windows.Input.MouseEventArgs;
+using MouseButtonEventArgs = System.Windows.Input.MouseButtonEventArgs;
+using MouseWheelEventArgs = System.Windows.Input.MouseWheelEventArgs;
+using MouseButton = System.Windows.Input.MouseButton;
+using MouseButtonState = System.Windows.Input.MouseButtonState;
+using Cursors = System.Windows.Input.Cursors;
+using Pen = System.Windows.Media.Pen;
+using Brush = System.Windows.Media.Brush;
+using Brushes = System.Windows.Media.Brushes;
+using Color = System.Windows.Media.Color;
 using KmlScopedEditor.Models;
 using KmlScopedEditor.Services;
 
