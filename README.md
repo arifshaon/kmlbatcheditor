@@ -1,6 +1,6 @@
 # KML Scoped Editor
 
-A Windows desktop application for safely batch-editing placemark styles in Google Earth **KML** and **KMZ** files.
+A Windows desktop application for safely batch-editing placemark styles and interactively editing line geometry in Google Earth **KML** and **KMZ** files.
 
 KML Scoped Editor lets you select placemarks by folder, icon image, or icon variant, then change one or more style properties without deliberately changing unrelated placemark data or style settings.
 
@@ -45,6 +45,27 @@ For example, you can change the text colour of every placemark in a folder while
 - Supports cancellation where an operation can be stopped safely.
 - Displays clear success, warning, and error notifications.
 - Saves the edited document as a new KML or KMZ file.
+- Includes an experimental Line Editor for drawing across contour/LineString geometry to select, cut, and delete lines or cut fragments.
+- Supports zoom, pan, fit-to-view, invert selection, and undo while line editing.
+
+---
+
+## Experimental Line Editor
+
+After opening a KML or KMZ containing `LineString` geometry, choose **Line Editor** from the top toolbar.
+
+The Line Editor is intended for contour-map and similar line-cleanup work:
+
+1. **Select** is the default tool. Drag a stroke across one or more lines to add them to the current selection.
+2. Selected lines are highlighted. Use **Delete Selected** only when the selection is correct.
+3. Use **Clear Selection** to start the selection again, or **Invert Selection** when it is quicker to identify the lines to keep.
+4. Switch to **Cut** and drag a stroke across contours that need to be split. The editor divides each crossed line at the actual intersections.
+5. After cutting, switch back to **Select**. The new fragments can be selected and deleted independently.
+6. **Undo** reverses the last cut or deletion.
+7. Use the mouse wheel to zoom. Right- or middle-drag pans the view. **Fit to View** returns to the full linework.
+8. Choose **Apply & Close** to return the geometry changes to the main editor, then use the normal **Save As** command to create the output KML/KMZ.
+
+The Line Editor works on a temporary in-memory copy. Closing it with **Cancel** leaves the loaded document unchanged.
 
 ---
 
