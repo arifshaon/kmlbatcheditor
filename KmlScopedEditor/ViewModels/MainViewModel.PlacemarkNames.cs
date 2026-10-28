@@ -195,6 +195,17 @@ public partial class MainViewModel
         OnPropertyChanged(nameof(PlacemarkNameSearchSummary));
     }
 
+
+    private void InvalidatePlacemarkNameInventory()
+    {
+        _placemarkNameInventory = Array.Empty<PlacemarkNameOption>();
+        _placemarkNameInventoryContext = null;
+        PlacemarkNameOptions.Clear();
+
+        RaisePlacemarkNameCommandStates();
+        OnPropertyChanged(nameof(PlacemarkNameSearchSummary));
+    }
+
     private void RaisePlacemarkNameCommandStates()
     {
         _selectVisiblePlacemarkNamesCommand?.RaiseCanExecuteChanged();
