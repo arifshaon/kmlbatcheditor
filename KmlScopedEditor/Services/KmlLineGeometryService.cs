@@ -557,13 +557,24 @@ public sealed class KmlLineGeometryService
         return string.Join(
             " ",
             coordinates.Select(point =>
-                point.Altitude.HasValue
-                    ? string.Create(
-                        CultureInfo.InvariantCulture,
-                        $"{point.Longitude:R},{point.Latitude:R},{point.Altitude.Value:R}")
-                    : string.Create(
-                        CultureInfo.InvariantCulture,
-                        $"{point.Longitude:R},{point.Latitude:R}")));
+            {
+                var longitude = point.Longitude.ToString(
+                    "R",
+                    CultureInfo.InvariantCulture);
+
+                var latitude = point.Latitude.ToString(
+                    "R",
+                    CultureInfo.InvariantCulture);
+
+                if (!point.Altitude.HasValue)
+                    return $"{longitude},{latitude}";
+
+                var altitude = point.Altitude.Value.ToString(
+                    "R",
+                    CultureInfo.InvariantCulture);
+
+                return $"{longitude},{latitude},{altitude}";
+            }));
     }
 
     private static bool IsClosed(
