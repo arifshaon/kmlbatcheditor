@@ -1,6 +1,9 @@
 using System.Globalization;
 using System.Windows;
 using System.Xml.Linq;
+using Point = System.Windows.Point;
+using Rect = System.Windows.Rect;
+using Vector = System.Windows.Vector;
 
 namespace KmlScopedEditor.Services;
 
