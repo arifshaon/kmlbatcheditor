@@ -376,6 +376,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public RelayCommand PickLabelColorCommand { get; }
 
+    public RelayCommand PickLineColorCommand { get; }
+
     public RelayCommand PreviousPreviewPlacemarkCommand { get; }
 
     public RelayCommand NextPreviewPlacemarkCommand { get; }
@@ -451,6 +453,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         PickLabelColorCommand =
             new RelayCommand(
                 _ => PickColor(isIconColor: false),
+                _ => !IsBusy);
+
+        PickLineColorCommand =
+            new RelayCommand(
+                _ => PickLineColor(),
                 _ => !IsBusy);
 
         PreviousPreviewPlacemarkCommand =
@@ -864,6 +871,27 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             EditSettings.IconColorText = selected;
         else
             EditSettings.LabelColorText = selected;
+    }
+
+    private void PickLineColor()
+    {
+        var currentText = EditSettings.LineColorText;
+
+#pragma warning disable CA1416
+        using var dialog = new Forms.ColorDialog
+        {
+            AllowFullOpen = true,
+            FullOpen = true,
+            AnyColor = true,
+            Color = ParseDisplayColor(currentText)
+        };
+
+        if (dialog.ShowDialog() != Forms.DialogResult.OK)
+            return;
+
+        EditSettings.LineColorText =
+            $"#{dialog.Color.R:X2}{dialog.Color.G:X2}{dialog.Color.B:X2}";
+#pragma warning restore CA1416
     }
 
     private static DrawingColor ParseDisplayColor(string? input)
@@ -1530,6 +1558,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         BrowseIconFileCommand.RaiseCanExecuteChanged();
         PickIconColorCommand.RaiseCanExecuteChanged();
         PickLabelColorCommand.RaiseCanExecuteChanged();
+        PickLineColorCommand.RaiseCanExecuteChanged();
         PreviousPreviewPlacemarkCommand.RaiseCanExecuteChanged();
         NextPreviewPlacemarkCommand.RaiseCanExecuteChanged();
         OpenPreviewInGoogleEarthCommand.RaiseCanExecuteChanged();
