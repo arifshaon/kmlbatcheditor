@@ -291,7 +291,7 @@
                             MinWidth="130"
                             Margin="0,0,10,0"
                             IsEnabled="False"
-                            Click="OnClearSplitLinesClick" />
+                            Click="OnRemovePendingSplitLineClick" />
 
                     <Border Grid.Column="4"
                             Background="#F3EAFB"
