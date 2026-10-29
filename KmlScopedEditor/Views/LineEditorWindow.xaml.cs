@@ -806,8 +806,7 @@ public partial class LineEditorWindow : Window
     {
         if (e.Tool == LineEditorTool.Split)
         {
-            if (!_draftCutDrawing &&
-                _draftCutPoints.Count == 0)
+            if (_draftCutPoints.Count == 0)
             {
                 var pendingGuide =
                     FindPendingGuideNearPoint(
@@ -817,15 +816,24 @@ public partial class LineEditorWindow : Window
 
                 if (pendingGuide is not null)
                 {
+                    _draftCutDrawing = false;
                     StartEditingGuide(
                         pendingGuide);
                     RefreshSurface();
                     UpdateStatus(
-                        "Split line selected for editing. Drag the orange handles to reshape it, or click away from it to start drawing another line.");
+                        "Split line selected for editing. Drag the orange handles to reshape it.");
                     return;
                 }
 
-                StopEditingGuide();
+                if (GetEditingGuide() is not null)
+                {
+                    StopEditingGuide();
+                    RefreshSurface();
+                    UpdateStatus(
+                        "Finished editing the split line. Click or drag again on empty space to start a replacement line.");
+                    return;
+                }
+
                 _draftCutDrawing = true;
             }
             else if (!_draftCutDrawing)
@@ -846,12 +854,17 @@ public partial class LineEditorWindow : Window
             UpdateStatus(
                 _draftCutPoints.Count < 2
                     ? "Split line started. Add at least one more point."
-                    : $"Split line has {_draftCutPoints.Count:N0} point(s). Press Enter to finish drawing; press Enter again or Apply split to apply all pending lines.");
+                    : $"Split line has {_draftCutPoints.Count:N0} point(s). Press Enter to finish drawing; press Enter again or Apply split to apply it.");
 
             return;
         }
 
         if (e.Tool != LineEditorTool.Select)
+            return;
+
+        // The first click of a double-click already changed the selection.
+        // Ignore the second click so it does not immediately toggle it back.
+        if (e.IsDoubleClick)
             return;
 
         var tolerance =
@@ -867,24 +880,39 @@ public partial class LineEditorWindow : Window
             return;
         }
 
+        var element =
+            feature.LineStringElement;
+
         if (e.IsDeselect)
         {
-            _selected.Remove(feature.LineStringElement);
+            _selected.Remove(element);
             UpdateStatus(
-                "Removed one line from the selection.");
+                $"Removed 1 {CurrentLineLabel.TrimEnd('(', 's', ')')} ({_selected.Count:N0} selected).");
         }
         else if (e.IsAdditive)
         {
-            _selected.Add(feature.LineStringElement);
+            _selected.Add(element);
             UpdateStatus(
-                $"Added one line to the selection; {_selected.Count:N0} selected.");
+                $"Added 1 {CurrentLineLabel.TrimEnd('(', 's', ')')} ({_selected.Count:N0} selected).");
+        }
+        else if (_workflowStep == 2)
+        {
+            _selected.Clear();
+            _selected.Add(element);
+            UpdateStatus(
+                "Selected one line for the Step 2 scope.");
+        }
+        else if (_selected.Contains(element))
+        {
+            _selected.Remove(element);
+            UpdateStatus(
+                $"Removed 1 {(_workflowStep == 3 ? "piece" : "line")} ({_selected.Count:N0} selected).");
         }
         else
         {
-            _selected.Clear();
-            _selected.Add(feature.LineStringElement);
+            _selected.Add(element);
             UpdateStatus(
-                "Selected one line.");
+                $"Added 1 {(_workflowStep == 3 ? "piece" : "line")} ({_selected.Count:N0} selected).");
         }
 
         EditorSurface.SetSelection(_selected);
@@ -899,6 +927,9 @@ public partial class LineEditorWindow : Window
         object? sender,
         LineEditorPointerEventArgs e)
     {
+        _lastPointerWorldPoint =
+            e.WorldPoint;
+
         if (EditorSurface.Tool == LineEditorTool.Split)
         {
             EditorSurface.SetHovered(null);
@@ -939,6 +970,8 @@ public partial class LineEditorWindow : Window
         object? sender,
         EventArgs e)
     {
+        _lastPointerWorldPoint = null;
+
         if (!_draftCutDrawing)
             return;
 
@@ -2031,6 +2064,14 @@ public partial class LineEditorWindow : Window
                 _committedPreviewPoints);
         }
 
+        if (_draftCutPoints.Count == 0)
+        {
+            _draftWillReplacePending =
+                _guides.Any(
+                    guide => !guide.Applied);
+            RefreshSurface();
+        }
+
         _draftCutPoints.Add(point);
         _draftCutPreviewPoint = null;
 
@@ -2095,9 +2136,13 @@ public partial class LineEditorWindow : Window
     private void CancelDraftCutLine(
         bool switchToSelect)
     {
+        var restorePendingAppearance =
+            _draftWillReplacePending;
+
         _draftCutPoints.Clear();
         _draftCutPreviewPoint = null;
         _draftCutDrawing = false;
+        _draftWillReplacePending = false;
         _cutPoints.Clear();
         ResetIncrementalSplitPreview();
         EditorSurface.SetCutPoints(_cutPoints);
@@ -2105,6 +2150,9 @@ public partial class LineEditorWindow : Window
         EditorSurface.SetDraftCut(
             _draftCutPoints,
             _draftCutPreviewPoint);
+
+        if (restorePendingAppearance)
+            RefreshSurface();
 
         if (switchToSelect)
             SetTool(LineEditorTool.Select);
@@ -2524,7 +2572,10 @@ public partial class LineEditorWindow : Window
                     new LineEditorGuideVisual(
                         ProjectGuide(
                             guide.Guide),
-                        guide.Applied))
+                        guide.Applied,
+                        !guide.Applied &&
+                        _draftWillReplacePending &&
+                        _draftCutPoints.Count > 0))
                 .ToList();
 
         EditorSurface.SetDocument(
@@ -2645,6 +2696,8 @@ public partial class LineEditorWindow : Window
         if (guide.Applied)
             return;
 
+        _draftCutDrawing = false;
+        _draftCutPreviewPoint = null;
         _editingGuideId = guide.Id;
         SetTool(LineEditorTool.Split);
 
