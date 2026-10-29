@@ -40,6 +40,7 @@ public sealed class LineEditorSurface : FrameworkElement
         Array.Empty<LineEditorGuideVisual>();
 
     private IReadOnlyList<Point> _cutPoints = Array.Empty<Point>();
+    private IReadOnlyList<Point> _appliedCutPoints = Array.Empty<Point>();
     private IReadOnlyList<Point> _draftCutPoints = Array.Empty<Point>();
     private Point? _draftCutPreviewPoint;
     private List<Point> _editableGuidePoints = new();
@@ -53,6 +54,7 @@ public sealed class LineEditorSurface : FrameworkElement
 
     private Pen? _normalPen;
     private Pen? _selectedPen;
+    private Pen? _softSelectedPen;
     private Pen? _hoverPen;
     private Pen? _activeSplitLinePen;
     private Pen? _appliedSplitLinePen;
@@ -61,8 +63,10 @@ public sealed class LineEditorSurface : FrameworkElement
     private Pen? _splitStrokePen;
     private SolidColorBrush? _splitVertexBrush;
     private SolidColorBrush? _splitPointBrush;
+    private SolidColorBrush? _appliedSplitPointBrush;
 
     private HashSet<XElement> _selected = new();
+    private bool _selectionIsSoft;
     private XElement? _hovered;
     private Rect _worldBounds = Rect.Empty;
 
@@ -195,6 +199,25 @@ public sealed class LineEditorSurface : FrameworkElement
         _selected = selected?.ToHashSet() ?? new HashSet<XElement>();
         EnsureRenderCache();
         RedrawSelectionLayer();
+    }
+
+    public void SetSelectionSoft(bool isSoft)
+    {
+        if (_selectionIsSoft == isSoft)
+            return;
+
+        _selectionIsSoft = isSoft;
+        EnsureRenderCache();
+        RedrawSelectionLayer();
+    }
+
+    public void SetAppliedCutPoints(
+        IReadOnlyList<Point> cutPoints)
+    {
+        _appliedCutPoints =
+            cutPoints ?? Array.Empty<Point>();
+        EnsureRenderCache();
+        RedrawOverlayLayer();
     }
 
     public void SetCutPoints(
@@ -732,7 +755,12 @@ public sealed class LineEditorSurface : FrameworkElement
     {
         using var context = _selectionVisual.RenderOpen();
 
-        if (_selectedPen is not null)
+        var selectionPen =
+            _selectionIsSoft
+                ? _softSelectedPen
+                : _selectedPen;
+
+        if (selectionPen is not null)
         {
             foreach (var element in _selected)
             {
@@ -742,7 +770,7 @@ public sealed class LineEditorSurface : FrameworkElement
                 {
                     context.DrawGeometry(
                         null,
-                        _selectedPen,
+                        selectionPen,
                         geometry);
                 }
             }
@@ -832,6 +860,21 @@ public sealed class LineEditorSurface : FrameworkElement
                     point,
                     vertexRadius,
                     vertexRadius);
+            }
+        }
+
+        if (_appliedCutPoints.Count > 0)
+        {
+            var radius = 1.9d / safeScale;
+
+            foreach (var point in _appliedCutPoints)
+            {
+                context.DrawEllipse(
+                    _appliedSplitPointBrush,
+                    null,
+                    point,
+                    radius,
+                    radius);
             }
         }
 
@@ -1041,6 +1084,10 @@ public sealed class LineEditorSurface : FrameworkElement
             Color.FromRgb(190, 45, 45),
             2.6d / safeScale);
 
+        _softSelectedPen = CreatePen(
+            Color.FromArgb(105, 190, 45, 45),
+            1.8d / safeScale);
+
         _hoverPen = CreatePen(
             Color.FromRgb(0, 120, 190),
             2.2d / safeScale);
@@ -1074,6 +1121,9 @@ public sealed class LineEditorSurface : FrameworkElement
 
         _splitPointBrush = CreateFrozenBrush(
             Color.FromRgb(218, 94, 39));
+
+        _appliedSplitPointBrush = CreateFrozenBrush(
+            Color.FromArgb(105, 218, 94, 39));
 
         _featureGeometry.Clear();
 
