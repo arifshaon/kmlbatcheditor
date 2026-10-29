@@ -8,6 +8,9 @@ namespace KmlScopedEditor;
 
 public partial class MainWindow : System.Windows.Window
 {
+    private System.Xml.Linq.XDocument? _lineEditorSessionDocument;
+    private LineEditorSessionState? _lineEditorSessionState;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -31,10 +34,23 @@ public partial class MainWindow : System.Windows.Window
             return;
         }
 
+        var currentDocument =
+            viewModel.DocumentContext.Document;
+
+        if (!ReferenceEquals(
+                _lineEditorSessionDocument,
+                currentDocument))
+        {
+            _lineEditorSessionDocument =
+                currentDocument;
+            _lineEditorSessionState = null;
+        }
+
         var editor = new LineEditorWindow(
-            viewModel.DocumentContext.Document,
+            currentDocument,
             System.IO.Path.GetFileName(
-                viewModel.DocumentContext.SourcePath))
+                viewModel.DocumentContext.SourcePath),
+            _lineEditorSessionState)
         {
             Owner = this
         };
@@ -42,8 +58,16 @@ public partial class MainWindow : System.Windows.Window
         if (editor.ShowDialog() != true)
             return;
 
+        var sessionState =
+            editor.SessionState;
+
         await viewModel.ApplyLineEditorDocumentAsync(
             editor.EditedDocument);
+
+        _lineEditorSessionDocument =
+            viewModel.DocumentContext.Document;
+        _lineEditorSessionState =
+            sessionState;
     }
 
     private void OnTreeViewItemSelected(
