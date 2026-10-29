@@ -261,7 +261,9 @@
                                    Text="(none selected)"
                                    Foreground="#7A8494"
                                    FontSize="11"
-                                   Margin="5,1,0,0" />
+                                   Margin="5,1,0,0"
+                                   MaxWidth="340"
+                                   TextWrapping="Wrap" />
                     </StackPanel>
 
                     <Button Grid.Column="6"
