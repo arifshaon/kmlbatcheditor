@@ -29,7 +29,7 @@
                                   Height="32"
                                   Margin="0,0,6,6"
                                   ToolTip="Draw a split line (S)"
-                                  Click="OnCutToolClick" />
+                                  Click="OnSplitToolClick" />
                     <ToggleButton Focusable="False" x:Name="PanToolButton"
                                   Content="Hand"
                                   Width="72"
@@ -90,7 +90,7 @@
                             Height="30"
                             Margin="0,0,6,6"
                             ToolTip="Keep the current selection as the split target, then draw a split line across it"
-                            Click="OnCutSelectedClick" />
+                            Click="OnSplitSelectedClick" />
                     <Button Focusable="False" Content="Delete Selected"
                             Width="115"
                             Height="30"
@@ -109,23 +109,23 @@
                             Width="125"
                             Height="30"
                             Margin="0,0,6,6"
-                            Click="OnImportCutLinesClick" />
+                            Click="OnImportSplitLineClick" />
                     <Button Focusable="False" Content="Use Selected as Split Line"
                             Width="165"
                             Height="30"
                             Margin="0,0,6,6"
-                            Click="OnUseSelectedAsCutlineClick" />
+                            Click="OnUseSelectedAsSplitLineClick" />
                     <Button Focusable="False" Content="Split with Imported Line"
                             Width="145"
                             Height="30"
                             Margin="0,0,6,6"
                             ToolTip="Use the imported/existing split line to split the current target. Hand-drawn split lines apply when you finish drawing."
-                            Click="OnApplyCutLinesClick" />
+                            Click="OnApplyImportedSplitLineClick" />
                     <Button Focusable="False" Content="Clear Split Lines"
                             Width="100"
                             Height="30"
                             Margin="0,0,0,6"
-                            Click="OnClearGuidesClick" />
+                            Click="OnClearSplitLinesClick" />
                 </WrapPanel>
 
                 <TextBlock x:Name="ScopeText"
