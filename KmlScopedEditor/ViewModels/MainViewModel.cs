@@ -99,6 +99,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref _selectedSelectionMode, value))
             {
                 OnPropertyChanged(nameof(IsFolderSelectionMode));
+                OnPropertyChanged(nameof(IsTickedSelectionMode));
                 OnPropertyChanged(nameof(IsPlacemarkNameSelectionMode));
                 OnPropertyChanged(nameof(IsIconImageSelectionMode));
                 OnPropertyChanged(nameof(IsIconVariantSelectionMode));
@@ -113,6 +114,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public bool IsFolderSelectionMode =>
         SelectedSelectionMode.Value == PlacemarkSelectionMode.Folder;
+
+    public bool IsTickedSelectionMode =>
+        SelectedSelectionMode.Value == PlacemarkSelectionMode.Ticked;
 
     public bool IsPlacemarkNameSelectionMode =>
         SelectedSelectionMode.Value == PlacemarkSelectionMode.PlacemarkName;
@@ -486,6 +490,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             {
                 Value = PlacemarkSelectionMode.Folder,
                 Label = "Selected folder"
+            },
+            new SelectionModeOption
+            {
+                Value = PlacemarkSelectionMode.Ticked,
+                Label = "Ticked items"
             },
             new SelectionModeOption
             {
@@ -1002,6 +1011,24 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         return DrawingColor.White;
     }
 
+    private void WireTreeCheckCallbacks()
+    {
+        foreach (var root in RootNodes)
+        {
+            root.SetChecksChangedCallback(
+                OnTreeChecksChanged);
+        }
+    }
+
+    private void OnTreeChecksChanged()
+    {
+        if (SelectedSelectionMode.Value ==
+            PlacemarkSelectionMode.Ticked)
+        {
+            ResetCalculatedSelection();
+        }
+    }
+
     private void ResetCalculatedSelection()
     {
         RefreshCalculatedSelectionLive();
@@ -1051,6 +1078,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                     SelectedNode,
                     IncludeSubfolders);
         }
+        else if (mode == PlacemarkSelectionMode.Ticked)
+        {
+            selection =
+                _selectionService.GetPlacemarksForTickedNodes(
+                    RootNodes);
+        }
         else if (mode == PlacemarkSelectionMode.PlacemarkName)
         {
             var names = GetSelectedPlacemarkNameOptions();
@@ -1094,6 +1127,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 IncludeSubfolders
                     ? $"{MatchedPlacemarkCount:N0} placemarks in {SelectedNode.Name}, including sub-folders."
                     : $"{MatchedPlacemarkCount:N0} placemarks in {SelectedNode.Name}.",
+            PlacemarkSelectionMode.Ticked =>
+                $"{MatchedPlacemarkCount:N0} placemarks are ticked in the tree.",
             PlacemarkSelectionMode.PlacemarkName =>
                 $"{MatchedPlacemarkCount:N0} placemarks match the selected name(s).",
             PlacemarkSelectionMode.IconImage =>
@@ -1414,6 +1449,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         RootNodes.Clear();
         RootNodes.Add(_documentContext.RootNode);
+        WireTreeCheckCallbacks();
 
         RefreshVisibleIconOptions();
 
@@ -1543,6 +1579,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         RootNodes.Clear();
         RootNodes.Add(_documentContext.RootNode);
+        WireTreeCheckCallbacks();
 
         SelectedNode = _documentContext.RootNode;
         RefreshVisibleIconOptions();
