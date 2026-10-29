@@ -1,26 +1,22 @@
 # Changelog
 
 ## Unreleased
-- Reworked Draw Cut into point-by-point cut-line drawing: click to add connected vertices, preview the path, undo the last point, then Apply Cut explicitly.
 
-- Added KML/KMZ cut-guide import with temporary overlay display and explicit Apply Cut.
-- Added single-click line selection and Use Selected as Cutline for helper paths drawn in Google Earth.
-- Selection strokes now require real geometric crossings; Alt + stroke removes crossed lines from the selection.
-- Added cached contour rendering, feature bounding-box rejection, hover highlighting, cut-point markers, and fixed projection for imported guides.
-- Imported guides survive undo and are not written into saved KML/KMZ output.
-- A single crossing of a closed ring now opens it with a visually negligible gap so a later cut can split it normally.
+### Line Editor
 
-
-### Added
-
-- Experimental Line Editor for KML/KMZ LineString geometry.
-- Draw-across selection: a freehand stroke selects every contour line or cut fragment it crosses.
-- Batch deletion of selected lines/fragments, with Clear Selection and Invert Selection.
-- Draw-across Cut tool that splits open and closed LineStrings at actual stroke intersections.
-- Undo for cut and delete operations.
-- Mouse-wheel zoom, right/middle-button pan, and Fit to View.
-- Line edits are made on a working copy and are committed to the loaded document only with Apply & Close.
-- Document tree, placemark, style, icon, and placemark-name indexes are rebuilt after structural line edits.
+- Simplified the permanent toolbar to **Select**, **Cut**, **Hand**, Undo, Fit, Zoom Selection, and zoom controls; Select/Cut actions now appear contextually.
+- Added keyboard shortcuts: V Select, C Cut, H Hand, Ctrl+Z Undo, Delete, Backspace, Esc, F, and +/- zoom.
+- Added explicit Hand mode, Space+drag pan, middle-drag pan, cursor feedback, and Zoom Selection.
+- Hand-drawn cuts now support point-by-point and freehand input, with double-click/right-click/Enter to finish and apply immediately as one undoable step.
+- Added live cut-impact preview markers and counts showing how many lines and intersections would be affected.
+- Cut scope now follows the current line selection inside the outer main-tree scope: selected lines only when present, otherwise all editable lines in the tree scope.
+- The map overlay permanently shows the active cut scope; out-of-scope lines remain visible in light grey and locked.
+- Fixed **Use Selected as Cutline** so the helper line is removed before the cut and cannot split itself.
+- Imported KML/KMZ cut guides remain preview-first and are committed explicitly with **Apply Imported Guide**.
+- Selection strokes use real geometric crossings only; Alt+drag deselects.
+- Added cached contour rendering, feature bounding-box rejection, hover highlighting, fixed projection for imported guides, and lightweight overlay-only live previews.
+- A single crossing of a closed ring opens it with a visually negligible gap so a later cut can split it normally.
+- Line edits remain on a working copy until **Apply & Close**.
 
 ## 1.1.0
 
