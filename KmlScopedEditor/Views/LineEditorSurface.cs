@@ -136,6 +136,13 @@ public sealed class LineEditorSurface : FrameworkElement
         InvalidateVisual();
     }
 
+    public void SetCutPoints(
+        IReadOnlyList<Point> cutPoints)
+    {
+        _cutPoints = cutPoints ?? Array.Empty<Point>();
+        InvalidateVisual();
+    }
+
     public void SetDraftCut(
         IReadOnlyList<Point> points,
         Point? previewPoint)
@@ -762,9 +769,12 @@ public sealed class LineEditorSurface : FrameworkElement
         if (!_drawingStroke)
             ReleaseMouseCapture();
 
-        Cursor = Tool == LineEditorTool.Pan
-            ? Cursors.Hand
-            : Cursors.Arrow;
+        Cursor = Tool switch
+        {
+            LineEditorTool.Pan => Cursors.Hand,
+            LineEditorTool.Cut => Cursors.Cross,
+            _ => Cursors.Arrow
+        };
     }
 
     private Point ScreenToWorld(Point screen)
