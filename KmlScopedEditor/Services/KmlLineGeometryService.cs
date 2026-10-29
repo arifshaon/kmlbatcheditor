@@ -20,13 +20,19 @@ public sealed class KmlLineGeometryService
         "http://www.opengis.net/kml/2.2";
 
     private readonly XDocument _document;
+    private readonly double? _fixedLongitudeScale;
     private double _longitudeScale = 1d;
 
-    public KmlLineGeometryService(XDocument document)
+    public KmlLineGeometryService(
+        XDocument document,
+        double? fixedLongitudeScale = null)
     {
         _document = document ?? throw new ArgumentNullException(nameof(document));
+        _fixedLongitudeScale = fixedLongitudeScale;
         Reload();
     }
+
+    public double LongitudeScale => _longitudeScale;
 
     public IReadOnlyList<KmlLineFeature> Features { get; private set; }
         = Array.Empty<KmlLineFeature>();
@@ -62,7 +68,13 @@ public sealed class KmlLineGeometryService
             .SelectMany(item => item.Coordinates)
             .ToList();
 
-        if (allCoordinates.Count > 0)
+        if (_fixedLongitudeScale.HasValue)
+        {
+            _longitudeScale = Math.Abs(_fixedLongitudeScale.Value) < 0.000001d
+                ? 0.000001d
+                : _fixedLongitudeScale.Value;
+        }
+        else if (allCoordinates.Count > 0)
         {
             var meanLatitude = allCoordinates.Average(point => point.Latitude);
             _longitudeScale = Math.Cos(meanLatitude * Math.PI / 180d);
@@ -92,11 +104,14 @@ public sealed class KmlLineGeometryService
                     bounds.Union(point);
             }
 
+            var featureBounds = BuildBounds(worldPoints);
+
             features.Add(new KmlLineFeature(
                 item.Line,
                 item.Name,
                 item.Coordinates,
-                worldPoints));
+                worldPoints,
+                featureBounds));
         }
 
         Features = features;
@@ -104,22 +119,62 @@ public sealed class KmlLineGeometryService
     }
 
     public IReadOnlyList<KmlLineFeature> FindIntersectingFeatures(
-        IReadOnlyList<Point> stroke,
-        double tolerance)
+        IReadOnlyList<Point> stroke)
     {
         if (stroke.Count < 2 || Features.Count == 0)
             return Array.Empty<KmlLineFeature>();
 
-        tolerance = Math.Max(0d, tolerance);
+        var strokeBounds = BuildBounds(stroke);
         var matches = new List<KmlLineFeature>();
 
         foreach (var feature in Features)
         {
-            if (FeatureIntersectsStroke(feature, stroke, tolerance))
+            if (!feature.WorldBounds.IntersectsWith(strokeBounds))
+                continue;
+
+            if (FeatureIntersectsStroke(feature, stroke))
                 matches.Add(feature);
         }
 
         return matches;
+    }
+
+    public KmlLineFeature? FindNearestFeature(
+        Point point,
+        double tolerance)
+    {
+        if (Features.Count == 0 || tolerance < 0d)
+            return null;
+
+        KmlLineFeature? best = null;
+        var bestDistance = tolerance;
+
+        foreach (var feature in Features)
+        {
+            var expanded = feature.WorldBounds;
+            expanded.Inflate(tolerance, tolerance);
+
+            if (!expanded.Contains(point))
+                continue;
+
+            var line = feature.WorldPoints;
+
+            for (var index = 0; index < line.Count - 1; index++)
+            {
+                var distance = PointToSegmentDistance(
+                    point,
+                    line[index],
+                    line[index + 1]);
+
+                if (distance <= bestDistance)
+                {
+                    bestDistance = distance;
+                    best = feature;
+                }
+            }
+        }
+
+        return best;
     }
 
     public LineCutResult CutWithStroke(IReadOnlyList<Point> stroke)
@@ -209,8 +264,7 @@ public sealed class KmlLineGeometryService
 
     private bool FeatureIntersectsStroke(
         KmlLineFeature feature,
-        IReadOnlyList<Point> stroke,
-        double tolerance)
+        IReadOnlyList<Point> stroke)
     {
         var line = feature.WorldPoints;
 
@@ -226,11 +280,8 @@ public sealed class KmlLineGeometryService
                 var c = stroke[strokeIndex];
                 var d = stroke[strokeIndex + 1];
 
-                if (SegmentsIntersect(a, b, c, d) ||
-                    SegmentDistance(a, b, c, d) <= tolerance)
-                {
+                if (SegmentsIntersect(a, b, c, d))
                     return true;
-                }
             }
         }
 
@@ -500,11 +551,29 @@ public sealed class KmlLineGeometryService
                 clones));
     }
 
-    private Point ToWorld(KmlCoordinate coordinate)
+    public Point Project(KmlCoordinate coordinate)
     {
         return new Point(
             coordinate.Longitude * _longitudeScale,
             coordinate.Latitude);
+    }
+
+    private Point ToWorld(KmlCoordinate coordinate)
+    {
+        return Project(coordinate);
+    }
+
+    private static Rect BuildBounds(IReadOnlyList<Point> points)
+    {
+        if (points.Count == 0)
+            return Rect.Empty;
+
+        var bounds = new Rect(points[0], points[0]);
+
+        for (var index = 1; index < points.Count; index++)
+            bounds.Union(points[index]);
+
+        return bounds;
     }
 
     private static List<KmlCoordinate> ParseCoordinates(string value)
@@ -764,18 +833,21 @@ public sealed class KmlLineFeature
         XElement lineStringElement,
         string name,
         IReadOnlyList<KmlCoordinate> coordinates,
-        IReadOnlyList<Point> worldPoints)
+        IReadOnlyList<Point> worldPoints,
+        Rect worldBounds)
     {
         LineStringElement = lineStringElement;
         Name = name;
         Coordinates = coordinates;
         WorldPoints = worldPoints;
+        WorldBounds = worldBounds;
     }
 
     public XElement LineStringElement { get; }
     public string Name { get; }
     public IReadOnlyList<KmlCoordinate> Coordinates { get; }
     public IReadOnlyList<Point> WorldPoints { get; }
+    public Rect WorldBounds { get; }
 }
 
 public readonly record struct KmlCoordinate(
