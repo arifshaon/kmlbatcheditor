@@ -288,7 +288,12 @@ public partial class LineEditorWindow : Window
             _draftCutPoints,
             _draftCutPreviewPoint);
 
-        var menu = new System.Windows.Controls.ContextMenu();
+        var menu = new System.Windows.Controls.ContextMenu
+        {
+            PlacementTarget = EditorSurface,
+            Placement =
+                System.Windows.Controls.Primitives.PlacementMode.MousePoint
+        };
 
         if (_draftCutPoints.Count == 0)
         {
