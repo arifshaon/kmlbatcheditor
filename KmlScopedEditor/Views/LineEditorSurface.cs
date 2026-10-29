@@ -455,9 +455,9 @@ public sealed class LineEditorSurface : FrameworkElement
             _cutClickPending = false;
             ReleaseMouseCapture();
 
-            var clickDistance = (screen - _strokeStartScreen).Length;
+            var cutGestureDistance = (screen - _strokeStartScreen).Length;
 
-            if (clickDistance < 4d)
+            if (cutGestureDistance < 4d)
             {
                 LineClicked?.Invoke(
                     this,
