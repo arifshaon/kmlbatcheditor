@@ -9,6 +9,7 @@ public class KmlTreeNode : ViewModelBase
     private bool? _isChecked = false;
     private bool _isExpanded;
     private bool _isSelected;
+    private Action? _checksChanged;
 
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Name { get; set; } = string.Empty;
@@ -25,18 +26,23 @@ public class KmlTreeNode : ViewModelBase
         get => _isChecked;
         set
         {
-            if (SetProperty(ref _isChecked, value))
-            {
-                if (value.HasValue)
-                {
-                    foreach (var child in Children)
-                    {
-                        child.IsChecked = value.Value;
-                    }
-                }
+            if (_isChecked == value)
+                return;
 
-                Parent?.RefreshCheckStateFromChildren();
+            if (value.HasValue)
+            {
+                SetCheckedDown(
+                    value.Value);
             }
+            else
+            {
+                _isChecked = null;
+                OnPropertyChanged(
+                    nameof(IsChecked));
+            }
+
+            Parent?.RefreshCheckStateFromChildren();
+            _checksChanged?.Invoke();
         }
     }
 
@@ -52,15 +58,58 @@ public class KmlTreeNode : ViewModelBase
         set => SetProperty(ref _isSelected, value);
     }
 
+    public void SetChecksChangedCallback(
+        Action? callback)
+    {
+        _checksChanged = callback;
+
+        foreach (var child in Children)
+        {
+            child.SetChecksChangedCallback(
+                callback);
+        }
+    }
+
     public void RefreshCheckStateFromChildren()
     {
         if (Children.Count == 0)
             return;
 
         var first = Children[0].IsChecked;
-        var allSame = Children.All(c => c.IsChecked == first);
-        _isChecked = allSame ? first : null;
-        OnPropertyChanged(nameof(IsChecked));
+        var allSame =
+            Children.All(
+                child =>
+                    child.IsChecked == first);
+
+        var newValue =
+            allSame
+                ? first
+                : null;
+
+        if (_isChecked != newValue)
+        {
+            _isChecked = newValue;
+            OnPropertyChanged(
+                nameof(IsChecked));
+        }
+
         Parent?.RefreshCheckStateFromChildren();
+    }
+
+    private void SetCheckedDown(
+        bool value)
+    {
+        if (_isChecked != value)
+        {
+            _isChecked = value;
+            OnPropertyChanged(
+                nameof(IsChecked));
+        }
+
+        foreach (var child in Children)
+        {
+            child.SetCheckedDown(
+                value);
+        }
     }
 }
