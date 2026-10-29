@@ -157,10 +157,10 @@
                         <ComboBox x:Name="AppliedHistoryWidthComboBox"
                                   Width="58"
                                   Height="30"
-                                  Margin="0,0,12,0"
+                                  Margin="0,0,8,0"
                                   VerticalContentAlignment="Center"
                                   SelectionChanged="OnAppliedHistoryWidthChanged"
-                                  ToolTip="Thickness of applied split-history lines">
+                                  ToolTip="Thickness of previous split lines">
                             <ComboBoxItem Content="1 px" Tag="1" />
                             <ComboBoxItem Content="2 px" Tag="2" />
                             <ComboBoxItem Content="3 px" Tag="3" />
@@ -169,19 +169,21 @@
                             <ComboBoxItem Content="6 px" Tag="6" />
                         </ComboBox>
 
-                        <Button Focusable="False"
+                        <CheckBox x:Name="ShowPreviousSplitsCheckBox"
+                                  Content="Show previous splits"
+                                  IsChecked="True"
+                                  VerticalAlignment="Center"
+                                  Margin="0,0,12,0"
+                                  Checked="OnShowPreviousSplitsChanged"
+                                  Unchecked="OnShowPreviousSplitsChanged" />
+
+                        <Button x:Name="UndoButton"
+                                Focusable="False"
                                 Content="↶ Undo"
                                 Width="90"
                                 Height="30"
-                                ToolTip="Undo last split or deletion (Ctrl+Z)"
+                                ToolTip="Undo the last split-line edit, split, or deletion (Ctrl+Z)"
                                 Click="OnUndoClick" />
-                        <Button Focusable="False"
-                                Content="↷ Redo"
-                                Width="82"
-                                Height="30"
-                                Margin="8,0,0,0"
-                                IsEnabled="False"
-                                ToolTip="Redo is not available yet." />
                     </StackPanel>
                 </Grid>
 
@@ -207,10 +209,12 @@
                             Margin="0,0,6,0"
                             Click="OnInvertSelectionClick" />
                     <Button Grid.Column="2"
+                            x:Name="Step1DeleteButton"
                             Focusable="False"
-                            Content="Delete selected lines"
+                            Content="Delete selected lines (0)"
                             Height="30"
-                            MinWidth="130"
+                            MinWidth="150"
+                            IsEnabled="False"
                             Click="OnDeleteSelectedClick" />
                     <TextBlock Grid.Column="3"
                                Text="Drag across lines to select. Shift+click adds one; Alt+click/drag removes."
@@ -222,6 +226,7 @@
                 <Grid x:Name="Step2ActionsPanel"
                       Visibility="Collapsed">
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
@@ -254,10 +259,20 @@
                             Content="Use selected line"
                             Height="30"
                             MinWidth="132"
-                            Margin="0,0,12,0"
+                            Margin="0,0,6,0"
                             Click="OnUseSelectedAsSplitLineClick" />
 
-                    <Border Grid.Column="3"
+                    <Button Grid.Column="3"
+                            x:Name="RemovePendingSplitLineButton"
+                            Focusable="False"
+                            Content="✕ Remove split line"
+                            Height="30"
+                            MinWidth="130"
+                            Margin="0,0,10,0"
+                            IsEnabled="False"
+                            Click="OnClearSplitLinesClick" />
+
+                    <Border Grid.Column="4"
                             Background="#F3EAFB"
                             CornerRadius="12"
                             Padding="9,4"
@@ -269,7 +284,7 @@
                                    FontSize="11" />
                     </Border>
 
-                    <Border Grid.Column="4"
+                    <Border Grid.Column="5"
                             Background="#FFF3E8"
                             CornerRadius="12"
                             Padding="9,4"
@@ -282,7 +297,7 @@
                                    FontWeight="SemiBold" />
                     </Border>
 
-                    <StackPanel Grid.Column="5"
+                    <StackPanel Grid.Column="6"
                                 Orientation="Horizontal"
                                 VerticalAlignment="Center">
                         <CheckBox x:Name="OnlySplitSelectedCheckBox"
@@ -299,7 +314,7 @@
                                    TextWrapping="Wrap" />
                     </StackPanel>
 
-                    <Button Grid.Column="6"
+                    <Button Grid.Column="7"
                             Focusable="False"
                             x:Name="ApplySplitButton"
                             Content="⚒ Apply split"
@@ -335,10 +350,12 @@
                             Margin="0,0,6,0"
                             Click="OnInvertSelectionClick" />
                     <Button Grid.Column="2"
+                            x:Name="Step3DeleteButton"
                             Focusable="False"
-                            Content="Delete selected pieces"
+                            Content="Delete selected pieces (0)"
                             Height="30"
-                            MinWidth="140"
+                            MinWidth="160"
+                            IsEnabled="False"
                             Click="OnDeleteSelectedClick" />
                     <TextBlock Grid.Column="3"
                                Text="Select the pieces you do not want, then delete them."
@@ -478,17 +495,30 @@
                             <TextBlock Text="Selected (for deleting)" FontSize="11" Foreground="#52606D" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
+                            <Rectangle Width="22"
+                                       Height="2"
+                                       Fill="#743DAA"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,5,0"
+                                       StrokeDashArray="3,2" />
+                            <TextBlock Text="Pending split line" FontSize="11" Foreground="#52606D" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
                             <Rectangle x:Name="AppliedHistoryLegendLine"
                                        Width="22"
-                                       Height="3"
-                                       Fill="#4C2D67"
+                                       Height="2"
+                                       Fill="#8E84A8"
                                        VerticalAlignment="Center"
                                        Margin="0,0,5,0" />
-                            <TextBlock Text="Applied split history" FontSize="11" Foreground="#52606D" />
+                            <TextBlock Text="Previous split" FontSize="11" Foreground="#52606D" />
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
                             <Ellipse Width="8" Height="8" Fill="#DA5E27" VerticalAlignment="Center" Margin="0,0,5,0" />
                             <TextBlock Text="Split point" FontSize="11" Foreground="#52606D" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="8" Height="8" Fill="#707078" VerticalAlignment="Center" Margin="0,0,5,0" />
+                            <TextBlock Text="Previous split point" FontSize="11" Foreground="#52606D" />
                         </StackPanel>
                     </WrapPanel>
                 </Border>
