@@ -185,7 +185,7 @@ public partial class MainWindow : System.Windows.Window
             return;
         }
 
-        var scope = BuildLineEditorScope(
+        var initialSelection = BuildLineEditorInitialSelection(
             viewModel.DocumentContext.Document,
             viewModel.SelectedNode);
 
@@ -193,8 +193,8 @@ public partial class MainWindow : System.Windows.Window
             viewModel.DocumentContext.Document,
             System.IO.Path.GetFileName(
                 viewModel.DocumentContext.SourcePath),
-            scope.PlacemarkIndexes,
-            scope.DisplayName)
+            initialSelection.PlacemarkIndexes,
+            initialSelection.DisplayName)
         {
             Owner = this
         };
@@ -206,7 +206,7 @@ public partial class MainWindow : System.Windows.Window
             editor.EditedDocument);
     }
 
-    private static LineEditorScope BuildLineEditorScope(
+    private static LineEditorInitialSelection BuildLineEditorInitialSelection(
         System.Xml.Linq.XDocument document,
         KmlTreeNode? selectedNode)
     {
@@ -219,9 +219,9 @@ public partial class MainWindow : System.Windows.Window
 
         if (selectedNode?.SourceElement is null)
         {
-            return new LineEditorScope(
+            return new LineEditorInitialSelection(
                 null,
-                "Entire document");
+                "No initial tree selection");
         }
 
         IEnumerable<System.Xml.Linq.XElement> scopedPlacemarks =
@@ -244,21 +244,21 @@ public partial class MainWindow : System.Windows.Window
 
         if (indexes.Count == allPlacemarks.Count)
         {
-            return new LineEditorScope(
-                null,
-                "Entire document");
+            return new LineEditorInitialSelection(
+                indexes,
+                $"Tree selection: {selectedNode.Name}");
         }
 
         var displayName = string.IsNullOrWhiteSpace(selectedNode.Name)
             ? selectedNode.NodeType.ToString()
             : $"{selectedNode.NodeType}: {selectedNode.Name}";
 
-        return new LineEditorScope(
+        return new LineEditorInitialSelection(
             indexes,
             displayName);
     }
 
-    private sealed record LineEditorScope(
+    private sealed record LineEditorInitialSelection(
         IReadOnlyCollection<int>? PlacemarkIndexes,
         string DisplayName);
 
