@@ -284,8 +284,13 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
-        if (_historyAppearanceInitializing)
+        // XAML raises Checked/Unchecked during InitializeComponent, before
+        // the geometry service and the rest of the editor state exist.
+        if (_historyAppearanceInitializing ||
+            !IsLoaded)
+        {
             return;
+        }
 
         _hideAppliedSplitHistory =
             ShowPreviousSplitsCheckBox.IsChecked != true;
@@ -337,6 +342,7 @@ public partial class LineEditorWindow : Window
         System.Windows.Controls.SelectionChangedEventArgs e)
     {
         if (_historyAppearanceInitializing ||
+            !IsLoaded ||
             AppliedHistoryWidthComboBox
                 .SelectedItem is not ComboBoxItem item ||
             !double.TryParse(
