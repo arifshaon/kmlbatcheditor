@@ -3,10 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:KmlScopedEditor.Views"
         Title="Line Editor"
-        Width="1200"
-        Height="820"
-        MinWidth="850"
-        MinHeight="600"
+        Width="1280"
+        Height="840"
+        MinWidth="900"
+        MinHeight="620"
         WindowStartupLocation="CenterOwner">
     <DockPanel>
         <Border DockPanel.Dock="Top"
@@ -20,44 +20,66 @@
                                   Content="Select"
                                   Width="86"
                                   Height="32"
-                                  Margin="0,0,6,0"
+                                  Margin="0,0,6,6"
                                   Click="OnSelectToolClick" />
                     <ToggleButton x:Name="CutToolButton"
-                                  Content="Cut"
-                                  Width="86"
+                                  Content="Draw Cut"
+                                  Width="92"
                                   Height="32"
-                                  Margin="0,0,12,0"
+                                  Margin="0,0,12,6"
                                   Click="OnCutToolClick" />
+
+                    <Button Content="Import Cut Lines..."
+                            Width="125"
+                            Height="32"
+                            Margin="0,0,6,6"
+                            Click="OnImportCutLinesClick" />
+                    <Button Content="Use Selected as Cutline"
+                            Width="165"
+                            Height="32"
+                            Margin="0,0,6,6"
+                            Click="OnUseSelectedAsCutlineClick" />
+                    <Button Content="Apply Cut"
+                            Width="90"
+                            Height="32"
+                            Margin="0,0,6,6"
+                            Click="OnApplyCutLinesClick" />
+                    <Button Content="Clear Guides"
+                            Width="100"
+                            Height="32"
+                            Margin="0,0,12,6"
+                            Click="OnClearGuidesClick" />
 
                     <Button Content="Fit to View"
                             Width="100"
                             Height="32"
-                            Margin="0,0,12,0"
+                            Margin="0,0,12,6"
                             Click="OnFitViewClick" />
 
                     <Button Content="Undo"
                             Width="80"
                             Height="32"
-                            Margin="0,0,6,0"
+                            Margin="0,0,6,6"
                             Click="OnUndoClick" />
                     <Button Content="Clear Selection"
                             Width="115"
                             Height="32"
-                            Margin="0,0,6,0"
+                            Margin="0,0,6,6"
                             Click="OnClearSelectionClick" />
                     <Button Content="Invert Selection"
                             Width="115"
                             Height="32"
-                            Margin="0,0,6,0"
+                            Margin="0,0,6,6"
                             Click="OnInvertSelectionClick" />
                     <Button Content="Delete Selected"
                             Width="120"
                             Height="32"
+                            Margin="0,0,0,6"
                             Click="OnDeleteSelectedClick" />
                 </WrapPanel>
 
                 <TextBlock x:Name="InstructionText"
-                           Margin="0,8,0,0"
+                           Margin="0,4,0,0"
                            Foreground="#4B5563"
                            TextWrapping="Wrap" />
             </StackPanel>
@@ -86,7 +108,7 @@
                     <TextBlock x:Name="StatusText"
                                FontWeight="SemiBold"
                                TextWrapping="Wrap" />
-                    <TextBlock Text="Changes are made on a working copy. Cancel closes the editor without changing the loaded KML/KMZ."
+                    <TextBlock Text="Selection uses real crossings only. Alt + drag removes crossed lines from the selection. Imported cut guides are temporary and are not saved into the output."
                                Foreground="#6B7280"
                                FontSize="11"
                                Margin="0,3,12,0"
