@@ -378,7 +378,7 @@ public sealed class LineEditorSurface : FrameworkElement
 
         if (_strokeWorld.Count >= 2)
         {
-            var strokeColor = Tool == LineEditorTool.Cut
+            var strokeColor = Tool == LineEditorTool.Split
                 ? Color.FromRgb(213, 112, 23)
                 : Color.FromRgb(24, 119, 205);
 
@@ -410,7 +410,7 @@ public sealed class LineEditorSurface : FrameworkElement
             return;
         }
 
-        if (Tool == LineEditorTool.Cut)
+        if (Tool == LineEditorTool.Split)
         {
             CaptureMouse();
             _cutClickPending = true;
@@ -450,7 +450,7 @@ public sealed class LineEditorSurface : FrameworkElement
             return;
         }
 
-        if (Tool == LineEditorTool.Cut && _cutClickPending)
+        if (Tool == LineEditorTool.Split && _cutClickPending)
         {
             _cutClickPending = false;
             ReleaseMouseCapture();
@@ -593,7 +593,7 @@ public sealed class LineEditorSurface : FrameworkElement
             return;
         }
 
-        if (Tool == LineEditorTool.Cut &&
+        if (Tool == LineEditorTool.Split &&
             _cutClickPending &&
             e.LeftButton == MouseButtonState.Pressed)
         {
@@ -781,7 +781,7 @@ public sealed class LineEditorSurface : FrameworkElement
         Cursor = Tool switch
         {
             LineEditorTool.Pan => Cursors.Hand,
-            LineEditorTool.Cut => Cursors.Cross,
+            LineEditorTool.Split => Cursors.Cross,
             _ => Cursors.Arrow
         };
     }
