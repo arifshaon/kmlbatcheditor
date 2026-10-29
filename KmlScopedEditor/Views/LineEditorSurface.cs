@@ -30,6 +30,9 @@ public sealed class LineEditorSurface : FrameworkElement
     private IReadOnlyList<KmlLineFeature> _features =
         Array.Empty<KmlLineFeature>();
 
+    private IReadOnlyList<KmlLineFeature> _contextFeatures =
+        Array.Empty<KmlLineFeature>();
+
     private IReadOnlyList<LineEditorGuideVisual> _guides =
         Array.Empty<LineEditorGuideVisual>();
 
@@ -37,6 +40,7 @@ public sealed class LineEditorSurface : FrameworkElement
     private IReadOnlyList<Point> _draftCutPoints = Array.Empty<Point>();
     private Point? _draftCutPreviewPoint;
     private readonly Dictionary<XElement, StreamGeometry> _featureGeometry = new();
+    private readonly Dictionary<XElement, StreamGeometry> _contextGeometry = new();
     private readonly List<(LineEditorGuideVisual Guide, StreamGeometry Geometry)> _guideGeometry = new();
 
     private HashSet<XElement> _selected = new();
@@ -49,6 +53,7 @@ public sealed class LineEditorSurface : FrameworkElement
 
     private bool _drawingStroke;
     private bool _cutClickPending;
+    private bool _leftPan;
     private readonly List<Point> _strokeWorld = new();
     private Point _strokeStartScreen;
     private Point _lastStrokeScreen;
@@ -84,9 +89,12 @@ public sealed class LineEditorSurface : FrameworkElement
     public event EventHandler<LineEditorStrokeEventArgs>? StrokeCompleted;
     public event EventHandler<LineEditorClickEventArgs>? LineClicked;
     public event EventHandler<LineEditorPointerEventArgs>? PointerMoved;
+    public event EventHandler? PointerExited;
+    public event EventHandler<LineEditorContextEventArgs>? ContextRequested;
 
     public void SetDocument(
         IReadOnlyList<KmlLineFeature> features,
+        IReadOnlyList<KmlLineFeature> contextFeatures,
         IEnumerable<XElement> selected,
         Rect worldBounds,
         IReadOnlyList<LineEditorGuideVisual>? guides = null,
@@ -94,6 +102,7 @@ public sealed class LineEditorSurface : FrameworkElement
         bool fitView = false)
     {
         _features = features ?? Array.Empty<KmlLineFeature>();
+        _contextFeatures = contextFeatures ?? Array.Empty<KmlLineFeature>();
         _selected = selected?.ToHashSet() ?? new HashSet<XElement>();
         _worldBounds = worldBounds;
         _guides = guides ?? Array.Empty<LineEditorGuideVisual>();
@@ -214,9 +223,20 @@ public sealed class LineEditorSurface : FrameworkElement
         var safeScale = Math.Max(_scale, 0.000001d);
         drawingContext.PushTransform(CreateWorldTransform());
 
+        var contextPen = CreatePen(Color.FromRgb(190, 194, 200), 0.9d / safeScale);
         var normalPen = CreatePen(Color.FromRgb(84, 92, 102), 1.1d / safeScale);
         var selectedPen = CreatePen(Color.FromRgb(190, 45, 45), 2.6d / safeScale);
         var hoverPen = CreatePen(Color.FromRgb(0, 120, 190), 2.2d / safeScale);
+
+        foreach (var feature in _contextFeatures)
+        {
+            if (_contextGeometry.TryGetValue(
+                    feature.LineStringElement,
+                    out var geometry))
+            {
+                drawingContext.DrawGeometry(null, contextPen, geometry);
+            }
+        }
 
         foreach (var feature in _features)
         {
@@ -327,6 +347,15 @@ public sealed class LineEditorSurface : FrameworkElement
         Focus();
         var screen = e.GetPosition(this);
 
+        if (Tool == LineEditorTool.Pan ||
+            (Keyboard.Modifiers & ModifierKeys.Space) == ModifierKeys.Space)
+        {
+            _leftPan = true;
+            BeginPan(screen);
+            e.Handled = true;
+            return;
+        }
+
         if (Tool == LineEditorTool.Cut)
         {
             CaptureMouse();
@@ -355,6 +384,14 @@ public sealed class LineEditorSurface : FrameworkElement
 
         var screen = e.GetPosition(this);
         var alt = (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt;
+
+        if (_leftPan)
+        {
+            _leftPan = false;
+            EndPan();
+            e.Handled = true;
+            return;
+        }
 
         if (Tool == LineEditorTool.Cut && _cutClickPending)
         {
@@ -416,14 +453,19 @@ public sealed class LineEditorSurface : FrameworkElement
     protected override void OnMouseRightButtonDown(MouseButtonEventArgs e)
     {
         base.OnMouseRightButtonDown(e);
-        BeginPan(e.GetPosition(this));
+        Focus();
         e.Handled = true;
     }
 
     protected override void OnMouseRightButtonUp(MouseButtonEventArgs e)
     {
         base.OnMouseRightButtonUp(e);
-        EndPan();
+
+        ContextRequested?.Invoke(
+            this,
+            new LineEditorContextEventArgs(
+                ScreenToWorld(e.GetPosition(this))));
+
         e.Handled = true;
     }
 
@@ -502,6 +544,7 @@ public sealed class LineEditorSurface : FrameworkElement
         base.OnMouseLeave(e);
         _hasHoverScreen = false;
         SetHovered(null);
+        PointerExited?.Invoke(this, EventArgs.Empty);
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)
@@ -537,6 +580,17 @@ public sealed class LineEditorSurface : FrameworkElement
             if (feature.WorldPoints.Count >= 2)
             {
                 _featureGeometry[feature.LineStringElement] =
+                    BuildGeometry(feature.WorldPoints);
+            }
+        }
+
+        _contextGeometry.Clear();
+
+        foreach (var feature in _contextFeatures)
+        {
+            if (feature.WorldPoints.Count >= 2)
+            {
+                _contextGeometry[feature.LineStringElement] =
                     BuildGeometry(feature.WorldPoints);
             }
         }
@@ -677,6 +731,16 @@ public sealed class LineEditorClickEventArgs : EventArgs
 public sealed class LineEditorPointerEventArgs : EventArgs
 {
     public LineEditorPointerEventArgs(Point worldPoint)
+    {
+        WorldPoint = worldPoint;
+    }
+
+    public Point WorldPoint { get; }
+}
+
+public sealed class LineEditorContextEventArgs : EventArgs
+{
+    public LineEditorContextEventArgs(Point worldPoint)
     {
         WorldPoint = worldPoint;
     }
