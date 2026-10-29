@@ -210,6 +210,9 @@ public partial class LineEditorWindow : Window
 
         try
         {
+            ShowPreviousSplitsCheckBox.IsChecked =
+                !_hideAppliedSplitHistory;
+
             AppliedHistoryColorButton.Background =
                 new MediaBrush(
                     _appliedHistoryColor);
@@ -272,6 +275,24 @@ public partial class LineEditorWindow : Window
         {
             _historyAppearanceInitializing = false;
         }
+    }
+
+    private void OnShowPreviousSplitsChanged(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_historyAppearanceInitializing)
+            return;
+
+        _hideAppliedSplitHistory =
+            ShowPreviousSplitsCheckBox.IsChecked != true;
+
+        RefreshSurface();
+
+        UpdateStatus(
+            _hideAppliedSplitHistory
+                ? "Previous split lines hidden."
+                : "Previous split lines shown.");
     }
 
     private void OnAppliedHistoryColorClick(
@@ -414,7 +435,6 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
-        _hideAppliedSplitHistory = false;
         SetWorkflowStep(2);
     }
 
@@ -1633,8 +1653,6 @@ public partial class LineEditorWindow : Window
                 ? $" Removed {helperLinesRemoved:N0} helper line(s) before splitting."
                 : string.Empty));
 
-        _hideAppliedSplitHistory = false;
-
         var remainingPending =
             _guides.Count(
                 guide => !guide.Applied);
@@ -1818,7 +1836,6 @@ public partial class LineEditorWindow : Window
 
         if (state.Kind == UndoActionKind.Split)
         {
-            _hideAppliedSplitHistory = false;
             _step3InstructionOverride = null;
             SetWorkflowStep(2);
         }
@@ -2586,16 +2603,32 @@ public partial class LineEditorWindow : Window
 
         SplitLineSummaryText.Text =
             _draftCutPoints.Count >= 2
-                ? $"drawn line · {_draftCutPoints.Count:N0} points"
+                ? $"new line · {_draftCutPoints.Count:N0} points"
                 : pendingGuides > 0
                     ? pendingGuides == 1
-                        ? "1 split line ready"
-                        : $"{pendingGuides:N0} split lines ready"
+                        ? "split line ready"
+                        : $"split line ready · {pendingGuides:N0} paths"
                     : "No split line yet";
+
+        RemovePendingSplitLineButton.IsEnabled =
+            pendingGuides > 0;
 
         ApplySplitButton.IsEnabled =
             _draftCutPoints.Count >= 2 ||
             pendingGuides > 0;
+
+        var deleteCount =
+            validSelected.Count;
+
+        Step1DeleteButton.Content =
+            $"Delete selected lines ({deleteCount:N0})";
+        Step1DeleteButton.IsEnabled =
+            deleteCount > 0;
+
+        Step3DeleteButton.Content =
+            $"Delete selected pieces ({deleteCount:N0})";
+        Step3DeleteButton.IsEnabled =
+            deleteCount > 0;
 
         if (preview.HasValue)
         {
@@ -2623,7 +2656,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Select =>
                 "V Select · drag across lines · Alt+drag deselect · Delete remove · right-drag pan · Space+drag pan",
             _ =>
-                "Split · import or draw paths · click a pending line to edit · Enter finishes drawing · Enter again / Apply split applies all pending lines · Backspace removes a drawn point · right-drag pans"
+                "Split · import or draw a line · click it to edit · Enter finishes drawing · Enter again / Apply split applies · Delete removes the split line, never map lines · right-drag pans"
         };
     }
 
