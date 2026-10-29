@@ -145,8 +145,20 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public int MatchedPlacemarkCount
     {
         get => _matchedPlacemarkCount;
-        private set => SetProperty(ref _matchedPlacemarkCount, value);
+        private set
+        {
+            if (SetProperty(ref _matchedPlacemarkCount, value))
+            {
+                OnPropertyChanged(nameof(ApplyStyleButtonText));
+                OnPropertyChanged(nameof(LineGroupSummary));
+                OnPropertyChanged(nameof(IconGroupSummary));
+                OnPropertyChanged(nameof(LabelGroupSummary));
+            }
+        }
     }
+
+    public string ApplyStyleButtonText =>
+        $"Apply to {MatchedPlacemarkCount:N0} placemarks";
 
     public string SelectionSummary
     {
