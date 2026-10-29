@@ -253,7 +253,7 @@ public partial class LineEditorWindow : Window
         UpdateLiveSplitPreview();
 
         UpdateStatus(
-            $"Added a freehand section. Cut line now has {_draftCutPoints.Count:N0} sampled point(s). " +
+            $"Added a freehand section. Split line now has {_draftCutPoints.Count:N0} sampled point(s). " +
             "Continue drawing, or right-click for split-line options.");
     }
 
@@ -319,8 +319,8 @@ public partial class LineEditorWindow : Window
 
             UpdateStatus(
                 _draftCutPoints.Count < 2
-                    ? "Cut line started. Add at least one more point."
-                    : $"Cut line has {_draftCutPoints.Count:N0} point(s). Right-click for options, or double-click/Enter to finish and apply.");
+                    ? "Split line started. Add at least one more point."
+                    : $"Split line has {_draftCutPoints.Count:N0} point(s). Right-click for options, or double-click/Enter to finish and apply.");
 
             return;
         }
@@ -449,7 +449,7 @@ public partial class LineEditorWindow : Window
             {
                 AddContextMenuItem(
                     menu,
-                    "Start Cut Line Here",
+                    "Start Split Line Here",
                     () =>
                     {
                         _draftCutDrawing = true;
@@ -461,7 +461,7 @@ public partial class LineEditorWindow : Window
             {
                 AddContextMenuItem(
                     menu,
-                    "Add Cut Point Here",
+                    "Add Split Point Here",
                     () =>
                     {
                         _draftCutDrawing = true;
@@ -495,7 +495,7 @@ public partial class LineEditorWindow : Window
 
                 AddContextMenuItem(
                     menu,
-                    "Cancel Cut Line",
+                    "Cancel Split Line",
                     () => CancelDraftCutLine(
                         switchToSelect: false));
             }
@@ -504,7 +504,7 @@ public partial class LineEditorWindow : Window
         {
             AddContextMenuItem(
                 menu,
-                "Start Cut Line Here",
+                "Start Split Line Here",
                 () =>
                 {
                     CancelDraftCutLine(
@@ -557,7 +557,7 @@ public partial class LineEditorWindow : Window
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Import Cut Lines",
+            Title = "Import Split Line",
             Filter =
                 "Google Earth files (*.kml;*.kmz)|*.kml;*.kmz|" +
                 "KML files (*.kml)|*.kml|" +
@@ -594,7 +594,7 @@ public partial class LineEditorWindow : Window
             System.Windows.MessageBox.Show(
                 this,
                 $"The split line could not be imported.\n\n{exception.Message}",
-                "Import Cut Lines",
+                "Import Split Line",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
 
@@ -604,7 +604,7 @@ public partial class LineEditorWindow : Window
         if (imported == 0)
         {
             UpdateStatus(
-                "No LineString paths were found in the selected cutline file.");
+                "No LineString paths were found in the selected split-line file.");
             return;
         }
 
@@ -622,7 +622,7 @@ public partial class LineEditorWindow : Window
         if (_selected.Count != 1)
         {
             UpdateStatus(
-                "Select exactly one editable line, then choose Use Selected as Cutline.");
+                "Select exactly one editable line, then choose Use Selected as Split Line.");
             return;
         }
 
@@ -660,7 +660,7 @@ public partial class LineEditorWindow : Window
         UpdateCutScopeDisplay();
 
         UpdateStatus(
-            "Selected line is now the split line. It will be removed before the cut is calculated, so it cannot cut itself.");
+            "Selected line is now the split line. It will be removed before the split is calculated, so it cannot cut itself.");
     }
 
     private void OnApplyImportedSplitLineClick(
@@ -851,7 +851,7 @@ public partial class LineEditorWindow : Window
         UpdateCutScopeDisplay();
 
         UpdateStatus(
-            "Cut-line overlays cleared. Existing cuts were not changed.");
+            "Split-line overlays cleared. Existing splits were not changed.");
     }
 
     private void OnDeleteSelectedClick(
@@ -936,7 +936,7 @@ public partial class LineEditorWindow : Window
         if (_undo.Count == 0)
         {
             UpdateStatus(
-                "There is no cut or deletion to undo.");
+                "There is no split or deletion to undo.");
             return;
         }
 
@@ -972,7 +972,7 @@ public partial class LineEditorWindow : Window
         UpdateCutScopeDisplay();
 
         UpdateStatus(
-            "Last cut/deletion undone. Imported split-line overlays remain available.");
+            "Last split/deletion undone. Imported split-line overlays remain available.");
     }
 
     private void OnFitViewClick(
@@ -1141,7 +1141,7 @@ public partial class LineEditorWindow : Window
         {
             var result = System.Windows.MessageBox.Show(
                 this,
-                "One or more imported/existing split lines have not been used yet. Cut with them before closing?",
+                "One or more imported/existing split lines have not been used yet. Split with them before closing?",
                 "Unused split line",
                 MessageBoxButton.YesNoCancel,
                 MessageBoxImage.Question);
@@ -1232,7 +1232,7 @@ public partial class LineEditorWindow : Window
         if (_draftCutPoints.Count == 0)
         {
             UpdateStatus(
-                "There are no cut points to undo.");
+                "There are no split points to undo.");
             return;
         }
 
@@ -1250,7 +1250,7 @@ public partial class LineEditorWindow : Window
         UpdateStatus(
             _draftCutPoints.Count == 0
                 ? "Drawn split line cleared."
-                : $"Removed the last cut point. {_draftCutPoints.Count:N0} point(s) remain.");
+                : $"Removed the last split point. {_draftCutPoints.Count:N0} point(s) remain.");
     }
 
     private void PauseDraftCut()
