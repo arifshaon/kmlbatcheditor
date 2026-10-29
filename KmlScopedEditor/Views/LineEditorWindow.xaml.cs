@@ -1149,20 +1149,10 @@ public partial class LineEditorWindow : Window
         if (dialog.ShowDialog(this) != true)
             return;
 
-        // Imported and drawn lines are the same kind of pending split line.
-        // Importing must therefore add to, not replace, the current pending set.
-        _hideAppliedSplitHistory = false;
-
-        if (_draftCutPoints.Count >= 2)
-            CommitDraftCutAsPendingGuide();
-        else if (_draftCutPoints.Count > 0)
-            CancelDraftCutLine(
-                switchToSelect: false);
-
-        StopEditingGuide();
-
-        var imported = 0;
-        CutGuideState? lastImportedGuide = null;
+        // All paths imported in one action form one pending split set.
+        // The existing pending set is replaced only after the import succeeds.
+        var importedStates =
+            new List<CutGuideState>();
 
         try
         {
@@ -1173,15 +1163,10 @@ public partial class LineEditorWindow : Window
 
                 foreach (var guide in guides)
                 {
-                    lastImportedGuide =
+                    importedStates.Add(
                         new CutGuideState(
                             guide,
-                            removeMatchingSourceBeforeCut: false);
-
-                    _guides.Add(
-                        lastImportedGuide);
-
-                    imported++;
+                            removeMatchingSourceBeforeCut: false));
                 }
             }
         }
@@ -1197,23 +1182,30 @@ public partial class LineEditorWindow : Window
             return;
         }
 
-        if (imported == 0)
+        if (importedStates.Count == 0)
         {
             UpdateStatus(
                 "No LineString paths were found in the selected split-line file.");
             return;
         }
 
+        CancelDraftCutLine(
+            switchToSelect: false);
+        ReplacePendingSplitLines(
+            importedStates);
+
         RefreshSurface(fitView: true);
 
-        if (lastImportedGuide is not null)
-            StartEditingGuide(
-                lastImportedGuide);
+        var lastImportedGuide =
+            importedStates[^1];
+
+        StartEditingGuide(
+            lastImportedGuide);
 
         UpdatePendingGuidePreview();
 
         UpdateStatus(
-            $"Imported {imported:N0} split line(s) and added them to the pending split lines. Drag orange handles to reshape the selected line, click another pending line to edit it, draw another line, or press Apply split / Enter to apply them all.");
+            $"Imported {importedStates.Count:N0} split path(s) as the current split line set. Drag orange handles to reshape a path, or draw a new line to replace this set when the drawing is finished.");
     }
 
     private void OnEditImportedLineClick(
@@ -1255,6 +1247,20 @@ public partial class LineEditorWindow : Window
         if (state is null)
             return;
 
+        if (!e.IsComplete &&
+            _pendingGuideDragUndoState is null)
+        {
+            _pendingGuideDragUndoState =
+                CapturePendingGuideEditState();
+        }
+
+        if (e.IsComplete &&
+            _pendingGuideDragUndoState is null)
+        {
+            _pendingGuideDragUndoState =
+                CapturePendingGuideEditState();
+        }
+
         UpdateGuideFromWorldPoints(
             state,
             e.WorldPoints);
@@ -1263,9 +1269,16 @@ public partial class LineEditorWindow : Window
 
         if (e.IsComplete)
         {
+            if (_pendingGuideDragUndoState is not null)
+            {
+                PushPendingGuideEditUndo(
+                    _pendingGuideDragUndoState);
+                _pendingGuideDragUndoState = null;
+            }
+
             RefreshSurface();
             UpdateStatus(
-                $"Moved split-line vertex {e.VertexIndex + 1:N0}. Intersection preview updated.");
+                $"Moved split-line vertex {e.VertexIndex + 1:N0}. Ctrl+Z restores the previous position.");
         }
     }
 
@@ -1299,17 +1312,20 @@ public partial class LineEditorWindow : Window
             feature.Name,
             feature.Coordinates.ToList());
 
-        _guides.Add(
+        var createdGuide =
             new CutGuideState(
                 guide,
-                removeMatchingSourceBeforeCut: true));
+                removeMatchingSourceBeforeCut: true);
+
+        CancelDraftCutLine(
+            switchToSelect: false);
+        ReplacePendingSplitLines(
+            new[] { createdGuide });
 
         // This selection identified the helper line. Clearing it prevents the
         // helper from also becoming the split target scope.
         _selected.Clear();
         EditorSurface.SetSelection(_selected);
-
-        var createdGuide = _guides[^1];
 
         RefreshSurface();
         StartEditingGuide(createdGuide);
