@@ -37,6 +37,12 @@ public partial class LineEditorWindow : Window
     private Point? _draftCutPreviewPoint;
     private bool _draftCutDrawing;
 
+    private readonly HashSet<XElement> _committedPreviewLines = new();
+    private readonly List<Point> _committedPreviewPoints = new();
+    private readonly HashSet<XElement> _activeStrokePreviewLines = new();
+    private readonly List<Point> _activeStrokePreviewPoints = new();
+    private int _activeStrokePreviewProcessedPoints;
+
     private readonly HashSet<XElement> _selected = new();
     private readonly Stack<UndoState> _undo = new();
 
@@ -129,12 +135,14 @@ public partial class LineEditorWindow : Window
         SetTool(LineEditorTool.Split);
         _draftCutDrawing = true;
         _draftCutPreviewPoint = null;
+        RebuildCommittedSplitPreview();
+        ResetActiveStrokePreview();
 
         EditorSurface.SetDraftCut(
             _draftCutPoints,
             _draftCutPreviewPoint);
 
-        UpdateLiveCutPreview();
+        UpdateLiveSplitPreview();
 
         UpdateStatus(
             _draftCutPoints.Count == 0
@@ -242,7 +250,7 @@ public partial class LineEditorWindow : Window
             _draftCutPoints,
             _draftCutPreviewPoint);
 
-        UpdateLiveCutPreview();
+        UpdateLiveSplitPreview();
 
         UpdateStatus(
             $"Added a freehand section. Cut line now has {_draftCutPoints.Count:N0} sampled point(s). " +
@@ -253,32 +261,41 @@ public partial class LineEditorWindow : Window
         object? sender,
         LineEditorStrokeEventArgs e)
     {
-        if (e.Tool != LineEditorTool.Split)
-            return;
-
-        var stroke = _draftCutPoints.ToList();
-
-        foreach (var point in e.WorldPoints)
+        if (e.Tool != LineEditorTool.Split ||
+            e.WorldPoints.Count < 2)
         {
-            if (stroke.Count == 0 ||
-                (stroke[^1] - point).Length >
-                EditorSurface.WorldToleranceFromPixels(1.5d))
-            {
-                stroke.Add(point);
-            }
+            return;
         }
 
-        if (stroke.Count < 2)
-            return;
+        if (_activeStrokePreviewProcessedPoints <= 0)
+            _activeStrokePreviewProcessedPoints = 1;
 
-        var preview = _geometry.PreviewSplitWithStroke(
-            stroke,
-            GetSelectedTargetSet());
+        var startIndex = Math.Max(
+            1,
+            _activeStrokePreviewProcessedPoints);
 
-        _cutPoints.Clear();
-        _cutPoints.AddRange(preview.CutPoints);
-        EditorSurface.SetCutPoints(_cutPoints);
-        UpdateCutScopeDisplay(preview);
+        for (var index = startIndex;
+             index < e.WorldPoints.Count;
+             index++)
+        {
+            var preview = _geometry.PreviewSplitWithStroke(
+                new[]
+                {
+                    e.WorldPoints[index - 1],
+                    e.WorldPoints[index]
+                },
+                GetSelectedTargetSet());
+
+            MergePreview(
+                preview,
+                _activeStrokePreviewLines,
+                _activeStrokePreviewPoints);
+        }
+
+        _activeStrokePreviewProcessedPoints =
+            e.WorldPoints.Count;
+
+        ShowCombinedSplitPreview();
     }
 
     private void OnLineClicked(
@@ -291,7 +308,7 @@ public partial class LineEditorWindow : Window
                 _draftCutDrawing = true;
 
             AddDraftCutPoint(e.WorldPoint);
-            UpdateLiveCutPreview();
+            UpdateLiveSplitPreview();
 
             if (e.IsDoubleClick &&
                 _draftCutPoints.Count >= 2)
@@ -340,6 +357,9 @@ public partial class LineEditorWindow : Window
 
         EditorSurface.SetSelection(_selected);
         UpdateCutScopeDisplay();
+        if (_draftCutPoints.Count > 0)
+            RebuildCommittedSplitPreview();
+
         UpdatePendingGuidePreview();
     }
 
@@ -360,7 +380,7 @@ public partial class LineEditorWindow : Window
                     _draftCutPoints,
                     _draftCutPreviewPoint);
 
-                UpdateLiveCutPreview();
+                UpdateLiveSplitPreview();
             }
 
             return;
@@ -396,7 +416,7 @@ public partial class LineEditorWindow : Window
             _draftCutPoints,
             _draftCutPreviewPoint);
 
-        UpdateLiveCutPreview();
+        UpdateLiveSplitPreview();
     }
 
     private void OnContextRequested(
@@ -428,7 +448,7 @@ public partial class LineEditorWindow : Window
                     {
                         _draftCutDrawing = true;
                         AddDraftCutPoint(e.WorldPoint);
-                        UpdateLiveCutPreview();
+                        UpdateLiveSplitPreview();
                     });
             }
             else
@@ -440,7 +460,7 @@ public partial class LineEditorWindow : Window
                     {
                         _draftCutDrawing = true;
                         AddDraftCutPoint(e.WorldPoint);
-                        UpdateLiveCutPreview();
+                        UpdateLiveSplitPreview();
                     });
 
                 AddContextMenuItem(
@@ -486,7 +506,7 @@ public partial class LineEditorWindow : Window
                     SetTool(LineEditorTool.Split);
                     _draftCutDrawing = true;
                     AddDraftCutPoint(e.WorldPoint);
-                    UpdateLiveCutPreview();
+                    UpdateLiveSplitPreview();
                 });
         }
 
@@ -689,6 +709,7 @@ public partial class LineEditorWindow : Window
         _guides.Add(state);
 
         _draftCutPoints.Clear();
+        ResetIncrementalSplitPreview();
 
         EditorSurface.SetDraftCut(
             _draftCutPoints,
@@ -867,6 +888,9 @@ public partial class LineEditorWindow : Window
         _selected.Clear();
         EditorSurface.SetSelection(_selected);
 
+        if (_draftCutPoints.Count > 0)
+            RebuildCommittedSplitPreview();
+
         UpdatePendingGuidePreview();
         UpdateCutScopeDisplay();
         UpdateStatus("Selection cleared.");
@@ -890,6 +914,9 @@ public partial class LineEditorWindow : Window
             _selected.Add(line);
 
         EditorSurface.SetSelection(_selected);
+
+        if (_draftCutPoints.Count > 0)
+            RebuildCommittedSplitPreview();
 
         UpdatePendingGuidePreview();
         UpdateCutScopeDisplay();
@@ -1161,6 +1188,22 @@ public partial class LineEditorWindow : Window
             return;
         }
 
+        if (_draftCutPoints.Count > 0)
+        {
+            var preview = _geometry.PreviewSplitWithStroke(
+                new[]
+                {
+                    _draftCutPoints[^1],
+                    point
+                },
+                GetSelectedTargetSet());
+
+            MergePreview(
+                preview,
+                _committedPreviewLines,
+                _committedPreviewPoints);
+        }
+
         _draftCutPoints.Add(point);
         _draftCutPreviewPoint = null;
 
@@ -1174,6 +1217,8 @@ public partial class LineEditorWindow : Window
     {
         foreach (var point in points)
             AddDraftCutPoint(point);
+
+        ResetActiveStrokePreview();
     }
 
     private void UndoLastDraftCutPoint()
@@ -1194,7 +1239,7 @@ public partial class LineEditorWindow : Window
             _draftCutPoints,
             _draftCutPreviewPoint);
 
-        UpdateLiveCutPreview();
+        UpdateLiveSplitPreview();
 
         UpdateStatus(
             _draftCutPoints.Count == 0
@@ -1219,6 +1264,7 @@ public partial class LineEditorWindow : Window
         _draftCutPreviewPoint = null;
         _draftCutDrawing = false;
         _cutPoints.Clear();
+        ResetIncrementalSplitPreview();
         EditorSurface.SetCutPoints(_cutPoints);
 
         EditorSurface.SetDraftCut(
@@ -1231,7 +1277,7 @@ public partial class LineEditorWindow : Window
             UpdateCutScopeDisplay();
     }
 
-    private void UpdateLiveCutPreview()
+    private void UpdateLiveSplitPreview()
     {
         if (_draftCutPoints.Count == 0)
         {
@@ -1239,38 +1285,135 @@ public partial class LineEditorWindow : Window
             return;
         }
 
-        var stroke =
-            _draftCutPoints.ToList();
+        LineSplitPreview? transient = null;
 
-        if (_draftCutPreviewPoint.HasValue)
-            stroke.Add(
-                _draftCutPreviewPoint.Value);
-
-        if (stroke.Count < 2)
+        if (_draftCutPreviewPoint.HasValue &&
+            _draftCutPoints.Count > 0)
         {
-            _cutPoints.Clear();
-            EditorSurface.SetCutPoints(_cutPoints);
-            UpdateCutScopeDisplay();
+            transient = _geometry.PreviewSplitWithStroke(
+                new[]
+                {
+                    _draftCutPoints[^1],
+                    _draftCutPreviewPoint.Value
+                },
+                GetSelectedTargetSet());
+        }
+
+        ShowCombinedSplitPreview(transient);
+    }
+
+    private void RebuildCommittedSplitPreview()
+    {
+        _committedPreviewLines.Clear();
+        _committedPreviewPoints.Clear();
+
+        for (var index = 1;
+             index < _draftCutPoints.Count;
+             index++)
+        {
+            var preview = _geometry.PreviewSplitWithStroke(
+                new[]
+                {
+                    _draftCutPoints[index - 1],
+                    _draftCutPoints[index]
+                },
+                GetSelectedTargetSet());
+
+            MergePreview(
+                preview,
+                _committedPreviewLines,
+                _committedPreviewPoints);
+        }
+    }
+
+    private void ResetActiveStrokePreview()
+    {
+        _activeStrokePreviewLines.Clear();
+        _activeStrokePreviewPoints.Clear();
+        _activeStrokePreviewProcessedPoints = 0;
+    }
+
+    private void ResetIncrementalSplitPreview()
+    {
+        _committedPreviewLines.Clear();
+        _committedPreviewPoints.Clear();
+        ResetActiveStrokePreview();
+    }
+
+    private void ShowCombinedSplitPreview(
+        LineSplitPreview? transient = null)
+    {
+        var lines = new HashSet<XElement>(
+            _committedPreviewLines);
+
+        lines.UnionWith(
+            _activeStrokePreviewLines);
+
+        var points = new List<Point>();
+
+        foreach (var point in _committedPreviewPoints)
+            AddUniquePreviewPoint(points, point);
+
+        foreach (var point in _activeStrokePreviewPoints)
+            AddUniquePreviewPoint(points, point);
+
+        if (transient.HasValue)
+        {
+            lines.UnionWith(
+                transient.Value.AffectedLines);
+
+            foreach (var point in
+                     transient.Value.CutPoints)
+            {
+                AddUniquePreviewPoint(
+                    points,
+                    point);
+            }
+        }
+
+        _cutPoints.Clear();
+        _cutPoints.AddRange(points);
+        EditorSurface.SetCutPoints(_cutPoints);
+
+        UpdateCutScopeDisplay(
+            new LineSplitPreview(
+                lines.Count,
+                points.Count,
+                points,
+                lines.ToList()));
+    }
+
+    private static void MergePreview(
+        LineSplitPreview preview,
+        HashSet<XElement> lines,
+        List<Point> points)
+    {
+        lines.UnionWith(preview.AffectedLines);
+
+        foreach (var point in preview.CutPoints)
+            AddUniquePreviewPoint(points, point);
+    }
+
+    private static void AddUniquePreviewPoint(
+        List<Point> points,
+        Point point)
+    {
+        const double tolerance = 0.0000000001d;
+
+        if (points.Any(existing =>
+                (existing - point).Length <= tolerance))
+        {
             return;
         }
 
-        var preview = _geometry.PreviewSplitWithStroke(
-            stroke,
-            GetSelectedTargetSet());
-
-        _cutPoints.Clear();
-        _cutPoints.AddRange(
-            preview.CutPoints);
-
-        EditorSurface.SetCutPoints(_cutPoints);
-        UpdateCutScopeDisplay(preview);
+        points.Add(point);
     }
 
     private void UpdatePendingGuidePreview()
     {
         if (_draftCutPoints.Count > 0)
         {
-            UpdateLiveCutPreview();
+            UpdateLiveSplitPreview();
             return;
         }
 
