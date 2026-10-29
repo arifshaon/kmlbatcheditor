@@ -28,6 +28,8 @@ public sealed class KmlBatchEditSettings : ViewModelBase
     private string _lineColorText = "#FFFFFF";
     private bool _changeLineWidth;
     private string _lineWidthText = "1";
+    private bool _changeLineOpacity;
+    private string _lineOpacityText = "100";
 
     public bool ChangeIconImage
     {
@@ -187,6 +189,22 @@ public sealed class KmlBatchEditSettings : ViewModelBase
         set => SetProperty(ref _lineWidthText, value);
     }
 
+    public bool ChangeLineOpacity
+    {
+        get => _changeLineOpacity;
+        set
+        {
+            if (SetProperty(ref _changeLineOpacity, value))
+                OnPropertyChanged(nameof(HasAnyChange));
+        }
+    }
+
+    public string LineOpacityText
+    {
+        get => _lineOpacityText;
+        set => SetProperty(ref _lineOpacityText, value);
+    }
+
     public bool HasAnyChange =>
         ChangeIconImage ||
         ChangeIconScale ||
@@ -196,5 +214,6 @@ public sealed class KmlBatchEditSettings : ViewModelBase
         ChangeLabelColor ||
         ChangeLabelOpacity ||
         ChangeLineColor ||
-        ChangeLineWidth;
+        ChangeLineWidth ||
+        ChangeLineOpacity;
 }
