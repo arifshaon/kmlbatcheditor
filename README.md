@@ -45,26 +45,27 @@ For example, you can change the text colour of every placemark in a folder while
 - Supports cancellation where an operation can be stopped safely.
 - Displays clear success, warning, and error notifications.
 - Saves the edited document as a new KML or KMZ file.
-- Includes an experimental Line Editor for drawing across contour/LineString geometry to select, cut, and delete lines or cut fragments.
+- Includes an experimental Line Editor for selecting, splitting, and deleting KML LineString geometry.
 - Supports zoom, pan, fit-to-view, invert selection, and undo while line editing.
 
 ---
 
 ## Experimental Line Editor
 
-The Line Editor is intended for dependable manual contour cleanup and cutting rather than automatic interpretation.
+The Line Editor is intended for dependable manual line cleanup and splitting rather than automatic interpretation.
 
 Typical workflow:
 
-1. In the main document tree, you can select a placemark/folder before opening **Line Editor**. Its lines are used as the initial selection, but **all lines in the document remain selectable and editable**. Choosing the whole document/root opens with no lines preselected.
-2. Use **Select (V)** to draw across unwanted contours. Only real crossings are selected. **Alt+drag** removes crossed lines from the selection. After selecting, choose **Cut Selected...** to split only those lines, or **Delete Selected** to remove them.
-3. **Cut Selected...** keeps the current selection as the cut target and switches to the Cut tool so you can draw the cutting path. If nothing is selected and you use Cut directly, the cut can affect any document line it crosses. The map overlay always shows which rule is active.
-4. Use **Cut (C)** to draw a cutline. Click to add connected points or press-and-drag for a freehand section. Live markers show the intersections and the overlay reports how many lines/points would be cut.
-5. **Right-click opens cut-line options at the pointer** (add point, finish/apply, undo point, cancel). You can also finish and apply with **double-click** or **Enter**. **Backspace** removes the last point; **Esc** cancels the draft.
-6. To use a Google Earth cutline, choose **Import Cut Line...**. The imported cut line is previewed first; choose **Cut with Imported Line** to split the current cut target.
-7. To use a helper LineString already in the document, select exactly that line and choose **Use Selected as Cutline**. The helper is removed before cutting so it cannot cut itself.
-8. After cutting, return to **Select** and remove unwanted fragments. Choose **Apply & Close** to commit those geometry changes to the currently loaded working document in memory. You can reopen Line Editor and continue from those edits. Selection alone is temporary and is not stored in KML/KMZ. Use **Save As** only when you want to write the edited file to disk.
+1. Open the KML/KMZ and choose **Line Editor**. The editor always opens with nothing selected.
+2. Use **Select (V)** to draw across lines. Only real crossings are selected. **Shift+click** adds one line; **Alt+click/drag** removes lines from the selection.
+3. Choose **Split Selected Lines...** to keep the current selection as the split target and switch to **Split (S)**. If nothing is selected and you use Split directly, any document line crossed by the split line can be affected.
+4. Draw a split line by clicking connected points or dragging freehand. Live markers and the map status show how many lines and intersection points would be split.
+5. Right-click for split-line actions at the pointer, or use **double-click** / **Enter** to finish and apply. **Backspace** removes the last split point; **Esc** cancels the draft.
+6. To use a Google Earth path, choose **Import Split Line...**, review the markers, then choose **Split with Imported Line**.
+7. To use a helper LineString already present in the document, select exactly that line and choose **Use Selected as Split Line**. The helper is removed before the split so it cannot split itself.
+8. After splitting, return to **Select** and delete unwanted pieces. Choose **Apply & Close** to keep those geometry changes in the currently loaded working document. Reopen Line Editor to continue. Use **Save As** only when you want to write the edited file to disk.
+9. In the main editor, line colour and line width can be changed using the same scoped style-edit workflow as icon/text properties.
 
-Navigation: **Hand (H)** pans with left-drag; **Space+drag** and middle-drag also pan; the mouse wheel and **+/-** zoom; **F** fits the view; **Zoom Selection** fits the highlighted lines. **Ctrl+Z** undoes the last cut/deletion.
+Navigation: **Hand (H)** pans with left-drag; **Space+drag** and middle-drag also pan; the mouse wheel and **+/-** zoom; **F** fits the view; **Zoom Selection** fits the highlighted lines. **Ctrl+Z** undoes the last split/deletion.
 
-Imported cut lines are temporary overlays and are not saved into the output KML/KMZ.
+Imported split lines are temporary overlays and are not saved into the output KML/KMZ.
