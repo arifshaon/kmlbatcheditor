@@ -484,6 +484,8 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
 
                                 <CheckBox Grid.Row="0"
@@ -571,6 +573,40 @@
                                         IsEnabled="{Binding EditSettings.ChangeLabelColor}"
                                         MinWidth="78"
                                         Margin="0,3,0,3" />
+
+
+                                <CheckBox Grid.Row="5"
+                                          Grid.Column="0"
+                                          Content="Change line colour"
+                                          IsChecked="{Binding EditSettings.ChangeLineColor}"
+                                          Margin="0,5,10,5" />
+                                <TextBox Grid.Row="5"
+                                         Grid.Column="1"
+                                         Text="{Binding EditSettings.LineColorText, UpdateSourceTrigger=PropertyChanged}"
+                                         IsEnabled="{Binding EditSettings.ChangeLineColor}"
+                                         Margin="0,3,6,3"
+                                         Padding="5"
+                                         ToolTip="Use #RRGGBB or #AARRGGBB" />
+                                <Button Grid.Row="5"
+                                        Grid.Column="2"
+                                        Content="Choose..."
+                                        Command="{Binding PickLineColorCommand}"
+                                        IsEnabled="{Binding EditSettings.ChangeLineColor}"
+                                        MinWidth="78"
+                                        Margin="0,3,0,3" />
+
+                                <CheckBox Grid.Row="6"
+                                          Grid.Column="0"
+                                          Content="Change line width"
+                                          IsChecked="{Binding EditSettings.ChangeLineWidth}"
+                                          Margin="0,5,10,5" />
+                                <TextBox Grid.Row="6"
+                                         Grid.Column="1"
+                                         Text="{Binding EditSettings.LineWidthText, UpdateSourceTrigger=PropertyChanged}"
+                                         IsEnabled="{Binding EditSettings.ChangeLineWidth}"
+                                         Margin="0,3,0,3"
+                                         Padding="5"
+                                         ToolTip="KML line width, for example 1, 2 or 3" />
                             </Grid>
 
                             <TextBlock Text="Colors may be entered as #RRGGBB or #AARRGGBB. The app converts them to KML AABBGGRR format automatically."
