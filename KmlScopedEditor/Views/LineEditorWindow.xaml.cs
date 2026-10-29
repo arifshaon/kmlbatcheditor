@@ -879,12 +879,26 @@ public partial class LineEditorWindow : Window
 
             AddContextMenuItem(
                 menu,
-                "Done Editing Imported Line",
+                "Finish editing this split line",
                 StopEditingGuide);
 
             AddContextMenuItem(
                 menu,
-                "Apply split",
+                "Start new split line here",
+                () =>
+                {
+                    StopEditingGuide();
+                    CancelDraftCutLine(
+                        switchToSelect: false);
+                    _draftCutDrawing = true;
+                    AddDraftCutPoint(
+                        e.WorldPoint);
+                    UpdateLiveSplitPreview();
+                });
+
+            AddContextMenuItem(
+                menu,
+                "Apply all pending split lines",
                 ApplyCurrentSplit);
 
             menu.IsOpen = true;
@@ -1022,14 +1036,20 @@ public partial class LineEditorWindow : Window
         if (dialog.ShowDialog(this) != true)
             return;
 
-        // Step 2 intentionally has one pending split operation. Importing a
-        // new split line replaces any unapplied drawn/imported split state.
+        // Imported and drawn lines are the same kind of pending split line.
+        // Importing must therefore add to, not replace, the current pending set.
         _hideAppliedSplitHistory = false;
+
+        if (_draftCutPoints.Count >= 2)
+            CommitDraftCutAsPendingGuide();
+        else if (_draftCutPoints.Count > 0)
+            CancelDraftCutLine(
+                switchToSelect: false);
+
         StopEditingGuide();
-        _guides.RemoveAll(guide => !guide.Applied);
-        CancelDraftCutLine(switchToSelect: false);
 
         var imported = 0;
+        CutGuideState? lastImportedGuide = null;
 
         try
         {
@@ -1040,10 +1060,13 @@ public partial class LineEditorWindow : Window
 
                 foreach (var guide in guides)
                 {
-                    _guides.Add(
+                    lastImportedGuide =
                         new CutGuideState(
                             guide,
-                            removeMatchingSourceBeforeCut: false));
+                            removeMatchingSourceBeforeCut: false);
+
+                    _guides.Add(
+                        lastImportedGuide);
 
                     imported++;
                 }
@@ -1070,16 +1093,14 @@ public partial class LineEditorWindow : Window
 
         RefreshSurface(fitView: true);
 
-        var importedGuide = _guides
-            .LastOrDefault(guide => !guide.Applied);
-
-        if (importedGuide is not null)
-            StartEditingGuide(importedGuide);
+        if (lastImportedGuide is not null)
+            StartEditingGuide(
+                lastImportedGuide);
 
         UpdatePendingGuidePreview();
 
         UpdateStatus(
-            $"Imported {imported:N0} split line(s). Drag orange vertex handles if you need to reshape it, then press Apply split or Enter.");
+            $"Imported {imported:N0} split line(s) and added them to the pending split lines. Drag orange handles to reshape the selected line, click another pending line to edit it, draw another line, or press Apply split / Enter to apply them all.");
     }
 
     private void OnEditImportedLineClick(
@@ -1092,23 +1113,24 @@ public partial class LineEditorWindow : Window
         {
             StopEditingGuide();
             UpdateStatus(
-                "Imported split-line editing finished. You can re-enter Edit Imported Line at any time before applying it.");
+                "Split-line editing finished.");
             return;
         }
 
         var pending = _guides
-            .LastOrDefault(guide => !guide.Applied);
+            .LastOrDefault(
+                guide => !guide.Applied);
 
         if (pending is null)
         {
             UpdateStatus(
-                "There is no pending imported/existing split line to edit.");
+                "There is no pending split line to edit.");
             return;
         }
 
         StartEditingGuide(pending);
         UpdateStatus(
-            "Editing imported split line. Drag orange handles to move vertices; right-click for add/delete vertex options.");
+            "Editing split line. Drag orange handles to move vertices; right-click for add/delete vertex options.");
     }
 
     private void OnEditableGuideChanged(
@@ -1220,20 +1242,25 @@ public partial class LineEditorWindow : Window
 
     private void ApplyCurrentSplit()
     {
-        if (_draftCutPoints.Count >= 2)
+        if (_draftCutPoints.Count == 1)
         {
-            FinishAndApplyDrawnSplit();
+            UpdateStatus(
+                "The current drawing needs at least one more point before it can be applied. Add another point or press Esc to cancel it.");
             return;
         }
 
-        if (_guides.Any(guide => !guide.Applied))
+        if (_draftCutPoints.Count >= 2)
+            CommitDraftCutAsPendingGuide();
+
+        if (_guides.Any(
+                guide => !guide.Applied))
         {
             ApplyPendingGuides();
             return;
         }
 
         UpdateStatus(
-            "There is no split line ready. Import one or choose Draw split line first.");
+            "There is no pending split line. Import one or draw one first.");
     }
 
     private void ApplyPendingGuides()
@@ -1248,50 +1275,14 @@ public partial class LineEditorWindow : Window
         {
             UpdateStatus(
                 _guides.Count == 0
-                    ? "No imported or existing split lines are loaded."
-                    : "All loaded split lines have already been used.");
+                    ? "No split lines are loaded."
+                    : "All split lines have already been applied.");
             return;
         }
 
         ApplyGuideStates(
             pending,
-            "Split using imported/existing line(s).");
-    }
-
-    private void FinishAndApplyDrawnSplit()
-    {
-        if (_draftCutPoints.Count < 2)
-        {
-            UpdateStatus(
-                "The split line needs at least two points.");
-            return;
-        }
-
-        _draftCutDrawing = false;
-        _draftCutPreviewPoint = null;
-
-        var guide = new KmlCutGuide(
-            "Drawn split line",
-            _draftCutPoints
-                .Select(_geometry.Unproject)
-                .ToList());
-
-        var state = new CutGuideState(
-            guide,
-            removeMatchingSourceBeforeCut: false);
-
-        _guides.Add(state);
-
-        _draftCutPoints.Clear();
-        ResetIncrementalSplitPreview();
-
-        EditorSurface.SetDraftCut(
-            _draftCutPoints,
-            _draftCutPreviewPoint);
-
-        ApplyGuideStates(
-            new[] { state },
-            "Drawn split applied.");
+            "Split applied.");
     }
 
     private void ApplyGuideStates(
