@@ -62,6 +62,8 @@ public sealed class LineEditorSurface : FrameworkElement
     private Pen? _draftSplitPen;
     private Pen? _selectStrokePen;
     private Pen? _splitStrokePen;
+    private Pen? _lassoPen;
+    private SolidColorBrush? _lassoFillBrush;
     private SolidColorBrush? _splitVertexBrush;
     private SolidColorBrush? _splitPointBrush;
     private SolidColorBrush? _appliedSplitPointBrush;
@@ -80,6 +82,7 @@ public sealed class LineEditorSurface : FrameworkElement
     private bool _fitPending = true;
 
     private bool _drawingStroke;
+    private bool _strokeIsLasso;
     private bool _cutClickPending;
     private bool _leftPan;
     private bool _rightPanPending;
@@ -137,6 +140,10 @@ public sealed class LineEditorSurface : FrameworkElement
     }
 
     public LineEditorTool Tool { get; set; } = LineEditorTool.Select;
+
+    public bool LassoMode { get; set; }
+
+    public bool LassoRemove { get; set; }
 
     public event EventHandler<LineEditorStrokeEventArgs>? StrokeCompleted;
     public event EventHandler<LineEditorStrokeEventArgs>? SplitStrokePreviewChanged;
@@ -450,6 +457,7 @@ public sealed class LineEditorSurface : FrameworkElement
 
         if (Tool == LineEditorTool.Split)
         {
+            _strokeIsLasso = false;
             CaptureMouse();
             _cutClickPending = true;
             _strokeWorld.Clear();
@@ -463,6 +471,12 @@ public sealed class LineEditorSurface : FrameworkElement
         CaptureMouse();
 
         _drawingStroke = true;
+        _strokeIsLasso =
+            Tool == LineEditorTool.Select &&
+            (LassoMode ||
+             (Keyboard.Modifiers &
+              ModifierKeys.Control) ==
+             ModifierKeys.Control);
         _strokeWorld.Clear();
 
         _strokeStartScreen = screen;
@@ -573,16 +587,24 @@ public sealed class LineEditorSurface : FrameworkElement
 
             if (_strokeWorld.Count >= 2)
             {
+                var deselectStroke =
+                    _strokeIsLasso &&
+                    LassoMode
+                        ? LassoRemove
+                        : alt;
+
                 StrokeCompleted?.Invoke(
                     this,
                     new LineEditorStrokeEventArgs(
                         Tool,
                         _strokeWorld.ToList(),
-                        alt));
+                        deselectStroke,
+                        _strokeIsLasso));
             }
         }
 
         _strokeWorld.Clear();
+        _strokeIsLasso = false;
         RedrawOverlayLayer();
         e.Handled = true;
     }
@@ -940,16 +962,34 @@ public sealed class LineEditorSurface : FrameworkElement
 
         if (_strokeWorld.Count >= 2)
         {
-            var strokePen = Tool == LineEditorTool.Split
-                ? _splitStrokePen
-                : _selectStrokePen;
-
-            if (strokePen is not null)
+            if (_strokeIsLasso &&
+                Tool == LineEditorTool.Select)
             {
-                context.DrawGeometry(
-                    null,
-                    strokePen,
-                    BuildGeometry(_strokeWorld));
+                if (_lassoPen is not null &&
+                    _lassoFillBrush is not null)
+                {
+                    context.DrawGeometry(
+                        _lassoFillBrush,
+                        _lassoPen,
+                        BuildPolygonGeometry(
+                            _strokeWorld));
+                }
+            }
+            else
+            {
+                var strokePen =
+                    Tool == LineEditorTool.Split
+                        ? _splitStrokePen
+                        : _selectStrokePen;
+
+                if (strokePen is not null)
+                {
+                    context.DrawGeometry(
+                        null,
+                        strokePen,
+                        BuildGeometry(
+                            _strokeWorld));
+                }
             }
         }
     }
@@ -1169,6 +1209,18 @@ public sealed class LineEditorSurface : FrameworkElement
             2.5d / safeScale,
             DashStyles.Dash);
 
+        _lassoPen = CreatePen(
+            Color.FromRgb(24, 119, 205),
+            2.0d / safeScale,
+            DashStyles.Dash);
+
+        _lassoFillBrush = CreateFrozenBrush(
+            Color.FromArgb(
+                36,
+                24,
+                119,
+                205));
+
         _splitVertexBrush = CreateFrozenBrush(
             Color.FromRgb(240, 139, 0));
 
@@ -1225,6 +1277,35 @@ public sealed class LineEditorSurface : FrameworkElement
             Math.Log(safeScale, 2d) * 2d) / 2d;
 
         return Math.Pow(2d, exponent);
+    }
+
+    private static StreamGeometry BuildPolygonGeometry(
+        IReadOnlyList<Point> points)
+    {
+        var geometry =
+            new StreamGeometry();
+
+        using (var context =
+               geometry.Open())
+        {
+            context.BeginFigure(
+                points[0],
+                isFilled: true,
+                isClosed: true);
+
+            for (var index = 1;
+                 index < points.Count;
+                 index++)
+            {
+                context.LineTo(
+                    points[index],
+                    true,
+                    false);
+            }
+        }
+
+        geometry.Freeze();
+        return geometry;
     }
 
     private static StreamGeometry BuildGeometry(
@@ -1529,16 +1610,19 @@ public sealed class LineEditorStrokeEventArgs : EventArgs
     public LineEditorStrokeEventArgs(
         LineEditorTool tool,
         IReadOnlyList<Point> worldPoints,
-        bool isDeselect)
+        bool isDeselect,
+        bool isLasso = false)
     {
         Tool = tool;
         WorldPoints = worldPoints;
         IsDeselect = isDeselect;
+        IsLasso = isLasso;
     }
 
     public LineEditorTool Tool { get; }
     public IReadOnlyList<Point> WorldPoints { get; }
     public bool IsDeselect { get; }
+    public bool IsLasso { get; }
 }
 
 public sealed class LineEditorClickEventArgs : EventArgs
