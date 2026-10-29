@@ -34,6 +34,8 @@ public sealed class LineEditorSurface : FrameworkElement
         Array.Empty<LineEditorGuideVisual>();
 
     private IReadOnlyList<Point> _cutPoints = Array.Empty<Point>();
+    private IReadOnlyList<Point> _draftCutPoints = Array.Empty<Point>();
+    private Point? _draftCutPreviewPoint;
     private readonly Dictionary<XElement, StreamGeometry> _featureGeometry = new();
     private readonly List<(LineEditorGuideVisual Guide, StreamGeometry Geometry)> _guideGeometry = new();
 
@@ -46,6 +48,7 @@ public sealed class LineEditorSurface : FrameworkElement
     private bool _fitPending = true;
 
     private bool _drawingStroke;
+    private bool _cutClickPending;
     private readonly List<Point> _strokeWorld = new();
     private Point _strokeStartScreen;
     private Point _lastStrokeScreen;
@@ -120,6 +123,15 @@ public sealed class LineEditorSurface : FrameworkElement
     public void SetSelection(IEnumerable<XElement> selected)
     {
         _selected = selected?.ToHashSet() ?? new HashSet<XElement>();
+        InvalidateVisual();
+    }
+
+    public void SetDraftCut(
+        IReadOnlyList<Point> points,
+        Point? previewPoint)
+    {
+        _draftCutPoints = points ?? Array.Empty<Point>();
+        _draftCutPreviewPoint = previewPoint;
         InvalidateVisual();
     }
 
@@ -235,13 +247,49 @@ public sealed class LineEditorSurface : FrameworkElement
             drawingContext.DrawGeometry(null, guidePen, item.Geometry);
         }
 
+        if (_draftCutPoints.Count > 0)
+        {
+            var draftPoints = _draftCutPoints.ToList();
+
+            if (_draftCutPreviewPoint.HasValue)
+                draftPoints.Add(_draftCutPreviewPoint.Value);
+
+            if (draftPoints.Count >= 2)
+            {
+                var draftPen = CreatePen(
+                    Color.FromRgb(240, 139, 0),
+                    2.4d / safeScale);
+
+                drawingContext.DrawGeometry(
+                    null,
+                    draftPen,
+                    BuildGeometry(draftPoints));
+            }
+
+            var vertexBrush = new SolidColorBrush(
+                Color.FromRgb(240, 139, 0));
+            vertexBrush.Freeze();
+
+            var vertexRadius = 4.2d / safeScale;
+
+            foreach (var point in _draftCutPoints)
+            {
+                drawingContext.DrawEllipse(
+                    vertexBrush,
+                    null,
+                    point,
+                    vertexRadius,
+                    vertexRadius);
+            }
+        }
+
         if (_cutPoints.Count > 0)
         {
             var markerBrush = new SolidColorBrush(
-                Color.FromRgb(224, 91, 32));
+                Color.FromRgb(218, 94, 39));
             markerBrush.Freeze();
 
-            var radius = 3.5d / safeScale;
+            var radius = 2.6d / safeScale;
 
             foreach (var point in _cutPoints)
             {
@@ -277,12 +325,22 @@ public sealed class LineEditorSurface : FrameworkElement
         base.OnMouseLeftButtonDown(e);
 
         Focus();
+        var screen = e.GetPosition(this);
+
+        if (Tool == LineEditorTool.Cut)
+        {
+            CaptureMouse();
+            _cutClickPending = true;
+            _strokeStartScreen = screen;
+            e.Handled = true;
+            return;
+        }
+
         CaptureMouse();
 
         _drawingStroke = true;
         _strokeWorld.Clear();
 
-        var screen = e.GetPosition(this);
         _strokeStartScreen = screen;
         _lastStrokeScreen = screen;
         _strokeWorld.Add(ScreenToWorld(screen));
@@ -295,12 +353,32 @@ public sealed class LineEditorSurface : FrameworkElement
     {
         base.OnMouseLeftButtonUp(e);
 
+        var screen = e.GetPosition(this);
+        var alt = (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt;
+
+        if (Tool == LineEditorTool.Cut && _cutClickPending)
+        {
+            _cutClickPending = false;
+            ReleaseMouseCapture();
+
+            if ((screen - _strokeStartScreen).Length < 4d)
+            {
+                LineClicked?.Invoke(
+                    this,
+                    new LineEditorClickEventArgs(
+                        Tool,
+                        ScreenToWorld(screen),
+                        alt));
+            }
+
+            e.Handled = true;
+            return;
+        }
+
         if (!_drawingStroke)
             return;
 
-        var screen = e.GetPosition(this);
         var clickDistance = (screen - _strokeStartScreen).Length;
-        var alt = (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt;
 
         _drawingStroke = false;
         ReleaseMouseCapture();
