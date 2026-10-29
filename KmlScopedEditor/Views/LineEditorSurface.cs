@@ -65,6 +65,10 @@ public sealed class LineEditorSurface : FrameworkElement
     private SolidColorBrush? _splitPointBrush;
     private SolidColorBrush? _appliedSplitPointBrush;
 
+    private Color _appliedGuideColor =
+        Color.FromRgb(76, 45, 103);
+    private double _appliedGuideThickness = 3d;
+
     private HashSet<XElement> _selected = new();
     private bool _selectionIsSoft;
     private XElement? _hovered;
@@ -210,6 +214,33 @@ public sealed class LineEditorSurface : FrameworkElement
         _selectionIsSoft = isSoft;
         EnsureRenderCache();
         RedrawSelectionLayer();
+    }
+
+    public void SetAppliedGuideStyle(
+        Color color,
+        double thickness)
+    {
+        var safeThickness =
+            double.IsFinite(thickness)
+                ? Math.Clamp(thickness, 1d, 8d)
+                : 3d;
+
+        if (_appliedGuideColor == color &&
+            Math.Abs(
+                _appliedGuideThickness -
+                safeThickness) <
+            0.000001d)
+        {
+            return;
+        }
+
+        _appliedGuideColor = color;
+        _appliedGuideThickness =
+            safeThickness;
+
+        InvalidateRenderCache();
+        EnsureRenderCache();
+        InvalidateVisual();
     }
 
     public void SetAppliedCutPoints(
@@ -1099,8 +1130,8 @@ public sealed class LineEditorSurface : FrameworkElement
             DashStyles.Dash);
 
         _appliedSplitLinePen = CreatePen(
-            Color.FromArgb(110, 116, 61, 170),
-            2.0d / safeScale,
+            _appliedGuideColor,
+            _appliedGuideThickness / safeScale,
             DashStyles.Dash);
 
         _draftSplitPen = CreatePen(
@@ -1123,8 +1154,13 @@ public sealed class LineEditorSurface : FrameworkElement
         _splitPointBrush = CreateFrozenBrush(
             Color.FromRgb(218, 94, 39));
 
-        _appliedSplitPointBrush = CreateFrozenBrush(
-            Color.FromArgb(105, 218, 94, 39));
+        _appliedSplitPointBrush =
+            CreateFrozenBrush(
+                Color.FromArgb(
+                    220,
+                    _appliedGuideColor.R,
+                    _appliedGuideColor.G,
+                    _appliedGuideColor.B));
 
         _featureGeometry.Clear();
 
