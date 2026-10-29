@@ -383,20 +383,48 @@
                         BorderBrush="#D0D6DE"
                         BorderThickness="1"
                         CornerRadius="4"
-                        IsHitTestVisible="False"
                         MaxWidth="470">
-                    <StackPanel>
-                        <TextBlock x:Name="InstructionText"
-                                   FontWeight="SemiBold"
-                                   Foreground="#243B64"
-                                   TextWrapping="Wrap" />
-                        <TextBlock x:Name="ToolHintText"
-                                   Margin="0,3,0,0"
-                                   FontSize="11"
-                                   Foreground="#4B5563"
-                                   TextWrapping="Wrap" />
-                    </StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0">
+                            <TextBlock x:Name="InstructionText"
+                                       FontWeight="SemiBold"
+                                       Foreground="#243B64"
+                                       TextWrapping="Wrap" />
+                            <TextBlock x:Name="ToolHintText"
+                                       Margin="0,3,0,0"
+                                       FontSize="11"
+                                       Foreground="#4B5563"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <Button Grid.Column="1"
+                                Focusable="False"
+                                Content="×"
+                                Width="22"
+                                Height="22"
+                                Padding="0"
+                                Margin="10,-3,-3,0"
+                                VerticalAlignment="Top"
+                                ToolTip="Hide instructions"
+                                Click="OnHideMapInstructionsClick" />
+                    </Grid>
                 </Border>
+
+                <Button x:Name="MapInstructionShowButton"
+                        Focusable="False"
+                        Content="? Tips"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Top"
+                        Margin="12"
+                        Padding="8,4"
+                        Visibility="Collapsed"
+                        ToolTip="Show line editor instructions"
+                        Click="OnShowMapInstructionsClick" />
 
                 <Border HorizontalAlignment="Left"
                         VerticalAlignment="Bottom"
