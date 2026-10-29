@@ -31,9 +31,6 @@ public sealed class LineEditorSurface : FrameworkElement
     private IReadOnlyList<KmlLineFeature> _features =
         Array.Empty<KmlLineFeature>();
 
-    private IReadOnlyList<KmlLineFeature> _contextFeatures =
-        Array.Empty<KmlLineFeature>();
-
     private IReadOnlyList<LineEditorGuideVisual> _guides =
         Array.Empty<LineEditorGuideVisual>();
 
@@ -41,7 +38,6 @@ public sealed class LineEditorSurface : FrameworkElement
     private IReadOnlyList<Point> _draftCutPoints = Array.Empty<Point>();
     private Point? _draftCutPreviewPoint;
     private readonly Dictionary<XElement, StreamGeometry> _featureGeometry = new();
-    private readonly Dictionary<XElement, StreamGeometry> _contextGeometry = new();
     private readonly List<(LineEditorGuideVisual Guide, StreamGeometry Geometry)> _guideGeometry = new();
 
     private HashSet<XElement> _selected = new();
@@ -96,7 +92,6 @@ public sealed class LineEditorSurface : FrameworkElement
 
     public void SetDocument(
         IReadOnlyList<KmlLineFeature> features,
-        IReadOnlyList<KmlLineFeature> contextFeatures,
         IEnumerable<XElement> selected,
         Rect worldBounds,
         IReadOnlyList<LineEditorGuideVisual>? guides = null,
@@ -104,7 +99,6 @@ public sealed class LineEditorSurface : FrameworkElement
         bool fitView = false)
     {
         _features = features ?? Array.Empty<KmlLineFeature>();
-        _contextFeatures = contextFeatures ?? Array.Empty<KmlLineFeature>();
         _selected = selected?.ToHashSet() ?? new HashSet<XElement>();
         _worldBounds = worldBounds;
         _guides = guides ?? Array.Empty<LineEditorGuideVisual>();
@@ -253,7 +247,6 @@ public sealed class LineEditorSurface : FrameworkElement
             new Rect(0d, 0d, ActualWidth, ActualHeight));
 
         if (_features.Count == 0 &&
-            _contextFeatures.Count == 0 &&
             _guides.Count == 0)
         {
             var text = new FormattedText(
@@ -277,20 +270,9 @@ public sealed class LineEditorSurface : FrameworkElement
         var safeScale = Math.Max(_scale, 0.000001d);
         drawingContext.PushTransform(CreateWorldTransform());
 
-        var contextPen = CreatePen(Color.FromRgb(190, 194, 200), 0.9d / safeScale);
         var normalPen = CreatePen(Color.FromRgb(84, 92, 102), 1.1d / safeScale);
         var selectedPen = CreatePen(Color.FromRgb(190, 45, 45), 2.6d / safeScale);
         var hoverPen = CreatePen(Color.FromRgb(0, 120, 190), 2.2d / safeScale);
-
-        foreach (var feature in _contextFeatures)
-        {
-            if (_contextGeometry.TryGetValue(
-                    feature.LineStringElement,
-                    out var geometry))
-            {
-                drawingContext.DrawGeometry(null, contextPen, geometry);
-            }
-        }
 
         foreach (var feature in _features)
         {
@@ -652,7 +634,6 @@ public sealed class LineEditorSurface : FrameworkElement
         base.OnMouseWheel(e);
 
         if (_features.Count == 0 &&
-            _contextFeatures.Count == 0 &&
             _guides.Count == 0)
         {
             return;
@@ -684,17 +665,6 @@ public sealed class LineEditorSurface : FrameworkElement
             if (feature.WorldPoints.Count >= 2)
             {
                 _featureGeometry[feature.LineStringElement] =
-                    BuildGeometry(feature.WorldPoints);
-            }
-        }
-
-        _contextGeometry.Clear();
-
-        foreach (var feature in _contextFeatures)
-        {
-            if (feature.WorldPoints.Count >= 2)
-            {
-                _contextGeometry[feature.LineStringElement] =
                     BuildGeometry(feature.WorldPoints);
             }
         }
