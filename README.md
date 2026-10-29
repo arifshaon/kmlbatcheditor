@@ -56,11 +56,11 @@ The Line Editor is intended for dependable manual contour cleanup and cutting ra
 
 Typical workflow:
 
-1. In the main document tree, select the placemark/folder you want to edit, then open **Line Editor**. That tree selection becomes the outer editing scope; lines outside it remain visible in light grey but are locked.
+1. In the main document tree, you can select a placemark/folder before opening **Line Editor**. Its lines are used as the initial selection, but **all lines in the document remain selectable and editable**. Choosing the whole document/root opens with no lines preselected.
 2. Use **Select (V)** to draw across unwanted contours. Only real crossings are selected. **Alt+drag** removes crossed lines from the selection. **Delete** removes the highlighted lines.
-3. If any editable lines are selected, a cut affects only those selected lines. If nothing is selected, the cut affects every editable line in the current tree scope. The map overlay always shows the active cut scope.
+3. If any lines are selected, a cut affects only those selected lines. If nothing is selected, the cut affects every line in the document. The map overlay always shows which rule is active.
 4. Use **Cut (C)** to draw a cutline. Click to add connected points or press-and-drag for a freehand section. Live markers show the intersections and the overlay reports how many lines/points would be cut.
-5. Finish a hand-drawn cut with **double-click**, **right-click**, or **Enter**. The cut is applied immediately as one undoable step. **Backspace** removes the last cut point; **Esc** cancels the draft.
+5. **Right-click opens cut-line options at the pointer** (add point, finish/apply, undo point, cancel). You can also finish and apply with **double-click** or **Enter**. **Backspace** removes the last point; **Esc** cancels the draft.
 6. To use a Google Earth cutline, choose **Import Cut Lines...**. Imported guides are previewed first; choose **Apply Imported Guide** to commit them.
 7. To use a helper LineString already in the document, select exactly that line and choose **Use Selected as Cutline**. The helper is removed before cutting so it cannot cut itself.
 8. After cutting, return to **Select** and remove unwanted fragments. Then choose **Apply & Close** and use **Save As** in the main window.
