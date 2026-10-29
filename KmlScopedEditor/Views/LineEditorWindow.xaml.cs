@@ -30,8 +30,8 @@ public partial class LineEditorWindow : Window
     private KmlLineGeometryService _geometry;
     private KmlLineGeometryService _contextGeometry;
     private readonly double _projectionScale;
-    private readonly bool _isScoped;
-    private readonly string _scopeDisplayName;
+    private readonly string _initialSelectionDisplayName;
+    private readonly int _initialSelectedLineCount;
 
     private readonly KmlCutGuideService _cutGuideLoader = new();
     private readonly List<CutGuideState> _guides = new();
@@ -48,8 +48,8 @@ public partial class LineEditorWindow : Window
     public LineEditorWindow(
         XDocument sourceDocument,
         string? sourceName = null,
-        IReadOnlyCollection<int>? scopedPlacemarkIndexes = null,
-        string? scopeDisplayName = null)
+        IReadOnlyCollection<int>? initialSelectedPlacemarkIndexes = null,
+        string? initialSelectionDisplayName = null)
     {
         InitializeComponent();
 
@@ -58,17 +58,10 @@ public partial class LineEditorWindow : Window
         _originalDocument = new XDocument(sourceDocument);
         _workingDocument = new XDocument(sourceDocument);
 
-        _isScoped = scopedPlacemarkIndexes is not null;
-        _scopeDisplayName = string.IsNullOrWhiteSpace(scopeDisplayName)
-            ? (_isScoped ? "selected tree scope" : "entire document")
-            : scopeDisplayName;
-
-        if (_isScoped)
-        {
-            ApplyScopeMarkers(
-                _workingDocument,
-                scopedPlacemarkIndexes!);
-        }
+        _initialSelectionDisplayName =
+            string.IsNullOrWhiteSpace(initialSelectionDisplayName)
+                ? "No initial tree selection"
+                : initialSelectionDisplayName;
 
         var projectionGeometry = new KmlLineGeometryService(
             _workingDocument);
@@ -81,8 +74,12 @@ public partial class LineEditorWindow : Window
 
         _geometry = new KmlLineGeometryService(
             _workingDocument,
-            _projectionScale,
-            _isScoped ? ScopeMarkerAttribute : null);
+            _projectionScale);
+
+        InitialiseSelectionFromTree(
+            initialSelectedPlacemarkIndexes);
+
+        _initialSelectedLineCount = _selected.Count;
 
         if (!string.IsNullOrWhiteSpace(sourceName))
             Title = $"Line Editor - {sourceName}";
@@ -400,24 +397,12 @@ public partial class LineEditorWindow : Window
         object? sender,
         LineEditorContextEventArgs e)
     {
-        if (EditorSurface.Tool == LineEditorTool.Cut)
-        {
-            if (_draftCutPoints.Count == 0)
-            {
-                _draftCutDrawing = true;
-                AddDraftCutPoint(e.WorldPoint);
-                UpdateLiveCutPreview();
-                UpdateStatus(
-                    "Cut line started. Add another point, then right-click again to finish.");
-                return;
-            }
-
-            if (_draftCutPoints.Count >= 2)
-            {
-                FinishAndApplyDrawnCut();
-                return;
-            }
-        }
+        // Stop the rubber-band preview while the context menu is open. The
+        // committed draft points remain visible and unchanged.
+        _draftCutPreviewPoint = null;
+        EditorSurface.SetDraftCut(
+            _draftCutPoints,
+            _draftCutPreviewPoint);
 
         var menu = new System.Windows.Controls.ContextMenu
         {
@@ -426,27 +411,96 @@ public partial class LineEditorWindow : Window
                 System.Windows.Controls.Primitives.PlacementMode.MousePoint
         };
 
-        AddContextMenuItem(
-            menu,
-            "Start Cut Line Here",
-            () =>
+        if (EditorSurface.Tool == LineEditorTool.Cut)
+        {
+            if (_draftCutPoints.Count == 0)
             {
-                CancelDraftCutLine(switchToSelect: false);
-                SetTool(LineEditorTool.Cut);
-                _draftCutDrawing = true;
-                AddDraftCutPoint(e.WorldPoint);
-                UpdateLiveCutPreview();
-            });
+                AddContextMenuItem(
+                    menu,
+                    "Start Cut Line Here",
+                    () =>
+                    {
+                        _draftCutDrawing = true;
+                        AddDraftCutPoint(e.WorldPoint);
+                        UpdateLiveCutPreview();
+                    });
+            }
+            else
+            {
+                AddContextMenuItem(
+                    menu,
+                    "Add Cut Point Here",
+                    () =>
+                    {
+                        _draftCutDrawing = true;
+                        AddDraftCutPoint(e.WorldPoint);
+                        UpdateLiveCutPreview();
+                    });
+
+                AddContextMenuItem(
+                    menu,
+                    "Finish and Apply Here",
+                    () =>
+                    {
+                        AddDraftCutPoint(e.WorldPoint);
+
+                        if (_draftCutPoints.Count >= 2)
+                            FinishAndApplyDrawnCut();
+                    });
+
+                if (_draftCutPoints.Count >= 2)
+                {
+                    AddContextMenuItem(
+                        menu,
+                        "Finish and Apply",
+                        FinishAndApplyDrawnCut);
+                }
+
+                AddContextMenuItem(
+                    menu,
+                    "Undo Last Point",
+                    UndoLastDraftCutPoint);
+
+                AddContextMenuItem(
+                    menu,
+                    "Cancel Cut Line",
+                    () => CancelDraftCutLine(
+                        switchToSelect: false));
+            }
+        }
+        else
+        {
+            AddContextMenuItem(
+                menu,
+                "Start Cut Line Here",
+                () =>
+                {
+                    CancelDraftCutLine(
+                        switchToSelect: false);
+                    SetTool(LineEditorTool.Cut);
+                    _draftCutDrawing = true;
+                    AddDraftCutPoint(e.WorldPoint);
+                    UpdateLiveCutPreview();
+                });
+        }
 
         AddContextMenuItem(
             menu,
             "Select Tool",
-            () => SetTool(LineEditorTool.Select));
+            () =>
+            {
+                PauseDraftCut();
+                SetTool(LineEditorTool.Select);
+            });
 
         AddContextMenuItem(
             menu,
             "Hand Tool",
-            () => SetTool(LineEditorTool.Pan));
+            () =>
+            {
+                PauseDraftCut();
+                SetTool(LineEditorTool.Pan);
+            });
 
         menu.IsOpen = true;
     }
@@ -862,10 +916,7 @@ public partial class LineEditorWindow : Window
         _geometry =
             new KmlLineGeometryService(
                 _workingDocument,
-                _projectionScale,
-                _isScoped
-                    ? ScopeMarkerAttribute
-                    : null);
+                _projectionScale);
 
         _hasPerformedCut =
             state.HasPerformedCut;
@@ -1282,8 +1333,8 @@ public partial class LineEditorWindow : Window
 
         MapScopeText.Text =
             validSelected.Count > 0
-                ? $"Cut affects: {validSelected.Count:N0} selected editable line(s)"
-                : $"Cut affects: all {_geometry.Features.Count:N0} editable line(s) in {_scopeDisplayName}";
+                ? $"Cut affects: {validSelected.Count:N0} selected line(s)"
+                : $"Cut affects: all {_geometry.Features.Count:N0} line(s) in the document";
 
         if (preview.HasValue)
         {
@@ -1313,27 +1364,16 @@ public partial class LineEditorWindow : Window
     private void UpdateScopeText()
     {
         var currentPlacemarkCount =
-            _isScoped
-                ? _workingDocument
-                    .Descendants(
-                        KmlNs + "Placemark")
-                    .Count(placemark =>
-                        string.Equals(
-                            placemark
-                                .Attribute(
-                                    ScopeMarkerAttribute)
-                                ?.Value,
-                            "true",
-                            StringComparison.Ordinal))
-                : _workingDocument
-                    .Descendants(
-                        KmlNs + "Placemark")
-                    .Count();
+            _workingDocument
+                .Descendants(
+                    KmlNs + "Placemark")
+                .Count();
 
         ScopeText.Text =
-            _isScoped
-                ? $"Editing scope: {_scopeDisplayName} — {currentPlacemarkCount:N0} placemark(s), {_geometry.Features.Count:N0} editable line(s). Lines outside this scope are light grey and locked."
-                : $"Editing scope: Entire document — {currentPlacemarkCount:N0} placemark(s), {_geometry.Features.Count:N0} editable line(s).";
+            $"All {_geometry.Features.Count:N0} line(s) in {currentPlacemarkCount:N0} placemark(s) are editable. " +
+            (_initialSelectedLineCount > 0
+                ? $"Started with {_initialSelectedLineCount:N0} line(s) selected from {_initialSelectionDisplayName}."
+                : "No lines were preselected from the main tree.");
     }
 
     private UndoState CaptureUndoState()
@@ -1405,22 +1445,9 @@ public partial class LineEditorWindow : Window
                     guide.Applied))
             .ToList();
 
-        var editableElements =
-            _geometry.Features
-                .Select(feature =>
-                    feature.LineStringElement)
-                .ToHashSet();
-
-        var contextOnly =
-            _contextGeometry.Features
-                .Where(feature =>
-                    !editableElements.Contains(
-                        feature.LineStringElement))
-                .ToList();
-
         EditorSurface.SetDocument(
             _geometry.Features,
-            contextOnly,
+            Array.Empty<KmlLineFeature>(),
             _selected,
             GetDisplayBounds(
                 guideVisuals),
@@ -1437,7 +1464,7 @@ public partial class LineEditorWindow : Window
         IReadOnlyList<LineEditorGuideVisual> guides)
     {
         var bounds =
-            _contextGeometry.WorldBounds;
+            _geometry.WorldBounds;
 
         foreach (var guide in guides)
         {
@@ -1471,17 +1498,20 @@ public partial class LineEditorWindow : Window
             $"{_undo.Count:N0} undo step(s).";
     }
 
-    private static void ApplyScopeMarkers(
-        XDocument document,
-        IReadOnlyCollection<int> placemarkIndexes)
+    private void InitialiseSelectionFromTree(
+        IReadOnlyCollection<int>? placemarkIndexes)
     {
-        var placemarks = document
-            .Descendants(
-                KmlNs + "Placemark")
+        if (placemarkIndexes is null ||
+            placemarkIndexes.Count == 0)
+        {
+            return;
+        }
+
+        var placemarks = _workingDocument
+            .Descendants(KmlNs + "Placemark")
             .ToList();
 
-        foreach (var index in
-                 placemarkIndexes)
+        foreach (var index in placemarkIndexes)
         {
             if (index < 0 ||
                 index >= placemarks.Count)
@@ -1489,9 +1519,11 @@ public partial class LineEditorWindow : Window
                 continue;
             }
 
-            placemarks[index].SetAttributeValue(
-                ScopeMarkerAttribute,
-                "true");
+            foreach (var line in placemarks[index]
+                         .Descendants(KmlNs + "LineString"))
+            {
+                _selected.Add(line);
+            }
         }
     }
 
