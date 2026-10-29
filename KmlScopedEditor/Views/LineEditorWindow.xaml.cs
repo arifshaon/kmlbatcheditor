@@ -2368,11 +2368,18 @@ public partial class LineEditorWindow : Window
             _draftCutPoints,
             _draftCutPreviewPoint);
 
+        if (_draftCutPoints.Count == 0 &&
+            _draftWillReplacePending)
+        {
+            _draftWillReplacePending = false;
+            RefreshSurface();
+        }
+
         UpdateLiveSplitPreview();
 
         UpdateStatus(
             _draftCutPoints.Count == 0
-                ? "Drawn split line cleared."
+                ? "Drawn split line cleared. The current split line was kept."
                 : $"Removed the last split point. {_draftCutPoints.Count:N0} point(s) remain.");
     }
 
@@ -2479,9 +2486,13 @@ public partial class LineEditorWindow : Window
         var points =
             new List<Point>();
 
-        MergePendingGuidePreviews(
-            lines,
-            points);
+        if (!_draftWillReplacePending ||
+            _draftCutPoints.Count == 0)
+        {
+            MergePendingGuidePreviews(
+                lines,
+                points);
+        }
 
         lines.UnionWith(
             _committedPreviewLines);
@@ -2843,8 +2854,7 @@ public partial class LineEditorWindow : Window
                             guide.Guide),
                         guide.Applied,
                         !guide.Applied &&
-                        _draftWillReplacePending &&
-                        _draftCutPoints.Count > 0))
+                        _draftWillReplacePending))
                 .ToList();
 
         EditorSurface.SetDocument(
