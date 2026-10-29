@@ -4,6 +4,9 @@
 
 ### Line Editor
 
+- Added universal **right-drag pan** from Select, Split, or Hand modes; a simple right-click still opens the context menu.
+- Imported split lines are now editable before applying: drag vertex handles, or right-click to add/delete vertices.
+
 - Renamed the geometry operation from **Cut** to **Split** throughout the Line Editor; the shortcut is now **S**.
 - The Line Editor now always opens with nothing selected.
 - Added **Shift+click** to add one line to the current selection; Alt+click/drag removes from it.
