@@ -4,6 +4,12 @@
 
 ### Line Editor
 
+- Removed the redundant geometry parse on Line Editor open and the full geometry `Reload()` after applying split lines.
+- Split rendering into retained base, selection/hover, and split/edit visual layers; hover/drawing no longer repaint the base geometry, and pan/zoom update layer transforms directly between zoom buckets.
+- Replaced distance-thinning display simplification with iterative Douglas–Peucker, preserving closed display rings and leaving source KML coordinates untouched.
+- Live split preview now checks effective split positions without constructing output pieces.
+- Clarified that **Split with Imported Line** is only for pending imported/existing split lines; hand-drawn splits apply when drawing is finished.
+
 - Added universal **right-drag pan** from Select, Split, or Hand modes; a simple right-click still opens the context menu.
 - Imported split lines are now editable before applying: drag vertex handles, or right-click to add/delete vertices.
 
