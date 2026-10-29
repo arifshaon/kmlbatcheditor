@@ -937,9 +937,22 @@ public partial class LineEditorWindow : Window
         if (guideStates.Count == 0)
             return;
 
-        var snapshot = CaptureUndoState();
         var selectedTargets = GetValidSelectedLines();
-        var useSelectedTargets = selectedTargets.Count > 0;
+        var limitToSelection =
+            OnlySplitSelectedCheckBox.IsChecked == true;
+
+        if (limitToSelection &&
+            selectedTargets.Count == 0)
+        {
+            UpdateStatus(
+                "Only split the selected lines is ticked, but no lines are selected.");
+            return;
+        }
+
+        var snapshot = CaptureUndoState();
+        var useSelectedTargets =
+            limitToSelection &&
+            selectedTargets.Count > 0;
 
         ClearCutTargetMarkers();
 
@@ -1038,8 +1051,11 @@ public partial class LineEditorWindow : Window
             $"{totalIntersections:N0} intersection(s), producing " +
             $"{totalPieces:N0} piece(s)." +
             (helperLinesRemoved > 0
-                ? $" Removed {helperLinesRemoved:N0} helper line(s) before cutting."
+                ? $" Removed {helperLinesRemoved:N0} helper line(s) before splitting."
                 : string.Empty));
+
+        SetWorkflowStep(3);
+        RefreshSurface();
     }
 
     private void OnClearSplitLinesClick(
@@ -1713,10 +1729,13 @@ public partial class LineEditorWindow : Window
     private IReadOnlySet<XElement>?
         GetSelectedTargetSet()
     {
+        if (OnlySplitSelectedCheckBox.IsChecked != true)
+            return null;
+
         var valid = GetValidSelectedLines();
 
         return valid.Count == 0
-            ? null
+            ? new HashSet<XElement>()
             : valid.ToHashSet();
     }
 
@@ -1740,21 +1759,54 @@ public partial class LineEditorWindow : Window
         var validSelected =
             GetValidSelectedLines();
 
-        MapScopeText.Text =
-            validSelected.Count > 0
-                ? $"Split affects: {validSelected.Count:N0} selected line(s)"
-                : $"Split affects: all {_geometry.Features.Count:N0} line(s) in the document";
+        UseSelectedLineButton.IsEnabled =
+            validSelected.Count == 1;
+
+        OnlySplitSelectedCheckBox.IsEnabled =
+            validSelected.Count > 0;
+
+        if (validSelected.Count == 0 &&
+            OnlySplitSelectedCheckBox.IsChecked == true)
+        {
+            OnlySplitSelectedCheckBox.IsChecked = false;
+        }
+
+        SelectedSplitScopeText.Text =
+            validSelected.Count == 0
+                ? "(none selected)"
+                : $"({validSelected.Count:N0} selected)";
+
+        var pendingGuides =
+            _guides.Count(guide => !guide.Applied);
+
+        SplitLineSummaryText.Text =
+            _draftCutPoints.Count >= 2
+                ? $"drawn line · {_draftCutPoints.Count:N0} points"
+                : pendingGuides > 0
+                    ? pendingGuides == 1
+                        ? "1 split line ready"
+                        : $"{pendingGuides:N0} split lines ready"
+                    : "No split line yet";
+
+        ApplySplitButton.IsEnabled =
+            _draftCutPoints.Count >= 2 ||
+            pendingGuides > 0;
 
         if (preview.HasValue)
         {
-            ToolHintText.Text =
-                $"{ToolHintForCurrentTool()} · Will split {preview.Value.LinesAffected:N0} line(s) at {preview.Value.IntersectionCount:N0} point(s)";
+            SplitPreviewSummaryText.Text =
+                $"will split {preview.Value.LinesAffected:N0} line(s) at {preview.Value.IntersectionCount:N0} point(s)";
         }
         else
         {
-            ToolHintText.Text =
-                ToolHintForCurrentTool();
+            SplitPreviewSummaryText.Text =
+                "draw or import a split line";
         }
+
+        ToolHintText.Text =
+            ToolHintForCurrentTool();
+
+        UpdateScopeText();
     }
 
     private string ToolHintForCurrentTool()
@@ -1766,20 +1818,23 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Select =>
                 "V Select · drag across lines · Alt+drag deselect · Delete remove · right-drag pan · Space+drag pan",
             _ =>
-                "S Split · click points or drag freehand · right-click options · double-click/Enter finish · Backspace undo point · Esc cancel"
+                "Split · import or draw a path · Apply split / Enter applies · Backspace removes a drawn point · right-drag pans"
         };
     }
 
     private void UpdateScopeText()
     {
-        var currentPlacemarkCount =
-            _workingDocument
-                .Descendants(
-                    KmlNs + "Placemark")
-                .Count();
+        var pendingSplitCount =
+            _guides.Count(guide => !guide.Applied) +
+            (_draftCutPoints.Count >= 2 ? 1 : 0);
 
         ScopeText.Text =
-            $"All {_geometry.Features.Count:N0} line(s) in {currentPlacemarkCount:N0} placemark(s) are editable. Nothing is preselected when the Line Editor opens.";
+            $"{_geometry.Features.Count:N0} lines · " +
+            $"{GetValidSelectedLines().Count:N0} selected · " +
+            (pendingSplitCount > 0
+                ? $"{pendingSplitCount:N0} split line(s) waiting to be applied · "
+                : string.Empty) +
+            "pan: right-drag or Space+drag";
     }
 
     private UndoState CaptureUndoState()
@@ -1843,13 +1898,16 @@ public partial class LineEditorWindow : Window
     {
         UpdateScopeText();
 
-        var guideVisuals = _guides
-            .Select(guide =>
-                new LineEditorGuideVisual(
-                    ProjectGuide(
-                        guide.Guide),
-                    guide.Applied))
-            .ToList();
+        var guideVisuals =
+            _workflowStep == 2
+                ? _guides
+                    .Select(guide =>
+                        new LineEditorGuideVisual(
+                            ProjectGuide(
+                                guide.Guide),
+                            guide.Applied))
+                    .ToList()
+                : new List<LineEditorGuideVisual>();
 
         EditorSurface.SetDocument(
             _geometry.Features,
@@ -1857,7 +1915,9 @@ public partial class LineEditorWindow : Window
             GetDisplayBounds(
                 guideVisuals),
             guideVisuals,
-            _cutPoints,
+            _workflowStep == 2
+                ? _cutPoints
+                : Array.Empty<Point>(),
             fitView);
 
         EditorSurface.SetDraftCut(
