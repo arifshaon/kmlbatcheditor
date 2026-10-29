@@ -397,7 +397,7 @@ public partial class LineEditorWindow : Window
             UpdateStatus(
                 _draftCutPoints.Count < 2
                     ? "Split line started. Add at least one more point."
-                    : $"Split line has {_draftCutPoints.Count:N0} point(s). Press Apply split or Enter when it is ready.");
+                    : $"Split line has {_draftCutPoints.Count:N0} point(s). Press Enter to finish drawing; press Enter again or Apply split to apply.");
 
             return;
         }
