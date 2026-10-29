@@ -185,7 +185,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Pan =>
                 "HAND: left-drag to pan. Mouse wheel zooms. Space+drag and middle-drag also pan.",
             LineEditorTool.Select =>
-                "SELECT: drag across lines to select real crossings. After selecting, choose Split Selected Lines... to split only those lines, or Delete Selected to remove them. Alt+drag deselects.",
+                "SELECT: drag across lines to select real crossings. Shift+click adds one line; Alt+click/drag removes. Then choose Split Selected Lines... or Delete Selected.",
             _ =>
                 "SPLIT: click points or drag freehand. Right-click opens split-line options at the pointer. Double-click or Enter finishes and applies. Backspace removes the last point; Esc cancels."
         };
@@ -195,7 +195,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Pan =>
                 "H Hand · Space+drag or middle-drag pan · +/- zoom · F fit",
             LineEditorTool.Select =>
-                "V Select · drag across lines · Split Selected Lines... splits the current selection · Delete removes it · Alt+drag deselect",
+                "V Select · drag across lines · Shift+click add · Alt+click/drag remove · Split Selected Lines... · Delete",
             _ =>
                 "S Split · click points or drag freehand · right-click options · double-click/Enter finish · Backspace undo point · Esc cancel"
         };
@@ -345,14 +345,20 @@ public partial class LineEditorWindow : Window
         {
             _selected.Remove(feature.LineStringElement);
             UpdateStatus(
-                $"Removed one {CurrentLineLabel} from the selection.");
+                "Removed one line from the selection.");
+        }
+        else if (e.IsAdditive)
+        {
+            _selected.Add(feature.LineStringElement);
+            UpdateStatus(
+                $"Added one line to the selection; {_selected.Count:N0} selected.");
         }
         else
         {
             _selected.Clear();
             _selected.Add(feature.LineStringElement);
             UpdateStatus(
-                $"Selected one {CurrentLineLabel}.");
+                "Selected one line.");
         }
 
         EditorSurface.SetSelection(_selected);
