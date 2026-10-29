@@ -129,7 +129,7 @@ public sealed class KmlLineGeometryService
 
         foreach (var feature in Features)
         {
-            if (!feature.WorldBounds.IntersectsWith(strokeBounds))
+            if (!BoundsOverlap(feature.WorldBounds, strokeBounds))
                 continue;
 
             if (FeatureIntersectsStroke(feature, stroke))
@@ -187,10 +187,15 @@ public sealed class KmlLineGeometryService
         var outputSegments = 0;
         var cutPoints = new List<Point>();
 
+        var strokeBounds = BuildBounds(stroke);
+
         // Work from the current feature snapshot. Replacements do not disturb
         // references to other LineStrings in the same XDocument.
         foreach (var feature in Features.ToList())
         {
+            if (!BoundsOverlap(feature.WorldBounds, strokeBounds))
+                continue;
+
             var events = FindCutEvents(feature, stroke);
             if (events.Count == 0)
                 continue;
@@ -629,6 +634,17 @@ public sealed class KmlLineGeometryService
             bounds.Union(points[index]);
 
         return bounds;
+    }
+
+    private static bool BoundsOverlap(Rect left, Rect right)
+    {
+        if (left.IsEmpty || right.IsEmpty)
+            return false;
+
+        return left.Left <= right.Right &&
+               left.Right >= right.Left &&
+               left.Top <= right.Bottom &&
+               left.Bottom >= right.Top;
     }
 
     private static List<KmlCoordinate> ParseCoordinates(string value)
