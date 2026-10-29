@@ -13,6 +13,7 @@ using MouseButton = System.Windows.Input.MouseButton;
 using MouseButtonState = System.Windows.Input.MouseButtonState;
 using ModifierKeys = System.Windows.Input.ModifierKeys;
 using Keyboard = System.Windows.Input.Keyboard;
+using Key = System.Windows.Input.Key;
 using Cursors = System.Windows.Input.Cursors;
 using Pen = System.Windows.Media.Pen;
 using Brushes = System.Windows.Media.Brushes;
@@ -348,7 +349,7 @@ public sealed class LineEditorSurface : FrameworkElement
         var screen = e.GetPosition(this);
 
         if (Tool == LineEditorTool.Pan ||
-            (Keyboard.Modifiers & ModifierKeys.Space) == ModifierKeys.Space)
+            Keyboard.IsKeyDown(Key.Space))
         {
             _leftPan = true;
             BeginPan(screen);
