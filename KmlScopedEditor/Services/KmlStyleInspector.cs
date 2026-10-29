@@ -94,7 +94,15 @@ public sealed class KmlStyleInspector
 
             LabelColor =
                 inlineValues.LabelColor ??
-                referencedValues.LabelColor
+                referencedValues.LabelColor,
+
+            LineColor =
+                inlineValues.LineColor ??
+                referencedValues.LineColor,
+
+            LineWidth =
+                inlineValues.LineWidth ??
+                referencedValues.LineWidth
         };
     }
 
@@ -172,6 +180,9 @@ public sealed class KmlStyleInspector
         var labelStyle =
             style.Element(KmlNs + "LabelStyle");
 
+        var lineStyle =
+            style.Element(KmlNs + "LineStyle");
+
         return new StyleValues
         {
             IconHref = CleanValue(
@@ -198,6 +209,16 @@ public sealed class KmlStyleInspector
             LabelColor = CleanValue(
                 labelStyle?
                     .Element(KmlNs + "color")?
+                    .Value),
+
+            LineColor = CleanValue(
+                lineStyle?
+                    .Element(KmlNs + "color")?
+                    .Value),
+
+            LineWidth = CleanValue(
+                lineStyle?
+                    .Element(KmlNs + "width")?
                     .Value)
         };
     }
@@ -245,5 +266,9 @@ public sealed class KmlStyleInspector
         public string? LabelScale { get; init; }
 
         public string? LabelColor { get; init; }
+
+        public string? LineColor { get; init; }
+
+        public string? LineWidth { get; init; }
     }
 }
