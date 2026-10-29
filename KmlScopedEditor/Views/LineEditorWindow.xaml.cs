@@ -49,6 +49,7 @@ public partial class LineEditorWindow : Window
 
     private bool _hasPerformedCut;
     private int _workflowStep = 1;
+    private int _nextAppliedSequence;
 
     public LineEditorWindow(
         XDocument sourceDocument,
@@ -189,7 +190,7 @@ public partial class LineEditorWindow : Window
         BeginSplitMode();
 
         UpdateStatus(
-            "Draw the split line by clicking points or dragging. Press Apply split or Enter when it is ready.");
+            "Draw the split line by clicking points or dragging. Press Enter to finish drawing, then Apply split or press Enter again.");
     }
 
     private void BeginSplitMode()
@@ -210,6 +211,29 @@ public partial class LineEditorWindow : Window
             _draftCutPoints.Count == 0
                 ? "Draw or import a split line. Nothing needs to be selected unless you want to limit the split."
                 : $"Continuing split line from {_draftCutPoints.Count:N0} existing point(s).");
+    }
+
+    private void FinishDraftCutDrawing()
+    {
+        if (_draftCutPoints.Count < 2)
+        {
+            UpdateStatus(
+                "The split line needs at least two points before it can be finished.");
+            return;
+        }
+
+        _draftCutDrawing = false;
+        _draftCutPreviewPoint = null;
+
+        EditorSurface.SetDraftCut(
+            _draftCutPoints,
+            _draftCutPreviewPoint);
+
+        RebuildCommittedSplitPreview();
+        UpdateLiveSplitPreview();
+
+        UpdateStatus(
+            $"Split line ready with {_draftCutPoints.Count:N0} point(s). Press Apply split or Enter to apply.");
     }
 
     private void SetTool(LineEditorTool tool)
@@ -243,7 +267,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Select =>
                 "Drag across lines · Shift+click adds · Alt+click/drag removes · Delete removes selected lines · right-drag pans",
             _ =>
-                "Click points or drag freehand · imported split vertices are draggable · Apply split or Enter applies · right-drag pans"
+                "Click points or drag freehand · Enter finishes while drawing · Enter again or Apply split applies · imported split vertices are draggable · right-drag pans"
         };
 
         UpdateCutScopeDisplay();
@@ -300,7 +324,7 @@ public partial class LineEditorWindow : Window
 
         UpdateStatus(
             $"Drawn split line has {_draftCutPoints.Count:N0} sampled point(s). " +
-            "Continue drawing, or press Apply split / Enter when it is ready.");
+            "Continue drawing, or press Enter to finish. Press Enter again or Apply split to apply.");
     }
 
     private void OnSplitStrokePreviewChanged(
@@ -952,7 +976,9 @@ public partial class LineEditorWindow : Window
             return;
         }
 
-        var snapshot = CaptureUndoState();
+        var snapshot =
+            CaptureUndoState(
+                UndoActionKind.Split);
         var useSelectedTargets =
             limitToSelection &&
             selectedTargets.Count > 0;
@@ -973,7 +999,6 @@ public partial class LineEditorWindow : Window
         var totalIntersections = 0;
         var totalPieces = 0;
         var helperLinesRemoved = 0;
-        var allCutPoints = new List<Point>();
         var changed = false;
 
         try
@@ -1011,13 +1036,15 @@ public partial class LineEditorWindow : Window
                 totalIntersections +=
                     result.IntersectionCount;
                 totalPieces += result.OutputSegments;
-                allCutPoints.AddRange(
-                    result.CutPoints);
 
                 if (result.LinesSplit > 0)
                     changed = true;
 
                 guideState.Applied = true;
+                guideState.AppliedSequence =
+                    ++_nextAppliedSequence;
+                guideState.AppliedCutPoints =
+                    result.CutPoints.ToList();
             }
         }
         finally
@@ -1030,7 +1057,6 @@ public partial class LineEditorWindow : Window
 
         _selected.Clear();
         _cutPoints.Clear();
-        _cutPoints.AddRange(allCutPoints);
 
         if (totalLines > 0)
             _hasPerformedCut = true;
@@ -1058,6 +1084,8 @@ public partial class LineEditorWindow : Window
                 : string.Empty));
 
         SetWorkflowStep(3);
+        InstructionText.Text =
+            $"Split applied: {totalLines:N0} line(s) split at {totalIntersections:N0} point(s). Select the pieces you want to remove.";
         RefreshSurface();
     }
 
@@ -1089,7 +1117,9 @@ public partial class LineEditorWindow : Window
             return;
         }
 
-        var snapshot = CaptureUndoState();
+        var snapshot =
+            CaptureUndoState(
+                UndoActionKind.Deletion);
 
         var deleted =
             _geometry.DeleteLines(_selected);
@@ -1178,25 +1208,47 @@ public partial class LineEditorWindow : Window
 
         foreach (var guide in _guides)
         {
-            guide.Applied =
-                state.GuideApplied.TryGetValue(
+            if (state.GuideStates.TryGetValue(
                     guide.Id,
-                    out var applied) &&
-                applied;
+                    out var guideState))
+            {
+                guide.Applied =
+                    guideState.Applied;
+                guide.AppliedSequence =
+                    guideState.AppliedSequence;
+                guide.AppliedCutPoints =
+                    guideState.AppliedCutPoints.ToList();
+            }
+            else
+            {
+                guide.Applied = false;
+                guide.AppliedSequence = 0;
+                guide.AppliedCutPoints =
+                    new List<Point>();
+            }
         }
 
         _cutPoints.Clear();
-        _cutPoints.AddRange(
-            state.CutPoints);
+
+        if (state.Kind == UndoActionKind.Deletion)
+        {
+            _cutPoints.AddRange(
+                state.CutPoints);
+        }
 
         _selected.Clear();
+
+        if (state.Kind == UndoActionKind.Split)
+            SetWorkflowStep(2);
 
         RefreshSurface();
         UpdatePendingGuidePreview();
         UpdateCutScopeDisplay();
 
         UpdateStatus(
-            "Last split/deletion undone. Imported split-line overlays remain available.");
+            state.Kind == UndoActionKind.Split
+                ? "Split undone — the split line is ready to apply again."
+                : "Deletion undone.");
     }
 
     private void OnFitViewClick(
@@ -1272,7 +1324,11 @@ public partial class LineEditorWindow : Window
 
         if (e.Key == Key.Enter)
         {
-            ApplyCurrentSplit();
+            if (_draftCutDrawing)
+                FinishDraftCutDrawing();
+            else
+                ApplyCurrentSplit();
+
             e.Handled = true;
             return;
         }
@@ -1435,6 +1491,14 @@ public partial class LineEditorWindow : Window
 
         _draftCutPoints.Add(point);
         _draftCutPreviewPoint = null;
+
+        EditorSurface.SetAppliedCutPoints(
+            (_workflowStep == 2 &&
+             pendingGuides.Count == 0) ||
+            _workflowStep == 3
+                ? latestAppliedGuide?.AppliedCutPoints ??
+                  Array.Empty<Point>()
+                : Array.Empty<Point>());
 
         EditorSurface.SetDraftCut(
             _draftCutPoints,
@@ -1773,7 +1837,14 @@ public partial class LineEditorWindow : Window
         SelectedSplitScopeText.Text =
             validSelected.Count == 0
                 ? "(none selected)"
-                : $"({validSelected.Count:N0} selected)";
+                : OnlySplitSelectedCheckBox.IsChecked == true
+                    ? $"{validSelected.Count:N0} selected — split limited to selection"
+                    : $"{validSelected.Count:N0} lines selected — the split will still cross all lines. Tick to limit it.";
+
+        EditorSurface.SetSelectionSoft(
+            _workflowStep == 2 &&
+            validSelected.Count > 0 &&
+            OnlySplitSelectedCheckBox.IsChecked != true);
 
         var pendingGuides =
             _guides.Count(guide => !guide.Applied);
@@ -1817,7 +1888,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Select =>
                 "V Select · drag across lines · Alt+drag deselect · Delete remove · right-drag pan · Space+drag pan",
             _ =>
-                "Split · import or draw a path · Apply split / Enter applies · Backspace removes a drawn point · right-drag pans"
+                "Split · import or draw a path · Enter finishes while drawing · Enter again / Apply split applies · Backspace removes a drawn point · right-drag pans"
         };
     }
 
@@ -1836,14 +1907,19 @@ public partial class LineEditorWindow : Window
             "pan: right-drag or Space+drag";
     }
 
-    private UndoState CaptureUndoState()
+    private UndoState CaptureUndoState(
+        UndoActionKind kind)
     {
         return new UndoState(
+            kind,
             new XDocument(_workingDocument),
             _hasPerformedCut,
             _guides.ToDictionary(
                 guide => guide.Id,
-                guide => guide.Applied),
+                guide => new GuideUndoState(
+                    guide.Applied,
+                    guide.AppliedSequence,
+                    guide.AppliedCutPoints.ToList())),
             _cutPoints.ToList());
     }
 
@@ -1897,17 +1973,49 @@ public partial class LineEditorWindow : Window
     {
         UpdateScopeText();
 
+        var pendingGuides =
+            _guides
+                .Where(guide => !guide.Applied)
+                .ToList();
+
+        var latestAppliedGuide =
+            _guides
+                .Where(guide => guide.Applied)
+                .OrderByDescending(
+                    guide => guide.AppliedSequence)
+                .FirstOrDefault();
+
+        var visibleGuides =
+            new List<CutGuideState>();
+
+        if (_workflowStep == 2)
+        {
+            if (pendingGuides.Count > 0)
+            {
+                visibleGuides.AddRange(
+                    pendingGuides);
+            }
+            else if (latestAppliedGuide is not null)
+            {
+                visibleGuides.Add(
+                    latestAppliedGuide);
+            }
+        }
+        else if (_workflowStep == 3 &&
+                 latestAppliedGuide is not null)
+        {
+            visibleGuides.Add(
+                latestAppliedGuide);
+        }
+
         var guideVisuals =
-            _workflowStep == 2
-                ? _guides
-                    .Where(guide => !guide.Applied)
-                    .Select(guide =>
-                        new LineEditorGuideVisual(
-                            ProjectGuide(
-                                guide.Guide),
-                            guide.Applied))
-                    .ToList()
-                : new List<LineEditorGuideVisual>();
+            visibleGuides
+                .Select(guide =>
+                    new LineEditorGuideVisual(
+                        ProjectGuide(
+                            guide.Guide),
+                        guide.Applied))
+                .ToList();
 
         EditorSurface.SetDocument(
             _geometry.Features,
@@ -2205,11 +2313,28 @@ public partial class LineEditorWindow : Window
         }
 
         public bool Applied { get; set; }
+
+        public int AppliedSequence { get; set; }
+
+        public List<Point> AppliedCutPoints { get; set; } =
+            new();
     }
 
+    private enum UndoActionKind
+    {
+        Split,
+        Deletion
+    }
+
+    private sealed record GuideUndoState(
+        bool Applied,
+        int AppliedSequence,
+        IReadOnlyList<Point> AppliedCutPoints);
+
     private sealed record UndoState(
+        UndoActionKind Kind,
         XDocument Document,
         bool HasPerformedCut,
-        Dictionary<Guid, bool> GuideApplied,
+        Dictionary<Guid, GuideUndoState> GuideStates,
         IReadOnlyList<Point> CutPoints);
 }
