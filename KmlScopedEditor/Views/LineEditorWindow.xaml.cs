@@ -1454,7 +1454,8 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
-        if (_lassoControlsUpdating)
+        if (_lassoControlsUpdating ||
+            !IsLoaded)
             return;
 
         var enabled =
@@ -1493,7 +1494,8 @@ public partial class LineEditorWindow : Window
         object sender,
         System.Windows.Controls.SelectionChangedEventArgs e)
     {
-        if (_lassoControlsUpdating)
+        if (_lassoControlsUpdating ||
+            !IsLoaded)
             return;
 
         var combo =
