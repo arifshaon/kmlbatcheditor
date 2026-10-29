@@ -1970,12 +1970,6 @@ public partial class LineEditorWindow : Window
 
     private void UpdateLiveSplitPreview()
     {
-        if (_draftCutPoints.Count == 0)
-        {
-            UpdatePendingGuidePreview();
-            return;
-        }
-
         LineSplitPreview? transient = null;
 
         if (_draftCutPreviewPoint.HasValue &&
@@ -2034,13 +2028,21 @@ public partial class LineEditorWindow : Window
     private void ShowCombinedSplitPreview(
         LineSplitPreview? transient = null)
     {
-        var lines = new HashSet<XElement>(
+        var lines =
+            new HashSet<XElement>();
+
+        var points =
+            new List<Point>();
+
+        MergePendingGuidePreviews(
+            lines,
+            points);
+
+        lines.UnionWith(
             _committedPreviewLines);
 
         lines.UnionWith(
             _activeStrokePreviewLines);
-
-        var points = new List<Point>();
 
         foreach (var point in _committedPreviewPoints)
             AddUniquePreviewPoint(points, point);
@@ -2102,49 +2104,47 @@ public partial class LineEditorWindow : Window
 
     private void UpdatePendingGuidePreview()
     {
-        if (_draftCutPoints.Count > 0)
-        {
-            UpdateLiveSplitPreview();
-            return;
-        }
+        UpdateLiveSplitPreview();
+    }
 
-        var pending = _guides
-            .Where(guide => !guide.Applied)
-            .ToList();
+    private void MergePendingGuidePreviews(
+        HashSet<XElement> lines,
+        List<Point> points)
+    {
+        var pending =
+            _guides
+                .Where(guide =>
+                    !guide.Applied)
+                .ToList();
 
         if (pending.Count == 0)
-        {
-            UpdateCutScopeDisplay();
             return;
-        }
 
         var selectedTargets =
             GetSelectedTargetSet();
 
-        var allPoints =
-            new List<Point>();
-
-        var lines = new HashSet<XElement>();
-        var intersections = 0;
-
         foreach (var guideState in pending)
         {
-            var targetSet = selectedTargets is null
-                ? _geometry.Features
-                    .Select(feature =>
-                        feature.LineStringElement)
-                    .ToHashSet()
-                : new HashSet<XElement>(
-                    selectedTargets);
+            var targetSet =
+                selectedTargets is null
+                    ? _geometry.Features
+                        .Select(feature =>
+                            feature.LineStringElement)
+                        .ToHashSet()
+                    : new HashSet<XElement>(
+                        selectedTargets);
 
             if (guideState.RemoveMatchingSourceBeforeCut)
             {
-                var helper = FindMatchingFeature(
-                    guideState.Guide.Coordinates);
+                var helper =
+                    FindMatchingFeature(
+                        guideState.Guide.Coordinates);
 
                 if (helper is not null)
+                {
                     targetSet.Remove(
                         helper.LineStringElement);
+                }
             }
 
             var preview =
@@ -2153,30 +2153,11 @@ public partial class LineEditorWindow : Window
                         guideState.Guide),
                     targetSet);
 
-            intersections +=
-                preview.IntersectionCount;
-
-            allPoints.AddRange(
-                preview.CutPoints);
-
-            foreach (var line in preview.AffectedLines)
-                lines.Add(line);
+            MergePreview(
+                preview,
+                lines,
+                points);
         }
-
-        _cutPoints.Clear();
-        _cutPoints.AddRange(allPoints);
-
-        EditorSurface.SetCutPoints(_cutPoints);
-
-        var previewSummary =
-            new LineSplitPreview(
-                lines.Count,
-                intersections,
-                allPoints,
-                lines.ToList());
-
-        UpdateCutScopeDisplay(
-            previewSummary);
     }
 
     private IReadOnlySet<XElement>?
