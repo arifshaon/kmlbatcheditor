@@ -1003,6 +1003,10 @@ public partial class LineEditorWindow : Window
         };
 
         var editingGuide = GetEditingGuide();
+        var clickedPendingGuide =
+            FindPendingGuideNearPoint(
+                e.WorldPoint,
+                EditorSurface.WorldToleranceFromPixels(8d));
 
         if (editingGuide is not null)
         {
@@ -1030,6 +1034,12 @@ public partial class LineEditorWindow : Window
 
             AddContextMenuItem(
                 menu,
+                "Remove this split line",
+                () => RemovePendingGuide(
+                    editingGuide));
+
+            AddContextMenuItem(
+                menu,
                 "Start new split line here",
                 () =>
                 {
@@ -1045,6 +1055,35 @@ public partial class LineEditorWindow : Window
             AddContextMenuItem(
                 menu,
                 "Apply all pending split lines",
+                ApplyCurrentSplit);
+
+            menu.IsOpen = true;
+            return;
+        }
+
+        if (clickedPendingGuide is not null)
+        {
+            AddContextMenuItem(
+                menu,
+                "Edit this split line",
+                () =>
+                {
+                    StartEditingGuide(
+                        clickedPendingGuide);
+                    RefreshSurface();
+                    UpdateStatus(
+                        "Split line selected for editing.");
+                });
+
+            AddContextMenuItem(
+                menu,
+                "Remove this split line",
+                () => RemovePendingGuide(
+                    clickedPendingGuide));
+
+            AddContextMenuItem(
+                menu,
+                "Apply split",
                 ApplyCurrentSplit);
 
             menu.IsOpen = true;
@@ -1082,15 +1121,9 @@ public partial class LineEditorWindow : Window
                     "Finish Drawing Here",
                     () =>
                     {
-                        AddDraftCutPoint(e.WorldPoint);
-                        _draftCutDrawing = false;
-                        _draftCutPreviewPoint = null;
-                        EditorSurface.SetDraftCut(
-                            _draftCutPoints,
-                            _draftCutPreviewPoint);
-                        UpdateLiveSplitPreview();
-                        UpdateStatus(
-                            "Split line ready. Press Apply split or Enter.");
+                        AddDraftCutPoint(
+                            e.WorldPoint);
+                        FinishDraftCutDrawing();
                     });
 
                 if (_draftCutPoints.Count >= 2)
@@ -1120,6 +1153,7 @@ public partial class LineEditorWindow : Window
                 "Start Split Line Here",
                 () =>
                 {
+                    SetWorkflowStep(2);
                     CancelDraftCutLine(
                         switchToSelect: false);
                     SetTool(LineEditorTool.Split);
@@ -1625,23 +1659,9 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
-        StopEditingGuide();
-
-        // Discard only unapplied helper lines. Applied guide state must remain
-        // available because Undo restores it by guide ID.
-        _guides.RemoveAll(
-            guide => !guide.Applied);
-
-        _hideAppliedSplitHistory = true;
-        _cutPoints.Clear();
         CancelDraftCutLine(
             switchToSelect: false);
-
-        RefreshSurface();
-        UpdateCutScopeDisplay();
-
-        UpdateStatus(
-            "Split-line overlays hidden. Existing splits were not changed.");
+        RemovePendingSplitSet();
     }
 
     private void OnDeleteSelectedClick(
