@@ -660,7 +660,7 @@ public partial class LineEditorWindow : Window
         UpdateCutScopeDisplay();
 
         UpdateStatus(
-            "Selected line is now the split line. It will be removed before the split is calculated, so it cannot cut itself.");
+            "Selected line is now the split line. It will be removed before the split is calculated, so it cannot split itself.");
     }
 
     private void OnApplyImportedSplitLineClick(
