@@ -327,12 +327,12 @@ public partial class LineEditorWindow : Window
         InstructionText.Text = _workflowStep switch
         {
             1 =>
-                "Remove unwanted source lines. Drag across lines to select them, then Delete selected.",
+                "Optional cleanup before splitting. Select whole lines you do not want, then Delete selected.",
             2 =>
                 "Nothing needs to be selected. Import a split line or draw one; orange dots show where lines will be split.",
             _ =>
                 _step3InstructionOverride ??
-                "Remove unwanted pieces after the split. Drag across pieces to select them, then Delete selected."
+                "Cleanup after splitting. Select the new split pieces you do not want, then Delete selected."
         };
 
         ToolHintText.Text = tool switch
@@ -2137,7 +2137,13 @@ public partial class LineEditorWindow : Window
         var visibleGuides =
             new List<CutGuideState>();
 
-        if (_workflowStep == 2)
+        if (_workflowStep == 1 &&
+            !_hideAppliedSplitHistory)
+        {
+            visibleGuides.AddRange(
+                latestAppliedGuides);
+        }
+        else if (_workflowStep == 2)
         {
             if (pendingGuides.Count > 0)
             {
@@ -2185,9 +2191,10 @@ public partial class LineEditorWindow : Window
 
         EditorSurface.SetAppliedCutPoints(
             !_hideAppliedSplitHistory &&
-            (((_workflowStep == 2 &&
-               pendingGuides.Count == 0) ||
-              _workflowStep == 3))
+            (_workflowStep == 1 ||
+             (_workflowStep == 2 &&
+              pendingGuides.Count == 0) ||
+             _workflowStep == 3)
                 ? latestAppliedCutPoints
                 : Array.Empty<Point>());
 
