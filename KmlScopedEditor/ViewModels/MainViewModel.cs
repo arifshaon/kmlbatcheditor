@@ -1291,6 +1291,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 source.Declaration.Standalone);
     }
 
+    public Task SaveCurrentDocumentAsAsync()
+    {
+        return SaveAsAsync();
+    }
+
     private async Task SaveAsAsync()
     {
         if (_documentContext is null)
