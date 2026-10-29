@@ -1492,18 +1492,6 @@ public partial class LineEditorWindow : Window
         _draftCutPoints.Add(point);
         _draftCutPreviewPoint = null;
 
-        IReadOnlyList<Point> latestAppliedCutPoints =
-            latestAppliedGuide is not null
-                ? latestAppliedGuide.AppliedCutPoints
-                : Array.Empty<Point>();
-
-        EditorSurface.SetAppliedCutPoints(
-            ((_workflowStep == 2 &&
-              pendingGuides.Count == 0) ||
-             _workflowStep == 3)
-                ? latestAppliedCutPoints
-                : Array.Empty<Point>());
-
         EditorSurface.SetDraftCut(
             _draftCutPoints,
             _draftCutPreviewPoint);
@@ -2031,6 +2019,18 @@ public partial class LineEditorWindow : Window
                 ? _cutPoints
                 : Array.Empty<Point>(),
             fitView);
+
+        IReadOnlyList<Point> latestAppliedCutPoints =
+            latestAppliedGuide is not null
+                ? latestAppliedGuide.AppliedCutPoints
+                : Array.Empty<Point>();
+
+        EditorSurface.SetAppliedCutPoints(
+            ((_workflowStep == 2 &&
+              pendingGuides.Count == 0) ||
+             _workflowStep == 3)
+                ? latestAppliedCutPoints
+                : Array.Empty<Point>());
 
         EditorSurface.SetDraftCut(
             _draftCutPoints,
