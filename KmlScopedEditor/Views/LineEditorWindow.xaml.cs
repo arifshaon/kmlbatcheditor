@@ -50,6 +50,8 @@ public partial class LineEditorWindow : Window
     private bool _hasPerformedCut;
     private int _workflowStep = 1;
     private int _nextAppliedSequence;
+    private bool _hideAppliedSplitHistory;
+    private string? _step3InstructionOverride;
 
     public LineEditorWindow(
         XDocument sourceDocument,
@@ -124,6 +126,7 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        _hideAppliedSplitHistory = false;
         SetWorkflowStep(2);
     }
 
@@ -131,6 +134,7 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        _step3InstructionOverride = null;
         SetWorkflowStep(3);
     }
 
@@ -171,6 +175,7 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        _hideAppliedSplitHistory = false;
         SetWorkflowStep(2);
 
         var pending = _guides
@@ -257,6 +262,7 @@ public partial class LineEditorWindow : Window
             2 =>
                 "Nothing needs to be selected. Import a split line or draw one; orange dots show where lines will be split.",
             _ =>
+                _step3InstructionOverride ??
                 "Remove unwanted pieces after the split. Drag across pieces to select them, then Delete selected."
         };
 
@@ -688,6 +694,7 @@ public partial class LineEditorWindow : Window
 
         // Step 2 intentionally has one pending split operation. Importing a
         // new split line replaces any unapplied drawn/imported split state.
+        _hideAppliedSplitHistory = false;
         StopEditingGuide();
         _guides.RemoveAll(guide => !guide.Applied);
         CancelDraftCutLine(switchToSelect: false);
@@ -1000,11 +1007,16 @@ public partial class LineEditorWindow : Window
         var totalPieces = 0;
         var helperLinesRemoved = 0;
         var changed = false;
+        var applySequence =
+            _nextAppliedSequence + 1;
+        var usedAnyGuide = false;
 
         try
         {
             foreach (var guideState in guideStates)
             {
+                var helperRemovedForGuide = 0;
+
                 if (guideState.RemoveMatchingSourceBeforeCut)
                 {
                     var helper = FindMatchingFeature(
@@ -1012,14 +1024,18 @@ public partial class LineEditorWindow : Window
 
                     if (helper is not null)
                     {
-                        helperLinesRemoved +=
+                        helperRemovedForGuide =
                             _geometry.DeleteLines(
                                 new[]
                                 {
                                     helper.LineStringElement
                                 });
 
-                        changed = true;
+                        helperLinesRemoved +=
+                            helperRemovedForGuide;
+
+                        if (helperRemovedForGuide > 0)
+                            changed = true;
                     }
                 }
 
@@ -1037,15 +1053,32 @@ public partial class LineEditorWindow : Window
                     result.IntersectionCount;
                 totalPieces += result.OutputSegments;
 
+                var guideWasUsed =
+                    result.LinesSplit > 0 ||
+                    helperRemovedForGuide > 0;
+
                 if (result.LinesSplit > 0)
                     changed = true;
 
-                guideState.Applied = true;
-                guideState.AppliedSequence =
-                    ++_nextAppliedSequence;
-                guideState.AppliedCutPoints =
-                    result.CutPoints.ToList();
+                if (guideWasUsed)
+                {
+                    guideState.Applied = true;
+                    guideState.AppliedSequence =
+                        applySequence;
+                    guideState.AppliedCutPoints =
+                        result.CutPoints.ToList();
+                    usedAnyGuide = true;
+                }
+                else
+                {
+                    guideState.Applied = false;
+                    guideState.AppliedSequence = 0;
+                    guideState.AppliedCutPoints.Clear();
+                }
             }
+
+            if (usedAnyGuide)
+                _nextAppliedSequence = applySequence;
         }
         finally
         {
@@ -1070,7 +1103,7 @@ public partial class LineEditorWindow : Window
         if (!changed)
         {
             UpdateStatus(
-                "The split line did not split any lines in the current split target.");
+                "The split line did not split any lines in the current split target. It remains ready so you can adjust it or try again.");
             return;
         }
 
@@ -1083,9 +1116,10 @@ public partial class LineEditorWindow : Window
                 ? $" Removed {helperLinesRemoved:N0} helper line(s) before splitting."
                 : string.Empty));
 
-        SetWorkflowStep(3);
-        InstructionText.Text =
+        _hideAppliedSplitHistory = false;
+        _step3InstructionOverride =
             $"Split applied: {totalLines:N0} line(s) split at {totalIntersections:N0} point(s). Select the pieces you want to remove.";
+        SetWorkflowStep(3);
         RefreshSurface();
     }
 
@@ -1094,7 +1128,13 @@ public partial class LineEditorWindow : Window
         RoutedEventArgs e)
     {
         StopEditingGuide();
-        _guides.Clear();
+
+        // Discard only unapplied helper lines. Applied guide state must remain
+        // available because Undo restores it by guide ID.
+        _guides.RemoveAll(
+            guide => !guide.Applied);
+
+        _hideAppliedSplitHistory = true;
         _cutPoints.Clear();
         CancelDraftCutLine(
             switchToSelect: false);
@@ -1103,7 +1143,7 @@ public partial class LineEditorWindow : Window
         UpdateCutScopeDisplay();
 
         UpdateStatus(
-            "Split-line overlays cleared. Existing splits were not changed.");
+            "Split-line overlays hidden. Existing splits were not changed.");
     }
 
     private void OnDeleteSelectedClick(
@@ -1239,15 +1279,25 @@ public partial class LineEditorWindow : Window
         _selected.Clear();
 
         if (state.Kind == UndoActionKind.Split)
+        {
+            _hideAppliedSplitHistory = false;
+            _step3InstructionOverride = null;
             SetWorkflowStep(2);
+        }
 
         RefreshSurface();
         UpdatePendingGuidePreview();
         UpdateCutScopeDisplay();
 
+        var restoredPendingSplit =
+            state.Kind == UndoActionKind.Split &&
+            _guides.Any(guide => !guide.Applied);
+
         UpdateStatus(
             state.Kind == UndoActionKind.Split
-                ? "Split undone — the split line is ready to apply again."
+                ? restoredPendingSplit
+                    ? "Split undone — the split line is ready to apply again."
+                    : "Split undone."
                 : "Deletion undone.");
     }
 
@@ -1324,10 +1374,15 @@ public partial class LineEditorWindow : Window
 
         if (e.Key == Key.Enter)
         {
-            if (_draftCutDrawing)
+            if (_draftCutDrawing &&
+                _draftCutPoints.Count > 0)
+            {
                 FinishDraftCutDrawing();
+            }
             else
+            {
                 ApplyCurrentSplit();
+            }
 
             e.Handled = true;
             return;
@@ -1970,12 +2025,23 @@ public partial class LineEditorWindow : Window
                 .Where(guide => !guide.Applied)
                 .ToList();
 
-        var latestAppliedGuide =
+        var latestAppliedSequence =
             _guides
                 .Where(guide => guide.Applied)
-                .OrderByDescending(
-                    guide => guide.AppliedSequence)
-                .FirstOrDefault();
+                .Select(guide =>
+                    guide.AppliedSequence)
+                .DefaultIfEmpty(0)
+                .Max();
+
+        var latestAppliedGuides =
+            latestAppliedSequence > 0
+                ? _guides
+                    .Where(guide =>
+                        guide.Applied &&
+                        guide.AppliedSequence ==
+                            latestAppliedSequence)
+                    .ToList()
+                : new List<CutGuideState>();
 
         var visibleGuides =
             new List<CutGuideState>();
@@ -1987,17 +2053,17 @@ public partial class LineEditorWindow : Window
                 visibleGuides.AddRange(
                     pendingGuides);
             }
-            else if (latestAppliedGuide is not null)
+            else if (!_hideAppliedSplitHistory)
             {
-                visibleGuides.Add(
-                    latestAppliedGuide);
+                visibleGuides.AddRange(
+                    latestAppliedGuides);
             }
         }
         else if (_workflowStep == 3 &&
-                 latestAppliedGuide is not null)
+                 !_hideAppliedSplitHistory)
         {
-            visibleGuides.Add(
-                latestAppliedGuide);
+            visibleGuides.AddRange(
+                latestAppliedGuides);
         }
 
         var guideVisuals =
@@ -2020,15 +2086,17 @@ public partial class LineEditorWindow : Window
                 : Array.Empty<Point>(),
             fitView);
 
-        IReadOnlyList<Point> latestAppliedCutPoints =
-            latestAppliedGuide is not null
-                ? latestAppliedGuide.AppliedCutPoints
-                : Array.Empty<Point>();
+        var latestAppliedCutPoints =
+            latestAppliedGuides
+                .SelectMany(guide =>
+                    guide.AppliedCutPoints)
+                .ToList();
 
         EditorSurface.SetAppliedCutPoints(
-            ((_workflowStep == 2 &&
-              pendingGuides.Count == 0) ||
-             _workflowStep == 3)
+            !_hideAppliedSplitHistory &&
+            (((_workflowStep == 2 &&
+               pendingGuides.Count == 0) ||
+              _workflowStep == 3))
                 ? latestAppliedCutPoints
                 : Array.Empty<Point>());
 
