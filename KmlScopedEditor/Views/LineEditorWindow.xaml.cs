@@ -2261,22 +2261,24 @@ public partial class LineEditorWindow : Window
             var result =
                 System.Windows.MessageBox.Show(
                     this,
-                    "The current split line has not been applied. Apply it before closing?",
+                    "One or more split lines are still pending and have not been applied. Close without applying them?",
                     "Pending split lines",
-                    MessageBoxButton.YesNoCancel,
+                    MessageBoxButton.YesNo,
                     MessageBoxImage.Question);
 
-            if (result ==
-                MessageBoxResult.Cancel)
+            if (result !=
+                MessageBoxResult.Yes)
             {
+                UpdateStatus(
+                    "Pending split lines were not applied. Choose Apply split when you are ready.");
                 return;
             }
 
-            if (result ==
-                MessageBoxResult.Yes)
-            {
-                ApplyPendingGuides();
-            }
+            StopEditingGuide();
+            _guides.RemoveAll(
+                guide => !guide.Applied);
+            _cutPoints.Clear();
+            RefreshSurface();
         }
 
         var outputDocument =
