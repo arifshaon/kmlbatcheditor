@@ -16,91 +16,114 @@
                 Padding="10">
             <StackPanel>
                 <WrapPanel>
-                    <ToggleButton x:Name="PanToolButton"
-                                  Content="Pan"
-                                  Width="76"
-                                  Height="32"
-                                  Margin="0,0,6,6"
-                                  Click="OnPanToolClick" />
                     <ToggleButton x:Name="SelectToolButton"
                                   Content="Select"
-                                  Width="86"
+                                  Width="82"
                                   Height="32"
                                   Margin="0,0,6,6"
+                                  ToolTip="Select lines (V)"
                                   Click="OnSelectToolClick" />
                     <ToggleButton x:Name="CutToolButton"
-                                  Content="Draw Cut Line"
-                                  Width="110"
+                                  Content="Cut"
+                                  Width="72"
                                   Height="32"
                                   Margin="0,0,6,6"
+                                  ToolTip="Draw a cut line (C)"
                                   Click="OnCutToolClick" />
-                    <Button Content="Finish Line"
-                            Width="95"
+                    <ToggleButton x:Name="PanToolButton"
+                                  Content="Hand"
+                                  Width="72"
+                                  Height="32"
+                                  Margin="0,0,14,6"
+                                  ToolTip="Pan the view (H). Space+drag and middle-drag also pan."
+                                  Click="OnPanToolClick" />
+
+                    <Button Content="Undo"
+                            Width="72"
                             Height="32"
                             Margin="0,0,6,6"
-                            Click="OnFinishCutLineClick" />
-                    <Button Content="Undo Point"
-                            Width="95"
+                            ToolTip="Undo last cut or deletion (Ctrl+Z)"
+                            Click="OnUndoClick" />
+                    <Button Content="Fit"
+                            Width="62"
                             Height="32"
                             Margin="0,0,6,6"
-                            Click="OnUndoCutPointClick" />
-                    <Button Content="Cancel Line"
-                            Width="95"
+                            ToolTip="Fit all lines and guides to the view (F)"
+                            Click="OnFitViewClick" />
+                    <Button Content="Zoom Selection"
+                            Width="112"
+                            Height="32"
+                            Margin="0,0,6,6"
+                            ToolTip="Zoom to currently selected lines"
+                            Click="OnZoomSelectionClick" />
+                    <Button Content="+"
+                            Width="34"
+                            Height="32"
+                            Margin="0,0,4,6"
+                            ToolTip="Zoom in (+)"
+                            Click="OnZoomInClick" />
+                    <Button Content="-"
+                            Width="34"
                             Height="32"
                             Margin="0,0,12,6"
-                            Click="OnCancelCutLineClick" />
+                            ToolTip="Zoom out (-)"
+                            Click="OnZoomOutClick" />
+                </WrapPanel>
 
+                <WrapPanel x:Name="SelectActionsPanel">
+                    <TextBlock Text="Selection:"
+                               VerticalAlignment="Center"
+                               FontWeight="SemiBold"
+                               Margin="0,0,8,6" />
+                    <Button Content="Clear"
+                            Width="70"
+                            Height="30"
+                            Margin="0,0,6,6"
+                            Click="OnClearSelectionClick" />
+                    <Button Content="Invert"
+                            Width="70"
+                            Height="30"
+                            Margin="0,0,6,6"
+                            Click="OnInvertSelectionClick" />
+                    <Button Content="Delete Selected"
+                            Width="115"
+                            Height="30"
+                            Margin="0,0,0,6"
+                            ToolTip="Delete highlighted lines (Delete)"
+                            Click="OnDeleteSelectedClick" />
+                </WrapPanel>
+
+                <WrapPanel x:Name="CutActionsPanel"
+                           Visibility="Collapsed">
+                    <TextBlock Text="Cut guides:"
+                               VerticalAlignment="Center"
+                               FontWeight="SemiBold"
+                               Margin="0,0,8,6" />
                     <Button Content="Import Cut Lines..."
                             Width="125"
-                            Height="32"
+                            Height="30"
                             Margin="0,0,6,6"
                             Click="OnImportCutLinesClick" />
                     <Button Content="Use Selected as Cutline"
                             Width="165"
-                            Height="32"
+                            Height="30"
                             Margin="0,0,6,6"
                             Click="OnUseSelectedAsCutlineClick" />
-                    <Button Content="Apply Cut"
-                            Width="90"
-                            Height="32"
+                    <Button Content="Apply Imported Guide"
+                            Width="145"
+                            Height="30"
                             Margin="0,0,6,6"
+                            ToolTip="Apply imported/existing guide lines. Hand-drawn cuts apply when you finish drawing."
                             Click="OnApplyCutLinesClick" />
                     <Button Content="Clear Guides"
                             Width="100"
-                            Height="32"
-                            Margin="0,0,12,6"
-                            Click="OnClearGuidesClick" />
-
-                    <Button Content="Fit to View"
-                            Width="100"
-                            Height="32"
-                            Margin="0,0,12,6"
-                            Click="OnFitViewClick" />
-
-                    <Button Content="Undo"
-                            Width="80"
-                            Height="32"
-                            Margin="0,0,6,6"
-                            Click="OnUndoClick" />
-                    <Button Content="Clear Selection"
-                            Width="115"
-                            Height="32"
-                            Margin="0,0,6,6"
-                            Click="OnClearSelectionClick" />
-                    <Button Content="Invert Selection"
-                            Width="115"
-                            Height="32"
-                            Margin="0,0,6,6"
-                            Click="OnInvertSelectionClick" />
-                    <Button Content="Delete Selected"
-                            Width="120"
-                            Height="32"
+                            Height="30"
                             Margin="0,0,0,6"
-                            Click="OnDeleteSelectedClick" />
+                            Click="OnClearGuidesClick" />
                 </WrapPanel>
 
                 <TextBlock x:Name="ScopeText"
-                           Margin="0,4,0,0"
+                           Margin="0,2,0,0"
                            FontWeight="SemiBold"
                            Foreground="#374151"
                            TextWrapping="Wrap" />
@@ -135,7 +158,7 @@
                     <TextBlock x:Name="StatusText"
                                FontWeight="SemiBold"
                                TextWrapping="Wrap" />
-                    <TextBlock Text="Selection uses real crossings only. Alt + drag removes crossed lines from the selection. Imported cut guides are temporary and are not saved into the output."
+                    <TextBlock Text="Delete remains two-stage: select first, then delete. Hand-drawn cuts are previewed before they commit and remain undoable."
                                Foreground="#6B7280"
                                FontSize="11"
                                Margin="0,3,12,0"
@@ -148,7 +171,33 @@
                 BorderBrush="#C8CCD2"
                 BorderThickness="1"
                 Background="White">
-            <views:LineEditorSurface x:Name="EditorSurface" />
+            <Grid>
+                <views:LineEditorSurface x:Name="EditorSurface" />
+
+                <Border HorizontalAlignment="Left"
+                        VerticalAlignment="Top"
+                        Margin="10"
+                        Padding="8,6"
+                        Background="#EFFFFFFF"
+                        BorderBrush="#C8CCD2"
+                        BorderThickness="1"
+                        CornerRadius="3"
+                        IsHitTestVisible="False">
+                    <StackPanel>
+                        <TextBlock x:Name="MapScopeText"
+                                   FontWeight="SemiBold"
+                                   Foreground="#374151"
+                                   TextWrapping="Wrap"
+                                   MaxWidth="520" />
+                        <TextBlock x:Name="ToolHintText"
+                                   Margin="0,2,0,0"
+                                   FontSize="11"
+                                   Foreground="#4B5563"
+                                   TextWrapping="Wrap"
+                                   MaxWidth="600" />
+                    </StackPanel>
+                </Border>
+            </Grid>
         </Border>
     </DockPanel>
 </Window>
