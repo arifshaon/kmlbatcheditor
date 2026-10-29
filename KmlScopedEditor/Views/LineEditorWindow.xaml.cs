@@ -1798,36 +1798,36 @@ public partial class LineEditorWindow : Window
     {
         if (_draftCutPoints.Count >= 2)
         {
-            var result = System.Windows.MessageBox.Show(
-                this,
-                "A drawn split line has not been applied yet. Apply this split before closing?",
-                "Unapplied split line",
-                MessageBoxButton.YesNoCancel,
-                MessageBoxImage.Question);
-
-            if (result == MessageBoxResult.Cancel)
-                return;
-
-            if (result == MessageBoxResult.Yes)
-                FinishAndApplyDrawnSplit();
-            else
-                CancelDraftCutLine(switchToSelect: false);
+            CommitDraftCutAsPendingGuide();
+        }
+        else if (_draftCutPoints.Count > 0)
+        {
+            CancelDraftCutLine(
+                switchToSelect: false);
         }
 
-        if (_guides.Any(guide => !guide.Applied))
+        if (_guides.Any(
+                guide => !guide.Applied))
         {
-            var result = System.Windows.MessageBox.Show(
-                this,
-                "One or more imported/existing split lines have not been used yet. Split with them before closing?",
-                "Unused split line",
-                MessageBoxButton.YesNoCancel,
-                MessageBoxImage.Question);
+            var result =
+                System.Windows.MessageBox.Show(
+                    this,
+                    "One or more split lines are still pending. Apply all pending split lines before closing?",
+                    "Pending split lines",
+                    MessageBoxButton.YesNoCancel,
+                    MessageBoxImage.Question);
 
-            if (result == MessageBoxResult.Cancel)
+            if (result ==
+                MessageBoxResult.Cancel)
+            {
                 return;
+            }
 
-            if (result == MessageBoxResult.Yes)
+            if (result ==
+                MessageBoxResult.Yes)
+            {
                 ApplyPendingGuides();
+            }
         }
 
         var outputDocument =
@@ -2442,6 +2442,45 @@ public partial class LineEditorWindow : Window
         _workflowStep == 3
             ? "piece(s)"
             : "line(s)";
+
+    private CutGuideState?
+        FindPendingGuideNearPoint(
+            Point worldPoint,
+            double tolerance)
+    {
+        CutGuideState? bestGuide = null;
+        var bestDistance = tolerance;
+
+        foreach (var guide in
+                 _guides.Where(
+                     item => !item.Applied))
+        {
+            var points =
+                ProjectGuide(
+                    guide.Guide);
+
+            for (var index = 0;
+                 index < points.Count - 1;
+                 index++)
+            {
+                var distance =
+                    DistanceToSegment(
+                        worldPoint,
+                        points[index],
+                        points[index + 1]);
+
+                if (distance <=
+                    bestDistance)
+                {
+                    bestDistance =
+                        distance;
+                    bestGuide = guide;
+                }
+            }
+        }
+
+        return bestGuide;
+    }
 
     private CutGuideState? GetEditingGuide()
     {
