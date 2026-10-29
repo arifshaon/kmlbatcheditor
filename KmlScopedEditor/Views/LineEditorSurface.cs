@@ -57,6 +57,7 @@ public sealed class LineEditorSurface : FrameworkElement
     private Pen? _softSelectedPen;
     private Pen? _hoverPen;
     private Pen? _activeSplitLinePen;
+    private Pen? _fadedPendingSplitLinePen;
     private Pen? _appliedSplitLinePen;
     private Pen? _draftSplitPen;
     private Pen? _selectStrokePen;
@@ -836,7 +837,9 @@ public sealed class LineEditorSurface : FrameworkElement
         {
             var splitLinePen = item.Guide.Applied
                 ? _appliedSplitLinePen
-                : _activeSplitLinePen;
+                : item.Guide.IsFaded
+                    ? _fadedPendingSplitLinePen
+                    : _activeSplitLinePen;
 
             if (splitLinePen is not null)
             {
@@ -1129,10 +1132,18 @@ public sealed class LineEditorSurface : FrameworkElement
             2.8d / safeScale,
             DashStyles.Dash);
 
-        _appliedSplitLinePen = CreatePen(
-            _appliedGuideColor,
-            _appliedGuideThickness / safeScale,
+        _fadedPendingSplitLinePen = CreatePen(
+            Color.FromArgb(90, 116, 61, 170),
+            2.4d / safeScale,
             DashStyles.Dash);
+
+        _appliedSplitLinePen = CreatePen(
+            Color.FromArgb(
+                153,
+                _appliedGuideColor.R,
+                _appliedGuideColor.G,
+                _appliedGuideColor.B),
+            _appliedGuideThickness / safeScale);
 
         _draftSplitPen = CreatePen(
             Color.FromRgb(240, 139, 0),
@@ -1157,10 +1168,10 @@ public sealed class LineEditorSurface : FrameworkElement
         _appliedSplitPointBrush =
             CreateFrozenBrush(
                 Color.FromArgb(
-                    220,
-                    _appliedGuideColor.R,
-                    _appliedGuideColor.G,
-                    _appliedGuideColor.B));
+                    180,
+                    112,
+                    112,
+                    120));
 
         _featureGeometry.Clear();
 
@@ -1479,7 +1490,8 @@ public sealed class LineEditorSurface : FrameworkElement
 
 public sealed record LineEditorGuideVisual(
     IReadOnlyList<Point> WorldPoints,
-    bool Applied);
+    bool Applied,
+    bool IsFaded = false);
 
 public sealed class LineEditorStrokeEventArgs : EventArgs
 {
