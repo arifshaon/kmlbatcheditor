@@ -272,7 +272,7 @@
                             MinWidth="130"
                             Margin="0,0,6,0"
                             Click="OnDrawSplitLineClick"
-                            ToolTip="Draw a new split path. Press Apply split or Enter when it is ready." />
+                            ToolTip="Draw another split path. Enter or double-click finishes the drawing; only Apply split performs the split." />
 
                     <Button Grid.Column="2"
                             Focusable="False"
@@ -286,7 +286,7 @@
                     <Button Grid.Column="3"
                             x:Name="RemovePendingSplitLineButton"
                             Focusable="False"
-                            Content="✕ Remove split line"
+                            Content="✕ Remove pending line(s)"
                             Height="30"
                             MinWidth="130"
                             Margin="0,0,10,0"
@@ -345,7 +345,7 @@
                             Foreground="White"
                             FontWeight="SemiBold"
                             Click="OnApplySplitClick"
-                            ToolTip="Apply the current split line. Enter does the same when no line is currently being drawn." />
+                            ToolTip="Apply all pending split lines. Finishing a drawing does not apply it." />
                 </Grid>
 
                 <Grid x:Name="Step3ActionsPanel"
