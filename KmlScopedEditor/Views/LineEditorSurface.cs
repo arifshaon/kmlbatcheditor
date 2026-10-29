@@ -681,7 +681,9 @@ public sealed class LineEditorSurface : FrameworkElement
         if (!_drawingStroke)
             ReleaseMouseCapture();
 
-        Cursor = Cursors.Arrow;
+        Cursor = Tool == LineEditorTool.Pan
+            ? Cursors.Hand
+            : Cursors.Arrow;
     }
 
     private Point ScreenToWorld(Point screen)
