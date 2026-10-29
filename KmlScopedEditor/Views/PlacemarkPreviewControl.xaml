@@ -7,8 +7,6 @@
     </UserControl.Resources>
 
     <StackPanel>
-        <local:OpacityControls />
-
         <Border Visibility="{Binding HasPlacemarkVisualPreview, Converter={StaticResource BooleanToVisibilityConverter}}"
                 Background="#F3F7F9"
                 BorderBrush="#B7C8D1"
@@ -63,6 +61,18 @@
                                        FontWeight="SemiBold"
                                        FontSize="15"
                                        Margin="0,0,0,8" />
+                            <Border Height="54"
+                                    Background="#FAFBFC"
+                                    CornerRadius="4"
+                                    Margin="0,0,0,8">
+                                <Path Data="M 8,33 C 48,16 92,41 138,22 S 218,30 266,18"
+                                      Stretch="Fill"
+                                      Margin="8"
+                                      Stroke="{Binding PlacemarkVisualPreview.Current.LineBrush}"
+                                      StrokeThickness="{Binding PlacemarkVisualPreview.Current.LineStrokeWidth}"
+                                      StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round" />
+                            </Border>
                             <Border Height="190"
                                     Background="#314D48"
                                     CornerRadius="4"
@@ -125,6 +135,18 @@
                                        FontSize="15"
                                        Foreground="#22633A"
                                        Margin="0,0,0,8" />
+                            <Border Height="54"
+                                    Background="#FAFBFC"
+                                    CornerRadius="4"
+                                    Margin="0,0,0,8">
+                                <Path Data="M 8,33 C 48,16 92,41 138,22 S 218,30 266,18"
+                                      Stretch="Fill"
+                                      Margin="8"
+                                      Stroke="{Binding PlacemarkVisualPreview.Proposed.LineBrush}"
+                                      StrokeThickness="{Binding PlacemarkVisualPreview.Proposed.LineStrokeWidth}"
+                                      StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round" />
+                            </Border>
                             <Border Height="190"
                                     Background="#314D48"
                                     CornerRadius="4"
