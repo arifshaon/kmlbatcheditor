@@ -447,6 +447,7 @@ public sealed class LineEditorSurface : FrameworkElement
 
         var screen = e.GetPosition(this);
         var alt = (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt;
+        var shift = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
 
         if (_leftPan)
         {
@@ -471,6 +472,7 @@ public sealed class LineEditorSurface : FrameworkElement
                         Tool,
                         ScreenToWorld(screen),
                         alt,
+                        shift,
                         e.ClickCount >= 2));
             }
             else
@@ -974,17 +976,20 @@ public sealed class LineEditorClickEventArgs : EventArgs
         LineEditorTool tool,
         Point worldPoint,
         bool isDeselect,
+        bool isAdditive,
         bool isDoubleClick)
     {
         Tool = tool;
         WorldPoint = worldPoint;
         IsDeselect = isDeselect;
+        IsAdditive = isAdditive;
         IsDoubleClick = isDoubleClick;
     }
 
     public LineEditorTool Tool { get; }
     public Point WorldPoint { get; }
     public bool IsDeselect { get; }
+    public bool IsAdditive { get; }
     public bool IsDoubleClick { get; }
 }
 
