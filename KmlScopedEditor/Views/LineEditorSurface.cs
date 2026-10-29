@@ -114,13 +114,24 @@ public sealed class LineEditorSurface : FrameworkElement
         IReadOnlyList<Point>? cutPoints = null,
         bool fitView = false)
     {
+        var previousFeatures = _features;
+
         _features = features ?? Array.Empty<KmlLineFeature>();
         _selected = selected?.ToHashSet() ?? new HashSet<XElement>();
         _worldBounds = worldBounds;
         _guides = guides ?? Array.Empty<LineEditorGuideVisual>();
         _cutPoints = cutPoints ?? Array.Empty<Point>();
 
-        InvalidateRenderCache();
+        if (CanIncrementallyUpdateRenderCache(fitView))
+        {
+            UpdateChangedFeatureGeometry(previousFeatures);
+            RebuildGuideGeometry();
+            RebuildBaseLayerFromCachedGeometry();
+        }
+        else
+        {
+            InvalidateRenderCache();
+        }
 
         if (_hovered is not null &&
             !_features.Any(feature =>
@@ -682,6 +693,119 @@ public sealed class LineEditorSurface : FrameworkElement
         e.Handled = true;
     }
 
+    private bool CanIncrementallyUpdateRenderCache(
+        bool fitView)
+    {
+        return !fitView &&
+               !_renderCacheDirty &&
+               double.IsFinite(_renderScaleBucket) &&
+               _normalPen is not null &&
+               _baseLayer is not null;
+    }
+
+    private void UpdateChangedFeatureGeometry(
+        IReadOnlyList<KmlLineFeature> previousFeatures)
+    {
+        var previousByElement = previousFeatures
+            .ToDictionary(
+                feature => feature.LineStringElement,
+                feature => feature);
+
+        var currentElements = _features
+            .Select(feature => feature.LineStringElement)
+            .ToHashSet();
+
+        foreach (var removed in _featureGeometry.Keys
+                     .Where(element =>
+                         !currentElements.Contains(element))
+                     .ToList())
+        {
+            _featureGeometry.Remove(removed);
+        }
+
+        var simplifyTolerance =
+            0.55d / Math.Max(
+                _renderScaleBucket,
+                0.000001d);
+
+        foreach (var feature in _features)
+        {
+            if (previousByElement.TryGetValue(
+                    feature.LineStringElement,
+                    out var previous) &&
+                ReferenceEquals(previous, feature) &&
+                _featureGeometry.ContainsKey(
+                    feature.LineStringElement))
+            {
+                continue;
+            }
+
+            if (feature.WorldPoints.Count < 2)
+            {
+                _featureGeometry.Remove(
+                    feature.LineStringElement);
+                continue;
+            }
+
+            _featureGeometry[feature.LineStringElement] =
+                BuildGeometry(
+                    feature.WorldPoints,
+                    simplifyTolerance);
+        }
+    }
+
+    private void RebuildGuideGeometry()
+    {
+        _guideGeometry.Clear();
+
+        var simplifyTolerance =
+            0.55d / Math.Max(
+                _renderScaleBucket,
+                0.000001d);
+
+        foreach (var guide in _guides)
+        {
+            if (guide.WorldPoints.Count >= 2)
+            {
+                _guideGeometry.Add((
+                    guide,
+                    BuildGeometry(
+                        guide.WorldPoints,
+                        simplifyTolerance)));
+            }
+        }
+    }
+
+    private void RebuildBaseLayerFromCachedGeometry()
+    {
+        if (_normalPen is null)
+        {
+            InvalidateRenderCache();
+            return;
+        }
+
+        var baseLayer = new DrawingGroup();
+
+        using (var context = baseLayer.Open())
+        {
+            foreach (var feature in _features)
+            {
+                if (_featureGeometry.TryGetValue(
+                        feature.LineStringElement,
+                        out var geometry))
+                {
+                    context.DrawGeometry(
+                        null,
+                        _normalPen,
+                        geometry);
+                }
+            }
+        }
+
+        baseLayer.Freeze();
+        _baseLayer = baseLayer;
+    }
+
     private void InvalidateRenderCache()
     {
         _renderCacheDirty = true;
@@ -778,19 +902,7 @@ public sealed class LineEditorSurface : FrameworkElement
         baseLayer.Freeze();
         _baseLayer = baseLayer;
 
-        _guideGeometry.Clear();
-
-        foreach (var guide in _guides)
-        {
-            if (guide.WorldPoints.Count >= 2)
-            {
-                _guideGeometry.Add((
-                    guide,
-                    BuildGeometry(
-                        guide.WorldPoints,
-                        simplifyTolerance)));
-            }
-        }
+        RebuildGuideGeometry();
     }
 
     private static double GetScaleBucket(double scale)
