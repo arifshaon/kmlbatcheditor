@@ -173,7 +173,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Select =>
                 "SELECT: drag across editable lines to select real crossings. Alt+drag deselects. Click selects the nearest line. Delete removes highlighted lines.",
             _ =>
-                "CUT: click points or drag freehand. Double-click, right-click, or Enter finishes and applies the drawn cut. Backspace removes the last point; Esc cancels."
+                "CUT: click points or drag freehand. Right-click opens cut-line options at the pointer. Double-click or Enter finishes and applies. Backspace removes the last point; Esc cancels."
         };
 
         ToolHintText.Text = tool switch
@@ -183,7 +183,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Select =>
                 "V Select · drag across lines · Alt+drag deselect · Delete remove · Space+drag pan",
             _ =>
-                "C Cut · click points or drag freehand · double-click/right-click/Enter finish · Backspace undo point · Esc cancel"
+                "C Cut · click points or drag freehand · right-click options · double-click/Enter finish · Backspace undo point · Esc cancel"
         };
 
         UpdateCutScopeDisplay();
@@ -240,7 +240,7 @@ public partial class LineEditorWindow : Window
 
         UpdateStatus(
             $"Added a freehand section. Cut line now has {_draftCutPoints.Count:N0} sampled point(s). " +
-            "Continue drawing, or right-click/Enter to finish.");
+            "Continue drawing, or right-click for cut-line options.");
     }
 
     private void OnCutStrokePreviewChanged(
@@ -297,7 +297,7 @@ public partial class LineEditorWindow : Window
             UpdateStatus(
                 _draftCutPoints.Count < 2
                     ? "Cut line started. Add at least one more point."
-                    : $"Cut line has {_draftCutPoints.Count:N0} point(s). Double-click, right-click, or press Enter to finish.");
+                    : $"Cut line has {_draftCutPoints.Count:N0} point(s). Right-click for options, or double-click/Enter to finish and apply.");
 
             return;
         }
