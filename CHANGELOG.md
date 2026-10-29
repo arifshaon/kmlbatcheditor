@@ -7,10 +7,10 @@
 - Simplified the permanent toolbar to **Select**, **Cut**, **Hand**, Undo, Fit, Zoom Selection, and zoom controls; Select/Cut actions now appear contextually.
 - Added keyboard shortcuts: V Select, C Cut, H Hand, Ctrl+Z Undo, Delete, Backspace, Esc, F, and +/- zoom.
 - Added explicit Hand mode, Space+drag pan, middle-drag pan, cursor feedback, and Zoom Selection.
-- Hand-drawn cuts now support point-by-point and freehand input, with double-click/right-click/Enter to finish and apply immediately as one undoable step.
+- Hand-drawn cuts support point-by-point and freehand input. Right-click opens contextual cut-line actions at the pointer; double-click or Enter finishes and applies as one undoable step.
 - Added live cut-impact preview markers and counts showing how many lines and intersections would be affected.
-- Cut scope now follows the current line selection inside the outer main-tree scope: selected lines only when present, otherwise all editable lines in the tree scope.
-- The map overlay permanently shows the active cut scope; out-of-scope lines remain visible in light grey and locked.
+- Cut scope follows the current line selection: selected lines only when present, otherwise all document lines. A main-tree choice now provides an initial selection rather than locking the rest of the document.
+- The map overlay permanently shows the active cut scope, while all document lines remain selectable/editable.
 - Fixed **Use Selected as Cutline** so the helper line is removed before the cut and cannot split itself.
 - Imported KML/KMZ cut guides remain preview-first and are committed explicitly with **Apply Imported Guide**.
 - Selection strokes use real geometric crossings only; Alt+drag deselects.
