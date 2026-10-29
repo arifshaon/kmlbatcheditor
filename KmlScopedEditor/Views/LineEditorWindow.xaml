@@ -175,9 +175,9 @@
                             Click="OnInvertSelectionClick" />
                     <Button Grid.Column="2"
                             Focusable="False"
-                            Content="Delete selected"
+                            Content="Delete selected lines"
                             Height="30"
-                            MinWidth="110"
+                            MinWidth="130"
                             Click="OnDeleteSelectedClick" />
                     <TextBlock Grid.Column="3"
                                Text="Drag across lines to select. Shift+click adds one; Alt+click/drag removes."
@@ -303,9 +303,9 @@
                             Click="OnInvertSelectionClick" />
                     <Button Grid.Column="2"
                             Focusable="False"
-                            Content="Delete selected"
+                            Content="Delete selected pieces"
                             Height="30"
-                            MinWidth="110"
+                            MinWidth="140"
                             Click="OnDeleteSelectedClick" />
                     <TextBlock Grid.Column="3"
                                Text="Select the pieces you do not want, then delete them."
