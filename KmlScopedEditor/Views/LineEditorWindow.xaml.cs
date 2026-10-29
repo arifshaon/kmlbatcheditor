@@ -32,6 +32,7 @@ public partial class LineEditorWindow : Window
 
     private readonly KmlCutGuideService _cutGuideLoader = new();
     private readonly List<CutGuideState> _guides = new();
+    private Guid? _editingGuideId;
     private readonly List<Point> _cutPoints = new();
     private readonly List<Point> _draftCutPoints = new();
     private Point? _draftCutPreviewPoint;
@@ -77,6 +78,7 @@ public partial class LineEditorWindow : Window
         EditorSurface.PointerMoved += OnPointerMoved;
         EditorSurface.PointerExited += OnPointerExited;
         EditorSurface.ContextRequested += OnContextRequested;
+        EditorSurface.EditableGuideChanged += OnEditableGuideChanged;
         PreviewKeyDown += OnPreviewKeyDown;
 
         Loaded += (_, _) =>
@@ -183,7 +185,7 @@ public partial class LineEditorWindow : Window
         InstructionText.Text = tool switch
         {
             LineEditorTool.Pan =>
-                "HAND: left-drag to pan. Mouse wheel zooms. Space+drag and middle-drag also pan.",
+                "HAND: left-drag to pan. Mouse wheel zooms. Right-drag, Space+drag and middle-drag also pan.",
             LineEditorTool.Select =>
                 "SELECT: drag across lines to select real crossings. Shift+click adds one line; Alt+click/drag removes. Then choose Split Selected Lines... or Delete Selected.",
             _ =>
@@ -193,7 +195,7 @@ public partial class LineEditorWindow : Window
         ToolHintText.Text = tool switch
         {
             LineEditorTool.Pan =>
-                "H Hand · Space+drag or middle-drag pan · +/- zoom · F fit",
+                "H Hand · right-drag / Space+drag / middle-drag pan · +/- zoom · F fit",
             LineEditorTool.Select =>
                 "V Select · drag across lines · Shift+click add · Alt+click/drag remove · Split Selected Lines... · Delete",
             _ =>
@@ -443,6 +445,41 @@ public partial class LineEditorWindow : Window
                 System.Windows.Controls.Primitives.PlacementMode.MousePoint
         };
 
+        var editingGuide = GetEditingGuide();
+
+        if (editingGuide is not null)
+        {
+            AddContextMenuItem(
+                menu,
+                "Add Vertex Here",
+                () => AddVertexToEditingGuide(
+                    editingGuide,
+                    e.WorldPoint));
+
+            if (editingGuide.Guide.Coordinates.Count > 2)
+            {
+                AddContextMenuItem(
+                    menu,
+                    "Delete Nearest Vertex",
+                    () => DeleteNearestVertexFromEditingGuide(
+                        editingGuide,
+                        e.WorldPoint));
+            }
+
+            AddContextMenuItem(
+                menu,
+                "Done Editing Imported Line",
+                StopEditingGuide);
+
+            AddContextMenuItem(
+                menu,
+                "Split with Imported Line",
+                ApplyPendingGuides);
+
+            menu.IsOpen = true;
+            return;
+        }
+
         if (EditorSurface.Tool == LineEditorTool.Split)
         {
             if (_draftCutPoints.Count == 0)
@@ -609,10 +646,69 @@ public partial class LineEditorWindow : Window
         }
 
         RefreshSurface(fitView: true);
+
+        var importedGuide = _guides
+            .LastOrDefault(guide => !guide.Applied);
+
+        if (importedGuide is not null)
+            StartEditingGuide(importedGuide);
+
         UpdatePendingGuidePreview();
 
         UpdateStatus(
-            $"Imported {imported:N0} split line(s). Review the intersection markers, then click Split with Imported Line.");
+            $"Imported {imported:N0} split line(s). The imported line is editable: drag its orange vertex handles, or right-click it to add/delete vertices. Then click Split with Imported Line.");
+    }
+
+    private void OnEditImportedLineClick(
+        object sender,
+        RoutedEventArgs e)
+    {
+        var current = GetEditingGuide();
+
+        if (current is not null)
+        {
+            StopEditingGuide();
+            UpdateStatus(
+                "Imported split-line editing finished. You can re-enter Edit Imported Line at any time before applying it.");
+            return;
+        }
+
+        var pending = _guides
+            .LastOrDefault(guide => !guide.Applied);
+
+        if (pending is null)
+        {
+            UpdateStatus(
+                "There is no pending imported/existing split line to edit.");
+            return;
+        }
+
+        StartEditingGuide(pending);
+        UpdateStatus(
+            "Editing imported split line. Drag orange handles to move vertices; right-click for add/delete vertex options.");
+    }
+
+    private void OnEditableGuideChanged(
+        object? sender,
+        LineEditorGuideEditEventArgs e)
+    {
+        var state = GetEditingGuide();
+
+        if (state is null)
+            return;
+
+        UpdateGuideFromWorldPoints(
+            state,
+            e.WorldPoints);
+
+        UpdatePendingGuidePreview();
+
+        if (e.IsComplete)
+        {
+            RefreshSurface();
+            UpdateStatus(
+                $"Moved split-line vertex {e.VertexIndex + 1:N0}. Intersection preview updated.");
+        }
     }
 
     private void OnUseSelectedAsSplitLineClick(
@@ -655,12 +751,15 @@ public partial class LineEditorWindow : Window
         _selected.Clear();
         EditorSurface.SetSelection(_selected);
 
+        var createdGuide = _guides[^1];
+
         RefreshSurface();
+        StartEditingGuide(createdGuide);
         UpdatePendingGuidePreview();
         UpdateCutScopeDisplay();
 
         UpdateStatus(
-            "Selected line is now the split line. It will be removed before the split is calculated, so it cannot split itself.");
+            "Selected line is now the split line and is editable. Drag its orange handles or right-click to add/delete vertices. It will be removed before the split is calculated, so it cannot split itself.");
     }
 
     private void OnApplyImportedSplitLineClick(
@@ -672,6 +771,8 @@ public partial class LineEditorWindow : Window
 
     private void ApplyPendingGuides()
     {
+        StopEditingGuide();
+
         var pending = _guides
             .Where(guide => !guide.Applied)
             .ToList();
@@ -842,6 +943,7 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        StopEditingGuide();
         _guides.Clear();
         _cutPoints.Clear();
         CancelDraftCutLine(
@@ -1216,6 +1318,18 @@ public partial class LineEditorWindow : Window
         EditorSurface.SetDraftCut(
             _draftCutPoints,
             _draftCutPreviewPoint);
+
+        var editingGuide = GetEditingGuide();
+
+        EditorSurface.SetEditableGuide(
+            editingGuide is null
+                ? null
+                : ProjectGuide(editingGuide.Guide));
+
+        EditImportedLineButton.Content =
+            editingGuide is null
+                ? "Edit Imported Line"
+                : "Done Editing Line";
     }
 
     private void AppendDraftPoints(
@@ -1546,9 +1660,9 @@ public partial class LineEditorWindow : Window
         return EditorSurface.Tool switch
         {
             LineEditorTool.Pan =>
-                "H Hand · Space+drag or middle-drag pan · +/- zoom · F fit",
+                "H Hand · right-drag / Space+drag / middle-drag pan · +/- zoom · F fit",
             LineEditorTool.Select =>
-                "V Select · drag across lines · Alt+drag deselect · Delete remove · Space+drag pan",
+                "V Select · drag across lines · Alt+drag deselect · Delete remove · right-drag pan · Space+drag pan",
             _ =>
                 "S Split · click points or drag freehand · right-click options · double-click/Enter finish · Backspace undo point · Esc cancel"
         };
@@ -1673,6 +1787,189 @@ public partial class LineEditorWindow : Window
 
     private string CurrentLineLabel => "line(s)";
 
+    private CutGuideState? GetEditingGuide()
+    {
+        if (!_editingGuideId.HasValue)
+            return null;
+
+        return _guides.FirstOrDefault(
+            guide =>
+                guide.Id == _editingGuideId.Value &&
+                !guide.Applied);
+    }
+
+    private void StartEditingGuide(
+        CutGuideState guide)
+    {
+        if (guide.Applied)
+            return;
+
+        _editingGuideId = guide.Id;
+        SetTool(LineEditorTool.Split);
+
+        EditorSurface.SetEditableGuide(
+            ProjectGuide(guide.Guide));
+
+        EditImportedLineButton.Content =
+            "Done Editing Line";
+    }
+
+    private void StopEditingGuide()
+    {
+        _editingGuideId = null;
+        EditorSurface.SetEditableGuide(null);
+        EditImportedLineButton.Content =
+            "Edit Imported Line";
+    }
+
+    private void UpdateGuideFromWorldPoints(
+        CutGuideState state,
+        IReadOnlyList<Point> worldPoints)
+    {
+        var previous = state.Guide.Coordinates;
+        var coordinates = new List<KmlCoordinate>(
+            worldPoints.Count);
+
+        for (var index = 0;
+             index < worldPoints.Count;
+             index++)
+        {
+            var unprojected =
+                _geometry.Unproject(worldPoints[index]);
+
+            var altitude =
+                index < previous.Count
+                    ? previous[index].Altitude
+                    : null;
+
+            coordinates.Add(
+                new KmlCoordinate(
+                    unprojected.Longitude,
+                    unprojected.Latitude,
+                    altitude));
+        }
+
+        state.Guide = new KmlCutGuide(
+            state.Guide.Name,
+            coordinates);
+    }
+
+    private void AddVertexToEditingGuide(
+        CutGuideState state,
+        Point worldPoint)
+    {
+        var points = ProjectGuide(state.Guide).ToList();
+
+        if (points.Count < 2)
+            return;
+
+        var bestSegment = 0;
+        var bestDistance = double.MaxValue;
+
+        for (var index = 0;
+             index < points.Count - 1;
+             index++)
+        {
+            var distance = DistanceToSegment(
+                worldPoint,
+                points[index],
+                points[index + 1]);
+
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestSegment = index;
+            }
+        }
+
+        points.Insert(
+            bestSegment + 1,
+            worldPoint);
+
+        UpdateGuideFromWorldPoints(
+            state,
+            points);
+
+        RefreshSurface();
+        UpdatePendingGuidePreview();
+
+        UpdateStatus(
+            $"Added a split-line vertex. {points.Count:N0} vertices now.");
+    }
+
+    private void DeleteNearestVertexFromEditingGuide(
+        CutGuideState state,
+        Point worldPoint)
+    {
+        var points = ProjectGuide(state.Guide).ToList();
+
+        if (points.Count <= 2)
+            return;
+
+        var nearestIndex = -1;
+        var nearestDistance =
+            EditorSurface.WorldToleranceFromPixels(14d);
+
+        for (var index = 0;
+             index < points.Count;
+             index++)
+        {
+            var distance =
+                (points[index] - worldPoint).Length;
+
+            if (distance <= nearestDistance)
+            {
+                nearestDistance = distance;
+                nearestIndex = index;
+            }
+        }
+
+        if (nearestIndex < 0)
+        {
+            UpdateStatus(
+                "Right-click closer to a split-line vertex to delete it.");
+            return;
+        }
+
+        points.RemoveAt(nearestIndex);
+
+        UpdateGuideFromWorldPoints(
+            state,
+            points);
+
+        RefreshSurface();
+        UpdatePendingGuidePreview();
+
+        UpdateStatus(
+            $"Deleted one split-line vertex. {points.Count:N0} vertices remain.");
+    }
+
+    private static double DistanceToSegment(
+        Point point,
+        Point start,
+        Point end)
+    {
+        var dx = end.X - start.X;
+        var dy = end.Y - start.Y;
+        var lengthSquared = (dx * dx) + (dy * dy);
+
+        if (lengthSquared <= double.Epsilon)
+            return (point - start).Length;
+
+        var t =
+            ((point.X - start.X) * dx +
+             (point.Y - start.Y) * dy) /
+            lengthSquared;
+
+        t = Math.Clamp(t, 0d, 1d);
+
+        var projection = new Point(
+            start.X + (t * dx),
+            start.Y + (t * dy));
+
+        return (point - projection).Length;
+    }
+
     private void UpdateStatus(
         string message)
     {
@@ -1733,7 +2030,7 @@ public partial class LineEditorWindow : Window
         public Guid Id { get; } =
             Guid.NewGuid();
 
-        public KmlCutGuide Guide { get; }
+        public KmlCutGuide Guide { get; set; }
 
         public bool
             RemoveMatchingSourceBeforeCut
