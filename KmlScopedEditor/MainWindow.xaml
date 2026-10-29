@@ -8,39 +8,66 @@
         xmlns:views="clr-namespace:KmlScopedEditor.Views"
         mc:Ignorable="d"
         Title="KML Scoped Editor"
-        Height="800"
-        Width="1300"
-        MinHeight="650"
-        MinWidth="1050">
+        Height="820"
+        Width="1380"
+        MinHeight="680"
+        MinWidth="1080">
 
     <Window.DataContext>
         <vm:MainViewModel />
     </Window.DataContext>
 
     <Window.Resources>
-        <BooleanToVisibilityConverter
-            x:Key="BooleanToVisibilityConverter" />
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+
+        <Style x:Key="ModeButtonStyle" TargetType="ToggleButton">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinWidth" Value="108" />
+            <Setter Property="Padding" Value="14,4" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="#CBD5E1" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#334155" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="Background" Value="#E8F0FE" />
+                    <Setter Property="BorderBrush" Value="#6A9FE8" />
+                    <Setter Property="Foreground" Value="#174EA6" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="StepNumberStyle" TargetType="Border">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Background" Value="#2F6FCC" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+        </Style>
+
+        <Style x:Key="SectionBorderStyle" TargetType="Border">
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="#D8DEE8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="Margin" Value="0,0,0,12" />
+        </Style>
 
         <HierarchicalDataTemplate
             DataType="{x:Type models:KmlTreeNode}"
             ItemsSource="{Binding Children}">
-
-            <Grid Margin="2">
+            <Grid Margin="2,2,4,2">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <CheckBox Grid.Column="0"
-                          IsThreeState="True"
-                          IsChecked="{Binding IsChecked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                          VerticalAlignment="Top"
-                          Margin="0,2,6,0" />
-
-                <TextBlock Grid.Column="1"
+                <TextBlock Grid.Column="0"
                            Margin="0,1,6,0"
-                           FontSize="14">
+                           FontSize="13">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock">
                             <Setter Property="Text" Value="📄" />
@@ -55,7 +82,7 @@
                                     <Setter Property="Text" Value="📍" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding NodeType}" Value="GroundOverlay">
-                                    <Setter Property="Text" Value="🖼" />
+                                    <Setter Property="Text" Value="▧" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding NodeType}" Value="NetworkLink">
                                     <Setter Property="Text" Value="🔗" />
@@ -65,13 +92,14 @@
                     </TextBlock.Style>
                 </TextBlock>
 
-                <StackPanel Grid.Column="2">
+                <StackPanel Grid.Column="1">
                     <TextBlock Text="{Binding Name}"
-                               FontSize="14"
-                               Foreground="#1F3A93" />
+                               FontSize="13"
+                               Foreground="#1F3A93"
+                               TextTrimming="CharacterEllipsis" />
                     <TextBlock Text="{Binding Subtitle}"
-                               FontSize="12"
-                               Foreground="Gray"
+                               FontSize="11"
+                               Foreground="#7A8494"
                                TextTrimming="CharacterEllipsis"
                                MaxWidth="520" />
                 </StackPanel>
@@ -81,594 +109,611 @@
 
     <Grid>
         <DockPanel IsEnabled="{Binding IsNotBusy}">
-        <Border DockPanel.Dock="Top"
-                Background="#F2F2F2"
-                Padding="8">
-            <StackPanel Orientation="Horizontal">
-                <Button Content="Open KML/KMZ"
-                        Width="125"
-                        Height="30"
-                        Command="{Binding OpenKmlCommand}" />
+            <Border DockPanel.Dock="Top"
+                    Background="White"
+                    BorderBrush="#D9DEE7"
+                    BorderThickness="0,0,0,1"
+                    Padding="12,10">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
 
-                <Button Content="Save As"
-                        Width="100"
-                        Height="30"
-                        Margin="8,0,0,0"
-                        Command="{Binding SaveAsCommand}" />
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <Button Content="📂 Open..."
+                                Width="92"
+                                Height="32"
+                                Command="{Binding OpenKmlCommand}" />
+                        <Button Content="💾 Save As..."
+                                Width="110"
+                                Height="32"
+                                Margin="8,0,0,0"
+                                Command="{Binding SaveAsCommand}" />
+                        <Button Content="✎ Edit Lines..."
+                                Width="116"
+                                Height="32"
+                                Margin="14,0,0,0"
+                                IsEnabled="{Binding HasLoadedDocument}"
+                                Click="OnLineEditorClick"
+                                ToolTip="Open the line editor for the whole loaded file." />
+                    </StackPanel>
 
-                <Button Content="Line Editor"
-                        Width="105"
-                        Height="30"
-                        Margin="8,0,0,0"
-                        IsEnabled="{Binding HasLoadedDocument}"
-                        Click="OnLineEditorClick"
-                        ToolTip="Cut, select and delete KML LineString geometry" />
+                    <TextBlock Grid.Column="1"
+                               Margin="18,7,12,0"
+                               Text="{Binding LoadedFilePath}"
+                               Foreground="#697586"
+                               TextTrimming="CharacterEllipsis" />
 
-                <TextBlock Margin="12,7,0,0"
-                           Text="{Binding LoadedFilePath}"
-                           TextTrimming="CharacterEllipsis" />
-
-                <TextBlock Margin="12,7,0,0"
-                           Text="{Binding UnsavedChangesDisplay}"
-                           Foreground="#B42318"
-                           FontWeight="SemiBold" />
-            </StackPanel>
-        </Border>
-
-        <Border DockPanel.Dock="Top"
-                Visibility="{Binding HasNotification, Converter={StaticResource BooleanToVisibilityConverter}}"
-                Padding="12,9"
-                BorderThickness="0,0,0,1">
-            <Border.Style>
-                <Style TargetType="Border">
-                    <Setter Property="Background" Value="#EAF2FF" />
-                    <Setter Property="BorderBrush" Value="#9ABCF0" />
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding NotificationKind}"
-                                     Value="{x:Static models:NotificationKind.Success}">
-                            <Setter Property="Background" Value="#E9F7EF" />
-                            <Setter Property="BorderBrush" Value="#85C99C" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding NotificationKind}"
-                                     Value="{x:Static models:NotificationKind.Warning}">
-                            <Setter Property="Background" Value="#FFF6DF" />
-                            <Setter Property="BorderBrush" Value="#E3BA5B" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding NotificationKind}"
-                                     Value="{x:Static models:NotificationKind.Error}">
-                            <Setter Property="Background" Value="#FDECEC" />
-                            <Setter Property="BorderBrush" Value="#D99A9A" />
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </Border.Style>
-
-            <DockPanel LastChildFill="True">
-                <Button DockPanel.Dock="Right"
-                        Content="✕"
-                        Command="{Binding DismissNotificationCommand}"
-                        Width="28"
-                        Height="24"
-                        Margin="12,0,0,0"
-                        ToolTip="Dismiss notification" />
-
-                <TextBlock Text="{Binding NotificationText}"
-                           VerticalAlignment="Center"
-                           TextWrapping="Wrap"
-                           FontWeight="SemiBold" />
-            </DockPanel>
-        </Border>
-
-        <StatusBar DockPanel.Dock="Bottom">
-            <StatusBarItem>
-                <TextBlock Text="{Binding StatusText}" />
-            </StatusBarItem>
-        </StatusBar>
-
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="420" />
-                <ColumnDefinition Width="6" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-
-            <Border Grid.Column="0"
-                    BorderBrush="#D0D0D0"
-                    BorderThickness="0,0,1,0"
-                    Background="#FAFAFA">
-                <TreeView ItemsSource="{Binding RootNodes}"
-                          ScrollViewer.CanContentScroll="True"
-                          VirtualizingStackPanel.IsVirtualizing="True"
-                          VirtualizingStackPanel.VirtualizationMode="Recycling">
-                    <TreeView.ItemContainerStyle>
-                        <Style TargetType="TreeViewItem">
-                            <Setter Property="IsExpanded"
-                                    Value="{Binding IsExpanded, Mode=TwoWay}" />
-                            <Setter Property="IsSelected"
-                                    Value="{Binding IsSelected, Mode=TwoWay}" />
-                        </Style>
-                    </TreeView.ItemContainerStyle>
-                </TreeView>
+                    <Border Grid.Column="2"
+                            Visibility="{Binding HasUnsavedChanges, Converter={StaticResource BooleanToVisibilityConverter}}"
+                            Background="#FFF0F0"
+                            CornerRadius="14"
+                            Padding="10,5"
+                            VerticalAlignment="Center">
+                        <TextBlock Text="● Unsaved changes"
+                                   Foreground="#B42318"
+                                   FontWeight="SemiBold"
+                                   FontSize="12" />
+                    </Border>
+                </Grid>
             </Border>
 
-            <GridSplitter Grid.Column="1"
-                          Width="6"
-                          HorizontalAlignment="Stretch"
-                          VerticalAlignment="Stretch" />
+            <Border DockPanel.Dock="Top"
+                    Visibility="{Binding HasNotification, Converter={StaticResource BooleanToVisibilityConverter}}"
+                    Background="#EEF5FF"
+                    BorderBrush="#BFD2EF"
+                    BorderThickness="0,0,0,1"
+                    Padding="10,7">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right"
+                            Content="✕"
+                            Command="{Binding DismissNotificationCommand}"
+                            Width="26"
+                            Height="22"
+                            Margin="10,0,0,0" />
+                    <TextBlock Text="{Binding NotificationText}"
+                               VerticalAlignment="Center"
+                               TextWrapping="Wrap" />
+                </DockPanel>
+            </Border>
 
-            <ScrollViewer Grid.Column="2"
-                          VerticalScrollBarVisibility="Auto">
-                <StackPanel Margin="16">
-                    <Border Visibility="{Binding HasLoadSummary, Converter={StaticResource BooleanToVisibilityConverter}}"
-                            Margin="0,0,0,20"
-                            Padding="14"
-                            Background="#EEF6FF"
-                            BorderBrush="#A9C8E8"
-                            BorderThickness="1"
-                            CornerRadius="6">
-                        <StackPanel>
-                            <TextBlock Text="File loaded successfully"
-                                       FontSize="18"
-                                       FontWeight="SemiBold"
-                                       Margin="0,0,0,8" />
-                            <TextBlock Text="{Binding LoadSummaryText}"
-                                       TextWrapping="Wrap"
-                                       LineHeight="20" />
-                        </StackPanel>
-                    </Border>
+            <StatusBar DockPanel.Dock="Bottom"
+                       Background="#F8FAFC"
+                       BorderBrush="#D9DEE7"
+                       BorderThickness="0,1,0,0">
+                <StatusBarItem>
+                    <TextBlock Text="{Binding StatusText}"
+                               Foreground="#64748B" />
+                </StatusBarItem>
+            </StatusBar>
 
-                    <TextBlock Text="Selection Details"
-                               FontSize="22"
-                               FontWeight="SemiBold" />
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="410" />
+                    <ColumnDefinition Width="6" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
 
-                    <Border Margin="0,12,0,20"
-                            Padding="12"
-                            Background="#F7F7F7"
-                            CornerRadius="6">
-                        <TextBlock Text="{Binding SelectedNodeSummary}"
+                <Border Grid.Column="0"
+                        Background="#FAFBFD"
+                        BorderBrush="#D9DEE7"
+                        BorderThickness="0,0,1,0">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top"
+                                   Margin="14,12,14,8"
+                                   Text="Click an item to inspect it, or to use it as the Tree item scope. No tick boxes — one click = one choice."
+                                   Foreground="#52606D"
                                    TextWrapping="Wrap" />
-                    </Border>
 
-                    <TextBlock Text="Style Diagnostics"
-                               FontSize="18"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,4" />
+                        <TreeView ItemsSource="{Binding RootNodes}"
+                                  Margin="0,0,0,8"
+                                  BorderThickness="0"
+                                  Background="Transparent"
+                                  ScrollViewer.CanContentScroll="True"
+                                  VirtualizingStackPanel.IsVirtualizing="True"
+                                  VirtualizingStackPanel.VirtualizationMode="Recycling">
+                            <TreeView.ItemContainerStyle>
+                                <Style TargetType="TreeViewItem">
+                                    <Setter Property="IsExpanded"
+                                            Value="{Binding IsExpanded, Mode=TwoWay}" />
+                                    <Setter Property="IsSelected"
+                                            Value="{Binding IsSelected, Mode=TwoWay}" />
+                                    <Setter Property="Padding" Value="3,2" />
+                                </Style>
+                            </TreeView.ItemContainerStyle>
+                        </TreeView>
+                    </DockPanel>
+                </Border>
 
-                    <TextBlock Text="{Binding StyleDiagnosticsMessage}"
-                               Foreground="Gray"
-                               Margin="0,0,0,10" />
+                <GridSplitter Grid.Column="1"
+                              Width="6"
+                              Background="#EEF1F5"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Stretch" />
 
-                    <Border Padding="12"
-                            Margin="0,0,0,20"
-                            Background="#FCFCFC"
-                            BorderBrush="#E0E0E0"
-                            BorderThickness="1"
-                            CornerRadius="6">
+                <ScrollViewer Grid.Column="2"
+                              VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="16">
+                        <TextBlock Text="Style changes"
+                                   FontSize="22"
+                                   FontWeight="SemiBold"
+                                   Foreground="#263244"
+                                   Margin="0,0,0,10" />
 
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="140" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-
-                            <TextBlock Grid.Row="0" Grid.Column="0"
-                                       Text="Style source:"
-                                       FontWeight="SemiBold"
-                                       Margin="0,3" />
-                            <TextBlock Grid.Row="0" Grid.Column="1"
-                                       Text="{Binding SelectedStyle.StyleSource}"
-                                       Margin="0,3"
-                                       TextWrapping="Wrap" />
-
-                            <TextBlock Grid.Row="1" Grid.Column="0"
-                                       Text="styleUrl:"
-                                       FontWeight="SemiBold"
-                                       Margin="0,3" />
-                            <TextBlock Grid.Row="1" Grid.Column="1"
-                                       Text="{Binding SelectedStyle.StyleUrlDisplay}"
-                                       Margin="0,3"
-                                       TextWrapping="Wrap" />
-
-                            <TextBlock Grid.Row="2" Grid.Column="0"
-                                       Text="Normal style:"
-                                       FontWeight="SemiBold"
-                                       Margin="0,3" />
-                            <TextBlock Grid.Row="2" Grid.Column="1"
-                                       Text="{Binding SelectedStyle.NormalStyleUrlDisplay}"
-                                       Margin="0,3"
-                                       TextWrapping="Wrap" />
-
-                            <TextBlock Grid.Row="3" Grid.Column="0"
-                                       Text="Highlight style:"
-                                       FontWeight="SemiBold"
-                                       Margin="0,3" />
-                            <TextBlock Grid.Row="3" Grid.Column="1"
-                                       Text="{Binding SelectedStyle.HighlightStyleUrlDisplay}"
-                                       Margin="0,3"
-                                       TextWrapping="Wrap" />
-
-                            <TextBlock Grid.Row="4" Grid.Column="0"
-                                       Text="Inline style:"
-                                       FontWeight="SemiBold"
-                                       Margin="0,3" />
-                            <TextBlock Grid.Row="4" Grid.Column="1"
-                                       Text="{Binding SelectedStyle.InlineStyleDisplay}"
-                                       Margin="0,3" />
-
-                            <TextBlock Grid.Row="5" Grid.Column="0"
-                                       Text="Icon URL:"
-                                       FontWeight="SemiBold"
-                                       Margin="0,3" />
-                            <TextBlock Grid.Row="5" Grid.Column="1"
-                                       Text="{Binding SelectedStyle.IconHrefDisplay}"
-                                       Margin="0,3"
-                                       TextWrapping="Wrap" />
-
-                            <TextBlock Grid.Row="6" Grid.Column="0"
-                                       Text="Icon size:"
-                                       FontWeight="SemiBold"
-                                       Margin="0,3" />
-                            <TextBlock Grid.Row="6" Grid.Column="1"
-                                       Text="{Binding SelectedStyle.IconScaleDisplay}"
-                                       Margin="0,3" />
-
-                            <TextBlock Grid.Row="7" Grid.Column="0"
-                                       Text="Icon color:"
-                                       FontWeight="SemiBold"
-                                       Margin="0,3" />
-                            <TextBlock Grid.Row="7" Grid.Column="1"
-                                       Text="{Binding SelectedStyle.IconColorDisplay}"
-                                       Margin="0,3"
-                                       TextWrapping="Wrap" />
-
-                            <TextBlock Grid.Row="8" Grid.Column="0"
-                                       Text="Text size:"
-                                       FontWeight="SemiBold"
-                                       Margin="0,3" />
-                            <TextBlock Grid.Row="8" Grid.Column="1"
-                                       Text="{Binding SelectedStyle.LabelScaleDisplay}"
-                                       Margin="0,3" />
-
-                            <TextBlock Grid.Row="9" Grid.Column="0"
-                                       Text="Text color:"
-                                       FontWeight="SemiBold"
-                                       Margin="0,3" />
-                            <TextBlock Grid.Row="9" Grid.Column="1"
-                                       Text="{Binding SelectedStyle.LabelColorDisplay}"
-                                       Margin="0,3"
-                                       TextWrapping="Wrap" />
-
-
-                            <TextBlock Grid.Row="10" Grid.Column="0"
-                                       Text="Line color:"
-                                       FontWeight="SemiBold"
-                                       Margin="0,3" />
-                            <TextBlock Grid.Row="10" Grid.Column="1"
-                                       Text="{Binding SelectedStyle.LineColorDisplay}"
-                                       Margin="0,3"
-                                       TextWrapping="Wrap" />
-
-                            <TextBlock Grid.Row="11" Grid.Column="0"
-                                       Text="Line width:"
-                                       FontWeight="SemiBold"
-                                       Margin="0,3" />
-                            <TextBlock Grid.Row="11" Grid.Column="1"
-                                       Text="{Binding SelectedStyle.LineWidthDisplay}"
-                                       Margin="0,3" />
-                        </Grid>
-                    </Border>
-
-                    <TextBlock Text="Placemark Selection"
-                               FontSize="18"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,8" />
-
-                    <Border Padding="12"
-                            Margin="0,0,0,20"
-                            Background="#FCFCFC"
-                            BorderBrush="#E0E0E0"
-                            BorderThickness="1"
-                            CornerRadius="6">
-
-                        <StackPanel>
-                            <TextBlock Text="Select placemarks by"
-                                       FontWeight="SemiBold"
-                                       Margin="0,0,0,5" />
-
-                            <ComboBox ItemsSource="{Binding SelectionModes}"
-                                      SelectedItem="{Binding SelectedSelectionMode}"
-                                      DisplayMemberPath="Label"
-                                      Width="260"
-                                      HorizontalAlignment="Left"
-                                      Margin="0,0,0,14" />
-
-                            <StackPanel Visibility="{Binding IsFolderSelectionMode,
-                                Converter={StaticResource BooleanToVisibilityConverter}}">
-
-                                <TextBlock Text="Current tree selection"
-                                           FontWeight="SemiBold" />
-
-                                <TextBlock Text="{Binding SelectedNode.Name}"
-                                           Margin="0,3,0,10"
-                                           Foreground="#1F3A93"
-                                           TextWrapping="Wrap" />
-
-                                <CheckBox Content="Include placemarks in nested subfolders"
-                                          IsChecked="{Binding IncludeSubfolders}"
-                                          Margin="0,0,0,14" />
-                            </StackPanel>
-
-                            <StackPanel Visibility="{Binding IsIconTypeSelectionMode,
-                                Converter={StaticResource BooleanToVisibilityConverter}}">
-
-                                <TextBlock Text="{Binding IconSelectionPrompt}"
-                                           FontWeight="SemiBold"
-                                           Margin="0,0,0,6" />
-
-                                <ListBox ItemsSource="{Binding IconTypes}"
-                                         Height="260"
-                                         Margin="0,0,0,14"
-                                         HorizontalContentAlignment="Stretch"
-                                         VirtualizingStackPanel.IsVirtualizing="True"
-                                         VirtualizingStackPanel.VirtualizationMode="Recycling">
-
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <CheckBox IsChecked="{Binding IsSelected}"
-                                                      ToolTip="{Binding IconHref}"
-                                                      Padding="2"
-                                                      HorizontalContentAlignment="Stretch">
-                                                <StackPanel>
-                                                    <TextBlock Text="{Binding DisplayName}"
-                                                               FontWeight="SemiBold"
-                                                               TextTrimming="CharacterEllipsis" />
-
-                                                    <TextBlock Text="{Binding DetailText}"
-                                                               Foreground="Gray"
-                                                               FontSize="11"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               MaxWidth="620" />
-                                                </StackPanel>
-                                            </CheckBox>
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
-                            </StackPanel>
-
-                            <Button Content="Calculate Selection"
-                                    Command="{Binding CalculateSelectionCommand}"
-                                    Width="160"
-                                    Height="32"
-                                    HorizontalAlignment="Left"
-                                    Margin="0,0,0,12" />
-
-                            <Border Background="#F2F6FC"
-                                    BorderBrush="#CBD8EA"
-                                    BorderThickness="1"
-                                    Padding="10"
-                                    CornerRadius="4">
-                                <StackPanel>
-                                    <TextBlock Text="{Binding MatchedPlacemarkCount,
-                                        StringFormat={}{0:N0} matched placemarks}"
+                        <Border Style="{StaticResource SectionBorderStyle}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                    <Border Style="{StaticResource StepNumberStyle}">
+                                        <TextBlock Text="1"
+                                                   Foreground="White"
+                                                   FontWeight="Bold"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center" />
+                                    </Border>
+                                    <TextBlock Text="Which placemarks?"
                                                FontSize="16"
-                                               FontWeight="SemiBold" />
-
-                                    <TextBlock Text="{Binding SelectionSummary}"
-                                               Margin="0,4,0,0"
-                                               TextWrapping="Wrap" />
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center" />
                                 </StackPanel>
-                            </Border>
-                        </StackPanel>
-                    </Border>
 
-                    <TextBlock Text="Batch Style Edit"
-                               FontSize="18"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,8" />
+                                <WrapPanel Margin="0,0,0,10">
+                                    <ToggleButton Style="{StaticResource ModeButtonStyle}"
+                                                  Content="Tree item"
+                                                  IsChecked="{Binding IsFolderSelectionMode, Mode=OneWay}"
+                                                  Command="{Binding SetSelectionModeCommand}"
+                                                  CommandParameter="Folder" />
+                                    <ToggleButton Style="{StaticResource ModeButtonStyle}"
+                                                  Content="Placemark name"
+                                                  IsChecked="{Binding IsPlacemarkNameSelectionMode, Mode=OneWay}"
+                                                  Command="{Binding SetSelectionModeCommand}"
+                                                  CommandParameter="PlacemarkName" />
+                                    <ToggleButton Style="{StaticResource ModeButtonStyle}"
+                                                  Content="Icon image"
+                                                  IsChecked="{Binding IsIconImageSelectionMode, Mode=OneWay}"
+                                                  Command="{Binding SetSelectionModeCommand}"
+                                                  CommandParameter="IconImage" />
+                                    <ToggleButton Style="{StaticResource ModeButtonStyle}"
+                                                  Content="Icon variant"
+                                                  IsChecked="{Binding IsIconVariantSelectionMode, Mode=OneWay}"
+                                                  Command="{Binding SetSelectionModeCommand}"
+                                                  CommandParameter="IconVariant" />
+                                </WrapPanel>
 
-                    <Border Padding="12"
-                            Background="#FCFCFC"
-                            BorderBrush="#E0E0E0"
-                            BorderThickness="1"
-                            CornerRadius="6">
-                        <StackPanel>
-                            <TextBlock Text="Enable only the properties that should change. Unchecked properties will remain untouched."
-                                       Foreground="Gray"
-                                       TextWrapping="Wrap"
-                                       Margin="0,0,0,14" />
+                                <StackPanel Visibility="{Binding IsFolderSelectionMode, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                            Margin="0,0,0,10">
+                                    <WrapPanel>
+                                        <TextBlock Text="Tree item: "
+                                                   Foreground="#52606D"
+                                                   VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding SelectedNode.Name}"
+                                                   Foreground="#1F3A93"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Center" />
+                                        <CheckBox Content="Include sub-folders"
+                                                  IsChecked="{Binding IncludeSubfolders}"
+                                                  Margin="12,0,0,0"
+                                                  VerticalAlignment="Center" />
+                                    </WrapPanel>
+                                </StackPanel>
 
+                                <views:PlacemarkNameSelectionControl />
+
+                                <StackPanel Visibility="{Binding IsIconTypeSelectionMode, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                            Margin="0,0,0,10">
+                                    <TextBlock Text="{Binding IconSelectionPrompt}"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,6" />
+                                    <ListBox ItemsSource="{Binding IconTypes}"
+                                             Height="160"
+                                             HorizontalContentAlignment="Stretch"
+                                             VirtualizingStackPanel.IsVirtualizing="True"
+                                             VirtualizingStackPanel.VirtualizationMode="Recycling">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <CheckBox IsChecked="{Binding IsSelected}"
+                                                          Padding="4"
+                                                          ToolTip="{Binding IconHref}">
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding DisplayName}"
+                                                                   FontWeight="SemiBold"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Text="{Binding DetailText}"
+                                                                   Foreground="#697586"
+                                                                   FontSize="11"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                </CheckBox>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </StackPanel>
+
+                                <Border Background="#ECF8F0"
+                                        BorderBrush="#A8D5B6"
+                                        BorderThickness="1"
+                                        CornerRadius="6"
+                                        Padding="10,7"
+                                        HorizontalAlignment="Left">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="✓ "
+                                                   Foreground="#18733B"
+                                                   FontWeight="Bold" />
+                                        <TextBlock Text="{Binding MatchedPlacemarkCount, StringFormat={}{0:N0} placemarks will change}"
+                                                   Foreground="#18733B"
+                                                   FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </Border>
+                                <TextBlock Text="{Binding SelectionSummary}"
+                                           Foreground="#697586"
+                                           FontSize="11"
+                                           Margin="0,5,0,0"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource SectionBorderStyle}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <Border Style="{StaticResource StepNumberStyle}">
+                                        <TextBlock Text="2"
+                                                   Foreground="White"
+                                                   FontWeight="Bold"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center" />
+                                    </Border>
+                                    <TextBlock Text="What to change?"
+                                               FontSize="16"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+
+                                <Expander IsExpanded="True"
+                                          Margin="0,0,0,6">
+                                    <Expander.Header>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="Lines"
+                                                       FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding LineGroupSummary, StringFormat= — {0}}"
+                                                       Foreground="#7A8494"
+                                                       Margin="6,0,0,0" />
+                                        </StackPanel>
+                                    </Expander.Header>
+                                    <Grid Margin="18,8,0,10"
+                                          IsEnabled="{Binding HasSelectedLines}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="180" />
+                                            <ColumnDefinition Width="110" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+
+                                        <CheckBox Grid.Row="0" Grid.Column="0"
+                                                  Content="Line colour"
+                                                  IsChecked="{Binding EditSettings.ChangeLineColor}"
+                                                  Margin="0,5,8,5" />
+                                        <TextBox Grid.Row="0" Grid.Column="1"
+                                                 Text="{Binding EditSettings.LineColorText, UpdateSourceTrigger=PropertyChanged}"
+                                                 IsEnabled="{Binding EditSettings.ChangeLineColor}"
+                                                 Margin="0,2,6,2"
+                                                 Padding="5" />
+                                        <Button Grid.Row="0" Grid.Column="2"
+                                                Content="Choose..."
+                                                Command="{Binding PickLineColorCommand}"
+                                                IsEnabled="{Binding EditSettings.ChangeLineColor}"
+                                                MinWidth="82"
+                                                Margin="0,2,0,2" />
+
+                                        <CheckBox Grid.Row="1" Grid.Column="0"
+                                                  Content="Line width"
+                                                  IsChecked="{Binding EditSettings.ChangeLineWidth}"
+                                                  Margin="0,5,8,5" />
+                                        <TextBox Grid.Row="1" Grid.Column="1"
+                                                 Text="{Binding EditSettings.LineWidthText, UpdateSourceTrigger=PropertyChanged}"
+                                                 IsEnabled="{Binding EditSettings.ChangeLineWidth}"
+                                                 Margin="0,2,6,2"
+                                                 Padding="5" />
+
+                                        <CheckBox Grid.Row="2" Grid.Column="0"
+                                                  Content="Line opacity"
+                                                  IsChecked="{Binding EditSettings.ChangeLineOpacity}"
+                                                  Margin="0,5,8,5" />
+                                        <TextBox Grid.Row="2" Grid.Column="1"
+                                                 Text="{Binding EditSettings.LineOpacityText, UpdateSourceTrigger=PropertyChanged}"
+                                                 IsEnabled="{Binding EditSettings.ChangeLineOpacity}"
+                                                 Margin="0,2,6,2"
+                                                 Padding="5"
+                                                 ToolTip="0 to 100 percent" />
+                                        <TextBlock Grid.Row="2" Grid.Column="2"
+                                                   Text="%"
+                                                   VerticalAlignment="Center" />
+                                    </Grid>
+                                </Expander>
+
+                                <Separator Margin="0,2,0,4" />
+
+                                <Expander IsExpanded="False"
+                                          Margin="0,0,0,6">
+                                    <Expander.Header>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="Icons"
+                                                       FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding IconGroupSummary, StringFormat= — {0}}"
+                                                       Foreground="#7A8494"
+                                                       Margin="6,0,0,0" />
+                                        </StackPanel>
+                                    </Expander.Header>
+                                    <Grid Margin="18,8,0,10"
+                                          IsEnabled="{Binding HasSelectedIcons}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="180" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+
+                                        <CheckBox Grid.Row="0" Grid.Column="0"
+                                                  Content="Icon image"
+                                                  IsChecked="{Binding EditSettings.ChangeIconImage}"
+                                                  Margin="0,5,8,5" />
+                                        <TextBox Grid.Row="0" Grid.Column="1"
+                                                 Text="{Binding EditSettings.IconFileNameDisplay}"
+                                                 IsReadOnly="True"
+                                                 IsEnabled="{Binding EditSettings.ChangeIconImage}"
+                                                 Margin="0,2,6,2"
+                                                 Padding="5" />
+                                        <Button Grid.Row="0" Grid.Column="2"
+                                                Content="Browse..."
+                                                Command="{Binding BrowseIconFileCommand}"
+                                                MinWidth="82"
+                                                Margin="0,2,0,2" />
+
+                                        <CheckBox Grid.Row="1" Grid.Column="0"
+                                                  Content="Icon size"
+                                                  IsChecked="{Binding EditSettings.ChangeIconScale}"
+                                                  Margin="0,5,8,5" />
+                                        <TextBox Grid.Row="1" Grid.Column="1"
+                                                 Text="{Binding EditSettings.IconScaleText, UpdateSourceTrigger=PropertyChanged}"
+                                                 IsEnabled="{Binding EditSettings.ChangeIconScale}"
+                                                 Margin="0,2,6,2"
+                                                 Padding="5" />
+
+                                        <CheckBox Grid.Row="2" Grid.Column="0"
+                                                  Content="Icon colour"
+                                                  IsChecked="{Binding EditSettings.ChangeIconColor}"
+                                                  Margin="0,5,8,5" />
+                                        <TextBox Grid.Row="2" Grid.Column="1"
+                                                 Text="{Binding EditSettings.IconColorText, UpdateSourceTrigger=PropertyChanged}"
+                                                 IsEnabled="{Binding EditSettings.ChangeIconColor}"
+                                                 Margin="0,2,6,2"
+                                                 Padding="5" />
+                                        <Button Grid.Row="2" Grid.Column="2"
+                                                Content="Choose..."
+                                                Command="{Binding PickIconColorCommand}"
+                                                IsEnabled="{Binding EditSettings.ChangeIconColor}"
+                                                MinWidth="82"
+                                                Margin="0,2,0,2" />
+
+                                        <CheckBox Grid.Row="3" Grid.Column="0"
+                                                  Content="Icon opacity"
+                                                  IsChecked="{Binding EditSettings.ChangeIconOpacity}"
+                                                  Margin="0,5,8,5" />
+                                        <TextBox Grid.Row="3" Grid.Column="1"
+                                                 Text="{Binding EditSettings.IconOpacityText, UpdateSourceTrigger=PropertyChanged}"
+                                                 IsEnabled="{Binding EditSettings.ChangeIconOpacity}"
+                                                 Margin="0,2,6,2"
+                                                 Padding="5" />
+                                        <TextBlock Grid.Row="3" Grid.Column="2"
+                                                   Text="%"
+                                                   VerticalAlignment="Center" />
+                                    </Grid>
+                                </Expander>
+
+                                <Separator Margin="0,2,0,4" />
+
+                                <Expander IsExpanded="False">
+                                    <Expander.Header>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="Labels (text)"
+                                                       FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding LabelGroupSummary, StringFormat= — {0}}"
+                                                       Foreground="#7A8494"
+                                                       Margin="6,0,0,0" />
+                                        </StackPanel>
+                                    </Expander.Header>
+                                    <Grid Margin="18,8,0,10"
+                                          IsEnabled="{Binding HasSelectedLabels}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="180" />
+                                            <ColumnDefinition Width="110" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+
+                                        <CheckBox Grid.Row="0" Grid.Column="0"
+                                                  Content="Text size"
+                                                  IsChecked="{Binding EditSettings.ChangeLabelScale}"
+                                                  Margin="0,5,8,5" />
+                                        <TextBox Grid.Row="0" Grid.Column="1"
+                                                 Text="{Binding EditSettings.LabelScaleText, UpdateSourceTrigger=PropertyChanged}"
+                                                 IsEnabled="{Binding EditSettings.ChangeLabelScale}"
+                                                 Margin="0,2,6,2"
+                                                 Padding="5" />
+
+                                        <CheckBox Grid.Row="1" Grid.Column="0"
+                                                  Content="Text colour"
+                                                  IsChecked="{Binding EditSettings.ChangeLabelColor}"
+                                                  Margin="0,5,8,5" />
+                                        <TextBox Grid.Row="1" Grid.Column="1"
+                                                 Text="{Binding EditSettings.LabelColorText, UpdateSourceTrigger=PropertyChanged}"
+                                                 IsEnabled="{Binding EditSettings.ChangeLabelColor}"
+                                                 Margin="0,2,6,2"
+                                                 Padding="5" />
+                                        <Button Grid.Row="1" Grid.Column="2"
+                                                Content="Choose..."
+                                                Command="{Binding PickLabelColorCommand}"
+                                                IsEnabled="{Binding EditSettings.ChangeLabelColor}"
+                                                MinWidth="82"
+                                                Margin="0,2,0,2" />
+
+                                        <CheckBox Grid.Row="2" Grid.Column="0"
+                                                  Content="Text opacity"
+                                                  IsChecked="{Binding EditSettings.ChangeLabelOpacity}"
+                                                  Margin="0,5,8,5" />
+                                        <TextBox Grid.Row="2" Grid.Column="1"
+                                                 Text="{Binding EditSettings.LabelOpacityText, UpdateSourceTrigger=PropertyChanged}"
+                                                 IsEnabled="{Binding EditSettings.ChangeLabelOpacity}"
+                                                 Margin="0,2,6,2"
+                                                 Padding="5" />
+                                        <TextBlock Grid.Row="2" Grid.Column="2"
+                                                   Text="%"
+                                                   VerticalAlignment="Center" />
+                                    </Grid>
+                                </Expander>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource SectionBorderStyle}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <Border Style="{StaticResource StepNumberStyle}">
+                                        <TextBlock Text="3"
+                                                   Foreground="White"
+                                                   FontWeight="Bold"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center" />
+                                    </Border>
+                                    <TextBlock Text="Preview"
+                                               FontSize="16"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+
+                                <views:PlacemarkPreviewControl />
+
+                                <TextBlock Text="{Binding BatchEditMessage}"
+                                           Foreground="#52606D"
+                                           FontSize="11"
+                                           TextWrapping="Wrap"
+                                           Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource SectionBorderStyle}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="185" />
-                                    <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
 
-                                <CheckBox Grid.Row="0"
-                                          Grid.Column="0"
-                                          Content="Change icon image"
-                                          IsChecked="{Binding EditSettings.ChangeIconImage}"
-                                          Margin="0,5,10,5" />
-                                <TextBox Grid.Row="0"
-                                         Grid.Column="1"
-                                         Text="{Binding EditSettings.IconFileNameDisplay}"
-                                         IsReadOnly="True"
-                                         IsEnabled="{Binding EditSettings.ChangeIconImage}"
-                                         Margin="0,3,6,3"
-                                         Padding="5"
-                                         ToolTip="{Binding EditSettings.IconFilePath}" />
-                                <Button Grid.Row="0"
-                                        Grid.Column="2"
-                                        Content="Browse..."
-                                        Command="{Binding BrowseIconFileCommand}"
-                                        MinWidth="78"
-                                        Margin="0,3,0,3" />
+                                <StackPanel Grid.Column="0"
+                                            Orientation="Horizontal"
+                                            VerticalAlignment="Center">
+                                    <Border Style="{StaticResource StepNumberStyle}">
+                                        <TextBlock Text="4"
+                                                   Foreground="White"
+                                                   FontWeight="Bold"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center" />
+                                    </Border>
+                                    <TextBlock Text="Apply"
+                                               FontSize="16"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
 
-                                <CheckBox Grid.Row="1"
-                                          Grid.Column="0"
-                                          Content="Change icon size"
-                                          IsChecked="{Binding EditSettings.ChangeIconScale}"
-                                          Margin="0,5,10,5" />
-                                <TextBox Grid.Row="1"
-                                         Grid.Column="1"
-                                         Text="{Binding EditSettings.IconScaleText, UpdateSourceTrigger=PropertyChanged}"
-                                         IsEnabled="{Binding EditSettings.ChangeIconScale}"
-                                         Margin="0,3,0,3"
-                                         Padding="5"
-                                         ToolTip="KML scale, for example 0.8, 1 or 1.5" />
-
-                                <CheckBox Grid.Row="2"
-                                          Grid.Column="0"
-                                          Content="Change icon colour"
-                                          IsChecked="{Binding EditSettings.ChangeIconColor}"
-                                          Margin="0,5,10,5" />
-                                <TextBox Grid.Row="2"
-                                         Grid.Column="1"
-                                         Text="{Binding EditSettings.IconColorText, UpdateSourceTrigger=PropertyChanged}"
-                                         IsEnabled="{Binding EditSettings.ChangeIconColor}"
-                                         Margin="0,3,6,3"
-                                         Padding="5"
-                                         ToolTip="Use #RRGGBB or #AARRGGBB" />
-                                <Button Grid.Row="2"
-                                        Grid.Column="2"
-                                        Content="Choose..."
-                                        Command="{Binding PickIconColorCommand}"
-                                        IsEnabled="{Binding EditSettings.ChangeIconColor}"
-                                        MinWidth="78"
-                                        Margin="0,3,0,3" />
-
-                                <CheckBox Grid.Row="3"
-                                          Grid.Column="0"
-                                          Content="Change text size"
-                                          IsChecked="{Binding EditSettings.ChangeLabelScale}"
-                                          Margin="0,5,10,5" />
-                                <TextBox Grid.Row="3"
-                                         Grid.Column="1"
-                                         Text="{Binding EditSettings.LabelScaleText, UpdateSourceTrigger=PropertyChanged}"
-                                         IsEnabled="{Binding EditSettings.ChangeLabelScale}"
-                                         Margin="0,3,0,3"
-                                         Padding="5"
-                                         ToolTip="KML label scale, for example 0.8, 1 or 1.5" />
-
-                                <CheckBox Grid.Row="4"
-                                          Grid.Column="0"
-                                          Content="Change text colour"
-                                          IsChecked="{Binding EditSettings.ChangeLabelColor}"
-                                          Margin="0,5,10,5" />
-                                <TextBox Grid.Row="4"
-                                         Grid.Column="1"
-                                         Text="{Binding EditSettings.LabelColorText, UpdateSourceTrigger=PropertyChanged}"
-                                         IsEnabled="{Binding EditSettings.ChangeLabelColor}"
-                                         Margin="0,3,6,3"
-                                         Padding="5"
-                                         ToolTip="Use #RRGGBB or #AARRGGBB" />
-                                <Button Grid.Row="4"
-                                        Grid.Column="2"
-                                        Content="Choose..."
-                                        Command="{Binding PickLabelColorCommand}"
-                                        IsEnabled="{Binding EditSettings.ChangeLabelColor}"
-                                        MinWidth="78"
-                                        Margin="0,3,0,3" />
-
-
-                                <CheckBox Grid.Row="5"
-                                          Grid.Column="0"
-                                          Content="Change line colour"
-                                          IsChecked="{Binding EditSettings.ChangeLineColor}"
-                                          Margin="0,5,10,5" />
-                                <TextBox Grid.Row="5"
-                                         Grid.Column="1"
-                                         Text="{Binding EditSettings.LineColorText, UpdateSourceTrigger=PropertyChanged}"
-                                         IsEnabled="{Binding EditSettings.ChangeLineColor}"
-                                         Margin="0,3,6,3"
-                                         Padding="5"
-                                         ToolTip="Use #RRGGBB or #AARRGGBB" />
-                                <Button Grid.Row="5"
-                                        Grid.Column="2"
-                                        Content="Choose..."
-                                        Command="{Binding PickLineColorCommand}"
-                                        IsEnabled="{Binding EditSettings.ChangeLineColor}"
-                                        MinWidth="78"
-                                        Margin="0,3,0,3" />
-
-                                <CheckBox Grid.Row="6"
-                                          Grid.Column="0"
-                                          Content="Change line width"
-                                          IsChecked="{Binding EditSettings.ChangeLineWidth}"
-                                          Margin="0,5,10,5" />
-                                <TextBox Grid.Row="6"
-                                         Grid.Column="1"
-                                         Text="{Binding EditSettings.LineWidthText, UpdateSourceTrigger=PropertyChanged}"
-                                         IsEnabled="{Binding EditSettings.ChangeLineWidth}"
-                                         Margin="0,3,0,3"
-                                         Padding="5"
-                                         ToolTip="KML line width, for example 1, 2 or 3" />
-                            </Grid>
-
-                            <TextBlock Text="Colors may be entered as #RRGGBB or #AARRGGBB. The app converts them to KML AABBGGRR format automatically."
-                                       Foreground="Gray"
-                                       FontSize="11"
-                                       TextWrapping="Wrap"
-                                       Margin="0,10,0,14" />
-                            <TextBlock Text="{Binding IconPackagingMessage}"
-                                       Foreground="#52606D"
-                                       FontSize="11"
-                                       TextWrapping="Wrap"
-                                       Margin="0,-8,0,14" />
-
-                            <StackPanel Orientation="Horizontal"
-                                        Margin="0,0,0,12">
-                                <Button Content="Preview Changes"
-                                        Command="{Binding PreviewChangesCommand}"
-                                        Width="145"
-                                        Height="32" />
-
-                                <Button Content="Apply Changes"
+                                <Button Grid.Column="1"
+                                        Content="{Binding MatchedPlacemarkCount, StringFormat=Apply to {0:N0} placemarks}"
                                         Command="{Binding ApplyChangesCommand}"
-                                        Width="135"
-                                        Height="32"
-                                        Margin="8,0,0,0" />
-                            </StackPanel>
+                                        Background="#2F6FCC"
+                                        Foreground="White"
+                                        FontWeight="SemiBold"
+                                        Padding="16,7"
+                                        Margin="16,0,12,0"
+                                        MinWidth="150" />
 
-                            <views:PlacemarkPreviewControl />
-
-                            <Border Background="#F8F9FB"
-                                    BorderBrush="#D9DEE7"
-                                    BorderThickness="1"
-                                    Padding="10"
-                                    CornerRadius="4">
-                                <TextBlock Text="{Binding BatchEditMessage}"
+                                <TextBlock Grid.Column="2"
+                                           Text="Your original file is not changed until you use Save As."
+                                           Foreground="#697586"
+                                           VerticalAlignment="Center"
                                            TextWrapping="Wrap" />
+                            </Grid>
+                        </Border>
+
+                        <Expander Header="Inspect selected item (style diagnostics)"
+                                  IsExpanded="False"
+                                  Margin="0,0,0,18">
+                            <Border Margin="0,8,0,0"
+                                    Padding="12"
+                                    Background="#FCFCFC"
+                                    BorderBrush="#E0E0E0"
+                                    BorderThickness="1"
+                                    CornerRadius="6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="145" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Style source:" FontWeight="SemiBold" Margin="0,3" />
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedStyle.StyleSource}" Margin="0,3" TextWrapping="Wrap" />
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="styleUrl:" FontWeight="SemiBold" Margin="0,3" />
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedStyle.StyleUrlDisplay}" Margin="0,3" TextWrapping="Wrap" />
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Normal style:" FontWeight="SemiBold" Margin="0,3" />
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedStyle.NormalStyleUrlDisplay}" Margin="0,3" TextWrapping="Wrap" />
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Highlight style:" FontWeight="SemiBold" Margin="0,3" />
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedStyle.HighlightStyleUrlDisplay}" Margin="0,3" TextWrapping="Wrap" />
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Inline style:" FontWeight="SemiBold" Margin="0,3" />
+                                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedStyle.InlineStyleDisplay}" Margin="0,3" />
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Icon URL:" FontWeight="SemiBold" Margin="0,3" />
+                                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding SelectedStyle.IconHrefDisplay}" Margin="0,3" TextWrapping="Wrap" />
+                                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Icon size:" FontWeight="SemiBold" Margin="0,3" />
+                                    <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding SelectedStyle.IconScaleDisplay}" Margin="0,3" />
+                                    <TextBlock Grid.Row="7" Grid.Column="0" Text="Icon colour:" FontWeight="SemiBold" Margin="0,3" />
+                                    <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding SelectedStyle.IconColorDisplay}" Margin="0,3" />
+                                    <TextBlock Grid.Row="8" Grid.Column="0" Text="Text size:" FontWeight="SemiBold" Margin="0,3" />
+                                    <TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding SelectedStyle.LabelScaleDisplay}" Margin="0,3" />
+                                    <TextBlock Grid.Row="9" Grid.Column="0" Text="Text colour:" FontWeight="SemiBold" Margin="0,3" />
+                                    <TextBlock Grid.Row="9" Grid.Column="1" Text="{Binding SelectedStyle.LabelColorDisplay}" Margin="0,3" />
+                                    <TextBlock Grid.Row="10" Grid.Column="0" Text="Line colour:" FontWeight="SemiBold" Margin="0,3" />
+                                    <TextBlock Grid.Row="10" Grid.Column="1" Text="{Binding SelectedStyle.LineColorDisplay}" Margin="0,3" />
+                                    <TextBlock Grid.Row="11" Grid.Column="0" Text="Line width:" FontWeight="SemiBold" Margin="0,3" />
+                                    <TextBlock Grid.Row="11" Grid.Column="1" Text="{Binding SelectedStyle.LineWidthDisplay}" Margin="0,3" />
+                                </Grid>
                             </Border>
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-            </ScrollViewer>
-        </Grid>
+                        </Expander>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
         </DockPanel>
 
         <Border Panel.ZIndex="100"
@@ -690,35 +735,27 @@
                                    FontWeight="SemiBold"
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,8" />
-
                         <TextBlock Text="{Binding BusyMessage}"
                                    FontSize="15"
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,12" />
-
                         <ProgressBar Height="18"
                                      Minimum="0"
                                      Maximum="100"
-                                     Value="{Binding BusyProgress,
-                                                     Mode=OneWay,
-                                                     FallbackValue=0,
-                                                     TargetNullValue=0}"
+                                     Value="{Binding BusyProgress}"
                                      IsIndeterminate="{Binding IsBusyProgressIndeterminate}"
                                      Margin="0,0,0,10" />
-
                         <TextBlock Text="{Binding BusyDetail}"
                                    Foreground="#5E6673"
                                    TextWrapping="Wrap"
                                    MinHeight="18"
                                    Margin="0,0,0,16" />
-
                         <Button Content="Cancel"
                                 Command="{Binding CancelOperationCommand}"
                                 Visibility="{Binding CanCancelCurrentOperation, Converter={StaticResource BooleanToVisibilityConverter}}"
                                 Width="100"
                                 Height="32"
                                 HorizontalAlignment="Right" />
-
                     </StackPanel>
                 </Border>
             </Grid>
