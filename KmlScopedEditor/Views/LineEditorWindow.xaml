@@ -23,11 +23,16 @@
                                   Margin="0,0,6,6"
                                   Click="OnSelectToolClick" />
                     <ToggleButton x:Name="CutToolButton"
-                                  Content="Draw Cut"
-                                  Width="92"
+                                  Content="Draw Cut Line"
+                                  Width="110"
                                   Height="32"
-                                  Margin="0,0,12,6"
+                                  Margin="0,0,6,6"
                                   Click="OnCutToolClick" />
+                    <Button Content="Undo Point"
+                            Width="95"
+                            Height="32"
+                            Margin="0,0,12,6"
+                            Click="OnUndoCutPointClick" />
 
                     <Button Content="Import Cut Lines..."
                             Width="125"
