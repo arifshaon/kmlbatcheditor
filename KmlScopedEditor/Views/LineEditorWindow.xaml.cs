@@ -223,6 +223,15 @@ public partial class LineEditorWindow : Window
                             20,
                             20));
 
+            AppliedHistoryLegendLine.Fill =
+                new MediaBrush(
+                    _appliedHistoryColor);
+            AppliedHistoryLegendLine.Height =
+                Math.Clamp(
+                    _appliedHistoryThickness,
+                    1d,
+                    6d);
+
             var targetThickness =
                 Math.Clamp(
                     Math.Round(
@@ -340,6 +349,15 @@ public partial class LineEditorWindow : Window
                         20,
                         20,
                         20));
+
+        AppliedHistoryLegendLine.Fill =
+            new MediaBrush(
+                _appliedHistoryColor);
+        AppliedHistoryLegendLine.Height =
+            Math.Clamp(
+                _appliedHistoryThickness,
+                1d,
+                6d);
 
         EditorSurface.SetAppliedGuideStyle(
             _appliedHistoryColor,
