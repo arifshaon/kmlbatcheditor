@@ -201,7 +201,9 @@ public sealed class LineEditorSurface : FrameworkElement
             null,
             new Rect(0d, 0d, ActualWidth, ActualHeight));
 
-        if (_features.Count == 0 && _guides.Count == 0)
+        if (_features.Count == 0 &&
+            _contextFeatures.Count == 0 &&
+            _guides.Count == 0)
         {
             var text = new FormattedText(
                 "No KML LineStrings were found.",
@@ -552,8 +554,12 @@ public sealed class LineEditorSurface : FrameworkElement
     {
         base.OnMouseWheel(e);
 
-        if (_features.Count == 0 && _guides.Count == 0)
+        if (_features.Count == 0 &&
+            _contextFeatures.Count == 0 &&
+            _guides.Count == 0)
+        {
             return;
+        }
 
         var screen = e.GetPosition(this);
         var worldBefore = ScreenToWorld(screen);
