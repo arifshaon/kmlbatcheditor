@@ -60,14 +60,10 @@ public partial class LineEditorWindow : Window
         _originalDocument = new XDocument(sourceDocument);
         _workingDocument = new XDocument(sourceDocument);
 
-        var projectionGeometry = new KmlLineGeometryService(
+        _geometry = new KmlLineGeometryService(
             _workingDocument);
 
-        _projectionScale = projectionGeometry.LongitudeScale;
-
-        _geometry = new KmlLineGeometryService(
-            _workingDocument,
-            _projectionScale);
+        _projectionScale = _geometry.LongitudeScale;
 
         if (!string.IsNullOrWhiteSpace(sourceName))
             Title = $"Line Editor - {sourceName}";
@@ -887,8 +883,10 @@ public partial class LineEditorWindow : Window
         }
         finally
         {
+            // SplitWithStroke/DeleteLines already update the feature list and
+            // spatial index incrementally. Clearing the temporary XML marker
+            // does not change geometry, so a full Reload here is redundant.
             ClearCutTargetMarkers();
-            _geometry.Reload();
         }
 
         _selected.Clear();
