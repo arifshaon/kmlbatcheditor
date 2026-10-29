@@ -22,6 +22,10 @@ public sealed class KmlResolvedStyle
 
     public string? LabelColor { get; init; }
 
+    public string? LineColor { get; init; }
+
+    public string? LineWidth { get; init; }
+
     public string StyleUrlDisplay => DisplayValue(StyleUrl);
 
     public string NormalStyleUrlDisplay => DisplayValue(NormalStyleUrl);
@@ -39,6 +43,10 @@ public sealed class KmlResolvedStyle
     public string IconColorDisplay => FormatKmlColor(IconColor);
 
     public string LabelColorDisplay => FormatKmlColor(LabelColor);
+
+    public string LineColorDisplay => FormatKmlColor(LineColor);
+
+    public string LineWidthDisplay => DisplayValue(LineWidth);
 
     private static string DisplayValue(string? value)
     {
