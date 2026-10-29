@@ -69,8 +69,8 @@ public sealed class LineEditorSurface : FrameworkElement
     private SolidColorBrush? _appliedSplitPointBrush;
 
     private Color _appliedGuideColor =
-        Color.FromRgb(76, 45, 103);
-    private double _appliedGuideThickness = 3d;
+        Color.FromRgb(142, 132, 168);
+    private double _appliedGuideThickness = 2d;
 
     private HashSet<XElement> _selected = new();
     private bool _selectionIsSoft;
