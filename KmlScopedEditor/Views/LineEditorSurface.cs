@@ -40,6 +40,21 @@ public sealed class LineEditorSurface : FrameworkElement
     private readonly Dictionary<XElement, StreamGeometry> _featureGeometry = new();
     private readonly List<(LineEditorGuideVisual Guide, StreamGeometry Geometry)> _guideGeometry = new();
 
+    private DrawingGroup? _baseLayer;
+    private double _renderScaleBucket = double.NaN;
+    private bool _renderCacheDirty = true;
+
+    private Pen? _normalPen;
+    private Pen? _selectedPen;
+    private Pen? _hoverPen;
+    private Pen? _activeSplitLinePen;
+    private Pen? _appliedSplitLinePen;
+    private Pen? _draftSplitPen;
+    private Pen? _selectStrokePen;
+    private Pen? _splitStrokePen;
+    private SolidColorBrush? _splitVertexBrush;
+    private SolidColorBrush? _splitPointBrush;
+
     private HashSet<XElement> _selected = new();
     private XElement? _hovered;
     private Rect _worldBounds = Rect.Empty;
@@ -65,6 +80,7 @@ public sealed class LineEditorSurface : FrameworkElement
         Focusable = true;
         ClipToBounds = true;
         SnapsToDevicePixels = true;
+        CacheMode = new BitmapCache();
 
         Loaded += (_, _) =>
         {
@@ -104,10 +120,13 @@ public sealed class LineEditorSurface : FrameworkElement
         _guides = guides ?? Array.Empty<LineEditorGuideVisual>();
         _cutPoints = cutPoints ?? Array.Empty<Point>();
 
-        RebuildGeometryCache();
+        InvalidateRenderCache();
 
         if (_hovered is not null &&
-            !_featureGeometry.ContainsKey(_hovered))
+            !_features.Any(feature =>
+                ReferenceEquals(
+                    feature.LineStringElement,
+                    _hovered)))
         {
             _hovered = null;
         }
@@ -268,39 +287,59 @@ public sealed class LineEditorSurface : FrameworkElement
         }
 
         var safeScale = Math.Max(_scale, 0.000001d);
+        EnsureRenderCache();
+
         drawingContext.PushTransform(CreateWorldTransform());
 
-        var normalPen = CreatePen(Color.FromRgb(84, 92, 102), 1.1d / safeScale);
-        var selectedPen = CreatePen(Color.FromRgb(190, 45, 45), 2.6d / safeScale);
-        var hoverPen = CreatePen(Color.FromRgb(0, 120, 190), 2.2d / safeScale);
+        if (_baseLayer is not null)
+            drawingContext.DrawDrawing(_baseLayer);
 
-        foreach (var feature in _features)
+        // Layer 2: selection and hover overlays. The base layer remains cached,
+        // so selection changes do not force every contour to be redrawn.
+        if (_selectedPen is not null)
         {
-            if (!_featureGeometry.TryGetValue(
-                    feature.LineStringElement,
-                    out var geometry))
+            foreach (var element in _selected)
             {
-                continue;
+                if (_featureGeometry.TryGetValue(
+                        element,
+                        out var geometry))
+                {
+                    drawingContext.DrawGeometry(
+                        null,
+                        _selectedPen,
+                        geometry);
+                }
             }
-
-            var pen = _selected.Contains(feature.LineStringElement)
-                ? selectedPen
-                : ReferenceEquals(_hovered, feature.LineStringElement)
-                    ? hoverPen
-                    : normalPen;
-
-            drawingContext.DrawGeometry(null, pen, geometry);
         }
 
+        if (_hovered is not null &&
+            !_selected.Contains(_hovered) &&
+            _hoverPen is not null &&
+            _featureGeometry.TryGetValue(
+                _hovered,
+                out var hoveredGeometry))
+        {
+            drawingContext.DrawGeometry(
+                null,
+                _hoverPen,
+                hoveredGeometry);
+        }
+
+        // Layer 3 starts here: split lines, vertices, intersection markers and
+        // the active selection/split stroke.
         foreach (var item in _guideGeometry)
         {
-            var alpha = item.Guide.Applied ? (byte)110 : (byte)230;
-            var guidePen = CreatePen(
-                Color.FromArgb(alpha, 116, 61, 170),
-                (item.Guide.Applied ? 2.0d : 2.8d) / safeScale,
-                DashStyles.Dash);
+            var splitLinePen = item.Guide.Applied
+                ? _appliedSplitLinePen
+                : _activeSplitLinePen;
 
-            drawingContext.DrawGeometry(null, guidePen, item.Geometry);
+            if (splitLinePen is not null)
+            {
+                drawingContext.DrawGeometry(
+                    null,
+                    splitLinePen,
+                    item.Geometry);
+            }
         }
 
         if (_draftCutPoints.Count > 0)
@@ -312,26 +351,18 @@ public sealed class LineEditorSurface : FrameworkElement
 
             if (draftPoints.Count >= 2)
             {
-                var draftPen = CreatePen(
-                    Color.FromRgb(240, 139, 0),
-                    2.4d / safeScale);
-
                 drawingContext.DrawGeometry(
                     null,
-                    draftPen,
+                    _draftSplitPen,
                     BuildGeometry(draftPoints));
             }
-
-            var vertexBrush = new SolidColorBrush(
-                Color.FromRgb(240, 139, 0));
-            vertexBrush.Freeze();
 
             var vertexRadius = 4.2d / safeScale;
 
             foreach (var point in _draftCutPoints)
             {
                 drawingContext.DrawEllipse(
-                    vertexBrush,
+                    _splitVertexBrush,
                     null,
                     point,
                     vertexRadius,
@@ -341,16 +372,12 @@ public sealed class LineEditorSurface : FrameworkElement
 
         if (_cutPoints.Count > 0)
         {
-            var markerBrush = new SolidColorBrush(
-                Color.FromRgb(218, 94, 39));
-            markerBrush.Freeze();
-
             var radius = 2.6d / safeScale;
 
             foreach (var point in _cutPoints)
             {
                 drawingContext.DrawEllipse(
-                    markerBrush,
+                    _splitPointBrush,
                     null,
                     point,
                     radius,
@@ -360,17 +387,14 @@ public sealed class LineEditorSurface : FrameworkElement
 
         if (_strokeWorld.Count >= 2)
         {
-            var strokeColor = Tool == LineEditorTool.Split
-                ? Color.FromRgb(213, 112, 23)
-                : Color.FromRgb(24, 119, 205);
-
-            var strokePen = CreatePen(
-                strokeColor,
-                2.5d / safeScale,
-                DashStyles.Dash);
+            var strokePen = Tool == LineEditorTool.Split
+                ? _splitStrokePen
+                : _selectStrokePen;
 
             var strokeGeometry = BuildGeometry(_strokeWorld);
-            drawingContext.DrawGeometry(null, strokePen, strokeGeometry);
+
+            if (strokePen is not null)
+                drawingContext.DrawGeometry(null, strokePen, strokeGeometry);
         }
 
         drawingContext.Pop();
@@ -656,45 +680,199 @@ public sealed class LineEditorSurface : FrameworkElement
         e.Handled = true;
     }
 
-    private void RebuildGeometryCache()
+    private void InvalidateRenderCache()
     {
+        _renderCacheDirty = true;
+        _baseLayer = null;
+        _featureGeometry.Clear();
+        _guideGeometry.Clear();
+    }
+
+    private void EnsureRenderCache()
+    {
+        var scaleBucket = GetScaleBucket(_scale);
+
+        if (!_renderCacheDirty &&
+            double.IsFinite(_renderScaleBucket) &&
+            Math.Abs(scaleBucket - _renderScaleBucket) <=
+            Math.Max(0.000000001d, scaleBucket * 0.000001d))
+        {
+            return;
+        }
+
+        _renderScaleBucket = scaleBucket;
+        _renderCacheDirty = false;
+
+        var safeScale = Math.Max(scaleBucket, 0.000001d);
+        var simplifyTolerance = 0.55d / safeScale;
+
+        _normalPen = CreatePen(
+            Color.FromRgb(84, 92, 102),
+            1.1d / safeScale);
+
+        _selectedPen = CreatePen(
+            Color.FromRgb(190, 45, 45),
+            2.6d / safeScale);
+
+        _hoverPen = CreatePen(
+            Color.FromRgb(0, 120, 190),
+            2.2d / safeScale);
+
+        _activeSplitLinePen = CreatePen(
+            Color.FromArgb(230, 116, 61, 170),
+            2.8d / safeScale,
+            DashStyles.Dash);
+
+        _appliedSplitLinePen = CreatePen(
+            Color.FromArgb(110, 116, 61, 170),
+            2.0d / safeScale,
+            DashStyles.Dash);
+
+        _draftSplitPen = CreatePen(
+            Color.FromRgb(240, 139, 0),
+            2.4d / safeScale);
+
+        _selectStrokePen = CreatePen(
+            Color.FromRgb(24, 119, 205),
+            2.5d / safeScale,
+            DashStyles.Dash);
+
+        _splitStrokePen = CreatePen(
+            Color.FromRgb(213, 112, 23),
+            2.5d / safeScale,
+            DashStyles.Dash);
+
+        _splitVertexBrush = CreateFrozenBrush(
+            Color.FromRgb(240, 139, 0));
+
+        _splitPointBrush = CreateFrozenBrush(
+            Color.FromRgb(218, 94, 39));
+
         _featureGeometry.Clear();
 
-        foreach (var feature in _features)
+        var baseLayer = new DrawingGroup();
+
+        using (var context = baseLayer.Open())
         {
-            if (feature.WorldPoints.Count >= 2)
+            foreach (var feature in _features)
             {
+                if (feature.WorldPoints.Count < 2)
+                    continue;
+
+                var geometry = BuildGeometry(
+                    feature.WorldPoints,
+                    simplifyTolerance);
+
                 _featureGeometry[feature.LineStringElement] =
-                    BuildGeometry(feature.WorldPoints);
+                    geometry;
+
+                context.DrawGeometry(
+                    null,
+                    _normalPen,
+                    geometry);
             }
         }
+
+        baseLayer.Freeze();
+        _baseLayer = baseLayer;
 
         _guideGeometry.Clear();
 
         foreach (var guide in _guides)
         {
             if (guide.WorldPoints.Count >= 2)
-                _guideGeometry.Add((guide, BuildGeometry(guide.WorldPoints)));
+            {
+                _guideGeometry.Add((
+                    guide,
+                    BuildGeometry(
+                        guide.WorldPoints,
+                        simplifyTolerance)));
+            }
         }
     }
 
-    private static StreamGeometry BuildGeometry(IReadOnlyList<Point> points)
+    private static double GetScaleBucket(double scale)
     {
+        var safeScale = Math.Max(scale, 0.000001d);
+        var exponent = Math.Round(
+            Math.Log(safeScale, 2d) * 2d) / 2d;
+
+        return Math.Pow(2d, exponent);
+    }
+
+    private static StreamGeometry BuildGeometry(
+        IReadOnlyList<Point> points,
+        double simplifyTolerance = 0d)
+    {
+        var displayPoints = simplifyTolerance > 0d
+            ? SimplifyForDisplay(points, simplifyTolerance)
+            : points;
+
         var geometry = new StreamGeometry();
 
         using (var context = geometry.Open())
         {
             context.BeginFigure(
-                points[0],
+                displayPoints[0],
                 isFilled: false,
                 isClosed: false);
 
-            for (var index = 1; index < points.Count; index++)
-                context.LineTo(points[index], true, false);
+            for (var index = 1;
+                 index < displayPoints.Count;
+                 index++)
+            {
+                context.LineTo(
+                    displayPoints[index],
+                    true,
+                    false);
+            }
         }
 
         geometry.Freeze();
         return geometry;
+    }
+
+    private static IReadOnlyList<Point> SimplifyForDisplay(
+        IReadOnlyList<Point> points,
+        double tolerance)
+    {
+        if (points.Count <= 2 || tolerance <= 0d)
+            return points;
+
+        var simplified = new List<Point>
+        {
+            points[0]
+        };
+
+        var lastKept = points[0];
+
+        for (var index = 1;
+             index < points.Count - 1;
+             index++)
+        {
+            var point = points[index];
+
+            if ((point - lastKept).Length < tolerance)
+                continue;
+
+            simplified.Add(point);
+            lastKept = point;
+        }
+
+        var last = points[^1];
+
+        if ((last - simplified[^1]).Length > 0d)
+            simplified.Add(last);
+
+        return simplified;
+    }
+
+    private static SolidColorBrush CreateFrozenBrush(
+        Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
     }
 
     private static Pen CreatePen(
