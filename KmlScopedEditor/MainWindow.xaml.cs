@@ -244,9 +244,11 @@ public partial class MainWindow : System.Windows.Window
 
         if (indexes.Count == allPlacemarks.Count)
         {
+            // Treat a whole-document/root choice as "everything is available"
+            // rather than opening the line editor with every line highlighted.
             return new LineEditorInitialSelection(
-                indexes,
-                $"Tree selection: {selectedNode.Name}");
+                null,
+                "Whole document selected in the main tree");
         }
 
         var displayName = string.IsNullOrWhiteSpace(selectedNode.Name)
