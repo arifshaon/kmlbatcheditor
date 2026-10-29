@@ -141,6 +141,9 @@ public partial class LineEditorWindow : Window
         PanToolButton.IsChecked = tool == LineEditorTool.Pan;
         SelectToolButton.IsChecked = tool == LineEditorTool.Select;
         CutToolButton.IsChecked = tool == LineEditorTool.Cut;
+        EditorSurface.Cursor = tool == LineEditorTool.Pan
+            ? System.Windows.Input.Cursors.Hand
+            : System.Windows.Input.Cursors.Arrow;
 
         InstructionText.Text = tool switch
         {
@@ -921,9 +924,21 @@ public partial class LineEditorWindow : Window
 
     private void UpdateScopeText()
     {
+        var currentPlacemarkCount = _isScoped
+            ? _workingDocument
+                .Descendants(KmlNs + "Placemark")
+                .Count(placemark =>
+                    string.Equals(
+                        placemark.Attribute(ScopeMarkerAttribute)?.Value,
+                        "true",
+                        StringComparison.Ordinal))
+            : _workingDocument
+                .Descendants(KmlNs + "Placemark")
+                .Count();
+
         ScopeText.Text = _isScoped
-            ? $"Editing scope: {_scopeDisplayName} — {_scopePlacemarkCount:N0} placemark(s), {_geometry.Features.Count:N0} editable line(s). Lines outside this scope are shown light grey and will not be changed."
-            : $"Editing scope: Entire document — {_scopePlacemarkCount:N0} placemark(s), {_geometry.Features.Count:N0} editable line(s).";
+            ? $"Editing scope: {_scopeDisplayName} — {currentPlacemarkCount:N0} placemark(s), {_geometry.Features.Count:N0} editable line(s). Lines outside this scope are shown light grey and will not be changed."
+            : $"Editing scope: Entire document — {currentPlacemarkCount:N0} placemark(s), {_geometry.Features.Count:N0} editable line(s).";
     }
 
     private UndoState CaptureUndoState()
