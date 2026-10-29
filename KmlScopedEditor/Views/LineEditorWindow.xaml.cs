@@ -528,7 +528,7 @@ public partial class LineEditorWindow : Window
         UpdatePendingGuidePreview();
 
         UpdateStatus(
-            "Split line finished and added to the pending split lines. Drag its orange handles to reshape it, draw another line, or press Apply split / Enter to apply all pending lines.");
+            "Split line finished. It is now the current split line. Drag its orange handles to reshape it, draw a replacement line, or press Apply split / Enter.");
     }
 
     private CutGuideState?
@@ -706,7 +706,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Select =>
                 "Drag across lines · Shift+click adds · Alt+click/drag removes · Delete removes selected lines · right-drag pans",
             _ =>
-                "Click points or drag freehand · click any pending split line to edit its vertices · Enter finishes while drawing · Enter again or Apply split applies all pending lines · right-drag pans"
+                "Click points or drag freehand · click the current split line to edit · Enter finishes drawing · Enter again or Apply split applies it · right-drag pans"
         };
 
         UpdateCutScopeDisplay();
@@ -1079,7 +1079,7 @@ public partial class LineEditorWindow : Window
 
             AddContextMenuItem(
                 menu,
-                "Apply all pending split lines",
+                "Apply split",
                 ApplyCurrentSplit);
 
             menu.IsOpen = true;
@@ -2238,7 +2238,7 @@ public partial class LineEditorWindow : Window
             var result =
                 System.Windows.MessageBox.Show(
                     this,
-                    "One or more split lines are still pending. Apply all pending split lines before closing?",
+                    "The current split line has not been applied. Apply it before closing?",
                     "Pending split lines",
                     MessageBoxButton.YesNoCancel,
                     MessageBoxImage.Question);
