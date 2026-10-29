@@ -1081,23 +1081,31 @@ public sealed class KmlLineGeometryService
             return;
         }
 
-        foreach (var segment in segments)
+        var segmentsToRemove =
+            segments.ToHashSet();
+
+        var affectedKeys =
+            segments
+                .SelectMany(segment =>
+                    GridKeysForBounds(
+                        segment.Bounds))
+                .Distinct()
+                .ToList();
+
+        foreach (var key in affectedKeys)
         {
-            foreach (var key in GridKeysForBounds(
-                         segment.Bounds))
+            if (!_segmentGrid.TryGetValue(
+                    key,
+                    out var bucket))
             {
-                if (!_segmentGrid.TryGetValue(
-                        key,
-                        out var bucket))
-                {
-                    continue;
-                }
-
-                bucket.Remove(segment);
-
-                if (bucket.Count == 0)
-                    _segmentGrid.Remove(key);
+                continue;
             }
+
+            bucket.RemoveAll(segment =>
+                segmentsToRemove.Contains(segment));
+
+            if (bucket.Count == 0)
+                _segmentGrid.Remove(key);
         }
 
         _segmentsByFeature.Remove(
