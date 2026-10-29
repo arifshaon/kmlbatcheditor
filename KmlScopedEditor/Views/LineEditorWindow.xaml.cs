@@ -211,7 +211,7 @@ public partial class LineEditorWindow : Window
         }
         catch (Exception exception)
         {
-            MessageBox.Show(
+            System.Windows.MessageBox.Show(
                 this,
                 $"The cut line could not be imported.\n\n{exception.Message}",
                 "Import Cut Lines",
