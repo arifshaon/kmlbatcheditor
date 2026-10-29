@@ -189,7 +189,51 @@ public sealed class KmlLineGeometryService
         return best;
     }
 
-    public LineCutResult CutWithStroke(IReadOnlyList<Point> stroke)
+    public LineCutPreview PreviewCutWithStroke(
+        IReadOnlyList<Point> stroke,
+        IReadOnlySet<XElement>? targetLines = null)
+    {
+        if (stroke.Count < 2 || Features.Count == 0)
+            return new LineCutPreview(0, 0, Array.Empty<Point>());
+
+        var linesAffected = 0;
+        var intersectionCount = 0;
+        var cutPoints = new List<Point>();
+        var strokeBounds = BuildBounds(stroke);
+
+        foreach (var feature in Features)
+        {
+            if (targetLines is not null &&
+                !targetLines.Contains(feature.LineStringElement))
+            {
+                continue;
+            }
+
+            if (!BoundsOverlap(feature.WorldBounds, strokeBounds))
+                continue;
+
+            var events = FindCutEvents(feature, stroke);
+            if (events.Count == 0)
+                continue;
+
+            var parts = BuildSplitParts(feature.Coordinates, events);
+            if (parts.Count == 0)
+                continue;
+
+            linesAffected++;
+            intersectionCount += events.Count;
+            cutPoints.AddRange(events.Select(item => item.Intersection));
+        }
+
+        return new LineCutPreview(
+            linesAffected,
+            intersectionCount,
+            cutPoints);
+    }
+
+    public LineCutResult CutWithStroke(
+        IReadOnlyList<Point> stroke,
+        XName? targetMarkerAttribute = null)
     {
         if (stroke.Count < 2 || Features.Count == 0)
             return new LineCutResult(0, 0, 0, Array.Empty<Point>());
@@ -202,9 +246,21 @@ public sealed class KmlLineGeometryService
         var strokeBounds = BuildBounds(stroke);
 
         // Work from the current feature snapshot. Replacements do not disturb
-        // references to other LineStrings in the same XDocument.
+        // references to other LineStrings in the same XDocument. When a
+        // temporary target marker is supplied, cloned split parts retain it so
+        // several imported guides can continue to affect the same selected
+        // source lines within one operation.
         foreach (var feature in Features.ToList())
         {
+            if (targetMarkerAttribute is not null &&
+                !string.Equals(
+                    feature.LineStringElement.Attribute(targetMarkerAttribute)?.Value,
+                    "true",
+                    StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             if (!BoundsOverlap(feature.WorldBounds, strokeBounds))
                 continue;
 
@@ -947,6 +1003,11 @@ public readonly record struct KmlCoordinate(
     double Longitude,
     double Latitude,
     double? Altitude);
+
+public readonly record struct LineCutPreview(
+    int LinesAffected,
+    int IntersectionCount,
+    IReadOnlyList<Point> CutPoints);
 
 public readonly record struct LineCutResult(
     int LinesSplit,
