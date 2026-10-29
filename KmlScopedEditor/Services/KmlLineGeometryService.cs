@@ -241,16 +241,18 @@ public sealed class KmlLineGeometryService
                 continue;
             }
 
-            var parts = BuildSplitParts(
-                feature.Coordinates,
-                events);
+            var previewEvents =
+                GetEffectivePreviewEvents(
+                    feature.Coordinates,
+                    events);
 
-            if (parts.Count == 0)
+            if (previewEvents.Count == 0)
                 continue;
 
             affectedLines.Add(feature.LineStringElement);
             cutPoints.AddRange(
-                events.Select(item => item.Intersection));
+                previewEvents.Select(
+                    item => item.Intersection));
         }
 
         return new LineSplitPreview(
@@ -500,6 +502,68 @@ public sealed class KmlLineGeometryService
         }
 
         return result;
+    }
+
+    private static IReadOnlyList<CutEvent> GetEffectivePreviewEvents(
+        IReadOnlyList<KmlCoordinate> coordinates,
+        IReadOnlyList<CutEvent> events)
+    {
+        var segmentCount = coordinates.Count - 1;
+
+        if (segmentCount < 1 || events.Count == 0)
+            return Array.Empty<CutEvent>();
+
+        if (IsClosed(coordinates))
+        {
+            var unique = new List<CutEvent>();
+
+            foreach (var item in events
+                         .OrderBy(item => item.PathPosition))
+            {
+                var position = item.PathPosition;
+
+                if (position >=
+                    segmentCount - 0.0000001d)
+                {
+                    position = 0d;
+                }
+
+                if (unique.Any(existing =>
+                        Math.Abs(
+                            NormalizeClosedPreviewPosition(
+                                existing.PathPosition,
+                                segmentCount) -
+                            position) <
+                        0.0000001d))
+                {
+                    continue;
+                }
+
+                unique.Add(item);
+            }
+
+            return unique;
+        }
+
+        return events
+            .Where(item =>
+                item.PathPosition > 0.0000001d &&
+                item.PathPosition <
+                    segmentCount - 0.0000001d)
+            .ToList();
+    }
+
+    private static double NormalizeClosedPreviewPosition(
+        double position,
+        int segmentCount)
+    {
+        if (position >=
+            segmentCount - 0.0000001d)
+        {
+            return 0d;
+        }
+
+        return Math.Max(0d, position);
     }
 
     private static List<List<KmlCoordinate>> BuildSplitParts(
