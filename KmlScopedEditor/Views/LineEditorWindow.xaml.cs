@@ -88,7 +88,7 @@ public partial class LineEditorWindow : Window
         {
             SetWorkflowStep(1);
             RefreshSurface(fitView: true);
-            UpdateStatus("Ready. Remove any unwanted source lines, or go straight to Split.");
+            UpdateStatus("Ready. Optional cleanup can remove whole lines before splitting, or you can go straight to Split.");
         };
     }
 
@@ -2233,7 +2233,10 @@ public partial class LineEditorWindow : Window
         return bounds;
     }
 
-    private string CurrentLineLabel => "line(s)";
+    private string CurrentLineLabel =>
+        _workflowStep == 3
+            ? "piece(s)"
+            : "line(s)";
 
     private CutGuideState? GetEditingGuide()
     {
