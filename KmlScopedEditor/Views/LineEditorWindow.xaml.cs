@@ -2380,9 +2380,11 @@ public partial class LineEditorWindow : Window
                 appliedGuides);
         }
 
-        if (_workflowStep == 2 &&
-            pendingGuides.Count > 0)
+        if (pendingGuides.Count > 0)
         {
+            // Pending split lines are editor content, not a Step-2-only
+            // decoration. Keep them visible while moving between workflow
+            // steps; only editing handles and preview dots are Step-2-specific.
             visibleGuides.AddRange(
                 pendingGuides);
         }
