@@ -8,6 +8,9 @@ using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using Key = System.Windows.Input.Key;
 using ModifierKeys = System.Windows.Input.ModifierKeys;
 using Keyboard = System.Windows.Input.Keyboard;
+using MediaColor = System.Windows.Media.Color;
+using MediaBrush = System.Windows.Media.SolidColorBrush;
+using ComboBoxItem = System.Windows.Controls.ComboBoxItem;
 
 namespace KmlScopedEditor.Views;
 
@@ -52,6 +55,10 @@ public partial class LineEditorWindow : Window
     private int _nextAppliedSequence;
     private bool _hideAppliedSplitHistory;
     private string? _step3InstructionOverride;
+    private MediaColor _appliedHistoryColor =
+        MediaColor.FromRgb(76, 45, 103);
+    private double _appliedHistoryThickness = 3d;
+    private bool _historyAppearanceInitializing;
 
     public LineEditorWindow(
         XDocument sourceDocument,
@@ -71,6 +78,7 @@ public partial class LineEditorWindow : Window
         _projectionScale = _geometry.LongitudeScale;
 
         RestoreSessionState(sessionState);
+        InitializeAppliedHistoryAppearanceControls();
 
         if (!string.IsNullOrWhiteSpace(sourceName))
             Title = $"Edit Lines — {sourceName}";
@@ -105,6 +113,36 @@ public partial class LineEditorWindow : Window
 
         _hideAppliedSplitHistory =
             sessionState.HideAppliedSplitHistory;
+
+        if (!string.IsNullOrWhiteSpace(
+                sessionState.AppliedHistoryColor))
+        {
+            try
+            {
+                _appliedHistoryColor =
+                    (MediaColor)
+                    System.Windows.Media.ColorConverter
+                        .ConvertFromString(
+                            sessionState.AppliedHistoryColor);
+            }
+            catch
+            {
+                _appliedHistoryColor =
+                    MediaColor.FromRgb(
+                        76,
+                        45,
+                        103);
+            }
+        }
+
+        _appliedHistoryThickness =
+            double.IsFinite(
+                sessionState.AppliedHistoryThickness)
+                ? Math.Clamp(
+                    sessionState.AppliedHistoryThickness,
+                    1d,
+                    8d)
+                : 3d;
 
         foreach (var item in sessionState.AppliedGuides)
         {
@@ -157,7 +195,166 @@ public partial class LineEditorWindow : Window
 
         return new LineEditorSessionState(
             appliedGuides,
-            _hideAppliedSplitHistory);
+            _hideAppliedSplitHistory,
+            _appliedHistoryColor.ToString(),
+            _appliedHistoryThickness);
+    }
+
+    private void InitializeAppliedHistoryAppearanceControls()
+    {
+        _historyAppearanceInitializing = true;
+
+        try
+        {
+            AppliedHistoryColorButton.Background =
+                new MediaBrush(
+                    _appliedHistoryColor);
+
+            AppliedHistoryColorButton.Foreground =
+                new MediaBrush(
+                    IsDarkColor(
+                        _appliedHistoryColor)
+                        ? MediaColor.FromRgb(
+                            255,
+                            255,
+                            255)
+                        : MediaColor.FromRgb(
+                            20,
+                            20,
+                            20));
+
+            var targetThickness =
+                Math.Clamp(
+                    Math.Round(
+                        _appliedHistoryThickness),
+                    1d,
+                    6d);
+
+            var matchingItem =
+                AppliedHistoryWidthComboBox
+                    .Items
+                    .OfType<ComboBoxItem>()
+                    .FirstOrDefault(item =>
+                        double.TryParse(
+                            item.Tag?.ToString(),
+                            System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            out var value) &&
+                        Math.Abs(
+                            value -
+                            targetThickness) <
+                        0.000001d);
+
+            AppliedHistoryWidthComboBox.SelectedItem =
+                matchingItem ??
+                AppliedHistoryWidthComboBox.Items
+                    .OfType<ComboBoxItem>()
+                    .FirstOrDefault();
+
+            EditorSurface.SetAppliedGuideStyle(
+                _appliedHistoryColor,
+                _appliedHistoryThickness);
+        }
+        finally
+        {
+            _historyAppearanceInitializing = false;
+        }
+    }
+
+    private void OnAppliedHistoryColorClick(
+        object sender,
+        RoutedEventArgs e)
+    {
+        using var dialog =
+            new System.Windows.Forms.ColorDialog
+            {
+                FullOpen = true,
+                Color =
+                    System.Drawing.Color.FromArgb(
+                        _appliedHistoryColor.A,
+                        _appliedHistoryColor.R,
+                        _appliedHistoryColor.G,
+                        _appliedHistoryColor.B)
+            };
+
+        if (dialog.ShowDialog() !=
+            System.Windows.Forms.DialogResult.OK)
+        {
+            return;
+        }
+
+        _appliedHistoryColor =
+            MediaColor.FromArgb(
+                dialog.Color.A,
+                dialog.Color.R,
+                dialog.Color.G,
+                dialog.Color.B);
+
+        ApplyAppliedHistoryAppearance();
+        UpdateStatus(
+            "Applied split-history color updated.");
+    }
+
+    private void OnAppliedHistoryWidthChanged(
+        object sender,
+        System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (_historyAppearanceInitializing ||
+            AppliedHistoryWidthComboBox
+                .SelectedItem is not ComboBoxItem item ||
+            !double.TryParse(
+                item.Tag?.ToString(),
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var thickness))
+        {
+            return;
+        }
+
+        _appliedHistoryThickness =
+            Math.Clamp(
+                thickness,
+                1d,
+                8d);
+
+        ApplyAppliedHistoryAppearance();
+        UpdateStatus(
+            $"Applied split-history width set to {_appliedHistoryThickness:0.#} px.");
+    }
+
+    private void ApplyAppliedHistoryAppearance()
+    {
+        AppliedHistoryColorButton.Background =
+            new MediaBrush(
+                _appliedHistoryColor);
+
+        AppliedHistoryColorButton.Foreground =
+            new MediaBrush(
+                IsDarkColor(
+                    _appliedHistoryColor)
+                    ? MediaColor.FromRgb(
+                        255,
+                        255,
+                        255)
+                    : MediaColor.FromRgb(
+                        20,
+                        20,
+                        20));
+
+        EditorSurface.SetAppliedGuideStyle(
+            _appliedHistoryColor,
+            _appliedHistoryThickness);
+    }
+
+    private static bool IsDarkColor(
+        MediaColor color)
+    {
+        var luminance =
+            (0.2126d * color.R) +
+            (0.7152d * color.G) +
+            (0.0722d * color.B);
+
+        return luminance < 145d;
     }
 
     private void OnPanToolClick(
@@ -2492,4 +2689,6 @@ public sealed record LineEditorSessionGuideState(
 
 public sealed record LineEditorSessionState(
     IReadOnlyList<LineEditorSessionGuideState> AppliedGuides,
-    bool HideAppliedSplitHistory);
+    bool HideAppliedSplitHistory,
+    string AppliedHistoryColor,
+    double AppliedHistoryThickness);
