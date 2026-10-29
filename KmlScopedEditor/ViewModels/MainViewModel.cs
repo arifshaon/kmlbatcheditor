@@ -43,8 +43,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private SelectionModeOption _selectedSelectionMode;
     private bool _includeSubfolders = true;
     private int _matchedPlacemarkCount;
+    private int _selectedLinePlacemarkCount;
+    private int _selectedIconPlacemarkCount;
+    private int _selectedLabelPlacemarkCount;
     private string _selectionSummary =
-        "Selection has not been calculated.";
+        "Open a file and choose a scope.";
 
     private IReadOnlyList<XElement> _currentSelection =
         Array.Empty<XElement>();
@@ -96,6 +99,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref _selectedSelectionMode, value))
             {
                 OnPropertyChanged(nameof(IsFolderSelectionMode));
+                OnPropertyChanged(nameof(IsPlacemarkNameSelectionMode));
+                OnPropertyChanged(nameof(IsIconImageSelectionMode));
+                OnPropertyChanged(nameof(IsIconVariantSelectionMode));
                 OnPropertyChanged(nameof(IsIconTypeSelectionMode));
                 OnPropertyChanged(nameof(IconSelectionPrompt));
 
@@ -107,6 +113,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public bool IsFolderSelectionMode =>
         SelectedSelectionMode.Value == PlacemarkSelectionMode.Folder;
+
+    public bool IsPlacemarkNameSelectionMode =>
+        SelectedSelectionMode.Value == PlacemarkSelectionMode.PlacemarkName;
+
+    public bool IsIconImageSelectionMode =>
+        SelectedSelectionMode.Value == PlacemarkSelectionMode.IconImage;
+
+    public bool IsIconVariantSelectionMode =>
+        SelectedSelectionMode.Value == PlacemarkSelectionMode.IconVariant;
 
     public bool IsIconTypeSelectionMode =>
         SelectedSelectionMode.Value == PlacemarkSelectionMode.IconImage ||
@@ -138,6 +153,58 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         get => _selectionSummary;
         private set => SetProperty(ref _selectionSummary, value);
     }
+
+    public int SelectedLinePlacemarkCount
+    {
+        get => _selectedLinePlacemarkCount;
+        private set
+        {
+            if (SetProperty(ref _selectedLinePlacemarkCount, value))
+            {
+                OnPropertyChanged(nameof(LineGroupSummary));
+                OnPropertyChanged(nameof(HasSelectedLines));
+            }
+        }
+    }
+
+    public int SelectedIconPlacemarkCount
+    {
+        get => _selectedIconPlacemarkCount;
+        private set
+        {
+            if (SetProperty(ref _selectedIconPlacemarkCount, value))
+            {
+                OnPropertyChanged(nameof(IconGroupSummary));
+                OnPropertyChanged(nameof(HasSelectedIcons));
+            }
+        }
+    }
+
+    public int SelectedLabelPlacemarkCount
+    {
+        get => _selectedLabelPlacemarkCount;
+        private set
+        {
+            if (SetProperty(ref _selectedLabelPlacemarkCount, value))
+            {
+                OnPropertyChanged(nameof(LabelGroupSummary));
+                OnPropertyChanged(nameof(HasSelectedLabels));
+            }
+        }
+    }
+
+    public bool HasSelectedLines => SelectedLinePlacemarkCount > 0;
+    public bool HasSelectedIcons => SelectedIconPlacemarkCount > 0;
+    public bool HasSelectedLabels => SelectedLabelPlacemarkCount > 0;
+
+    public string LineGroupSummary =>
+        BuildGroupSummary(SelectedLinePlacemarkCount, "have lines", "has a line");
+
+    public string IconGroupSummary =>
+        BuildGroupSummary(SelectedIconPlacemarkCount, "have icons", "has an icon");
+
+    public string LabelGroupSummary =>
+        BuildGroupSummary(SelectedLabelPlacemarkCount, "have labels", "has a label");
 
     public KmlTreeNode? SelectedNode
     {
@@ -370,6 +437,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public AsyncRelayCommand CalculateSelectionCommand { get; }
 
+    public RelayCommand SetSelectionModeCommand { get; }
+
     public RelayCommand BrowseIconFileCommand { get; }
 
     public RelayCommand PickIconColorCommand { get; }
@@ -439,6 +508,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             new AsyncRelayCommand(
                 _ => CalculateSelectionAsync(),
                 _ => !IsBusy && _documentContext is not null);
+
+        SetSelectionModeCommand =
+            new RelayCommand(
+                parameter => SetSelectionMode(parameter?.ToString()),
+                _ => !IsBusy);
 
         BrowseIconFileCommand =
             new RelayCommand(
@@ -919,14 +993,135 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     private void ResetCalculatedSelection()
     {
-        _currentSelection = Array.Empty<XElement>();
-        MatchedPlacemarkCount = 0;
-        SelectionSummary =
-            "Selection has changed. Calculate the selection again.";
+        RefreshCalculatedSelectionLive();
+    }
+
+    private void SetSelectionMode(string? value)
+    {
+        if (!Enum.TryParse<PlacemarkSelectionMode>(
+                value,
+                ignoreCase: true,
+                out var mode))
+        {
+            return;
+        }
+
+        var option = SelectionModes.FirstOrDefault(
+            item => item.Value == mode);
+
+        if (option is not null)
+            SelectedSelectionMode = option;
+    }
+
+    private void RefreshCalculatedSelectionLive()
+    {
+        if (_documentContext is null)
+        {
+            _currentSelection = Array.Empty<XElement>();
+            MatchedPlacemarkCount = 0;
+            SelectedLinePlacemarkCount = 0;
+            SelectedIconPlacemarkCount = 0;
+            SelectedLabelPlacemarkCount = 0;
+            SelectionSummary = "Open a KML or KMZ file first.";
+            InvalidateEditPreview(
+                "Open a file and choose a placemark scope before previewing style changes.");
+            RaiseCommandStates();
+            return;
+        }
+
+        var mode = SelectedSelectionMode.Value;
+        IReadOnlyList<XElement> selection;
+
+        if (mode == PlacemarkSelectionMode.Folder)
+        {
+            selection = SelectedNode is null
+                ? Array.Empty<XElement>()
+                : _selectionService.GetPlacemarksForFolder(
+                    SelectedNode,
+                    IncludeSubfolders);
+        }
+        else if (mode == PlacemarkSelectionMode.PlacemarkName)
+        {
+            var names = GetSelectedPlacemarkNameOptions();
+            selection = names.Count == 0
+                ? Array.Empty<XElement>()
+                : _placemarkNameSelectionService.GetPlacemarksForNames(names);
+        }
+        else
+        {
+            var icons = IconTypes
+                .Where(option => option.IsSelected)
+                .ToList();
+
+            selection = icons.Count == 0
+                ? Array.Empty<XElement>()
+                : _selectionService.GetPlacemarksForIconTypes(icons);
+        }
+
+        _currentSelection = selection;
+        MatchedPlacemarkCount = selection.Count;
+
+        SelectedLinePlacemarkCount = selection.Count(placemark =>
+            placemark.Descendants(KmlNs + "LineString").Any());
+
+        SelectedLabelPlacemarkCount = selection.Count(placemark =>
+            !string.IsNullOrWhiteSpace(
+                placemark.Element(KmlNs + "name")?.Value));
+
+        SelectedIconPlacemarkCount = selection.Count(placemark =>
+        {
+            var style = _styleInspector.Inspect(
+                placemark,
+                _documentContext);
+
+            return !string.IsNullOrWhiteSpace(style.IconHref);
+        });
+
+        SelectionSummary = mode switch
+        {
+            PlacemarkSelectionMode.Folder when SelectedNode is not null =>
+                IncludeSubfolders
+                    ? $"{MatchedPlacemarkCount:N0} placemarks in {SelectedNode.Name}, including sub-folders."
+                    : $"{MatchedPlacemarkCount:N0} placemarks in {SelectedNode.Name}.",
+            PlacemarkSelectionMode.PlacemarkName =>
+                $"{MatchedPlacemarkCount:N0} placemarks match the selected name(s).",
+            PlacemarkSelectionMode.IconImage =>
+                $"{MatchedPlacemarkCount:N0} placemarks match the selected icon image(s).",
+            PlacemarkSelectionMode.IconVariant =>
+                $"{MatchedPlacemarkCount:N0} placemarks match the selected icon variant(s).",
+            _ => $"{MatchedPlacemarkCount:N0} placemarks selected."
+        };
+
+        OnPropertyChanged(nameof(LineGroupSummary));
+        OnPropertyChanged(nameof(IconGroupSummary));
+        OnPropertyChanged(nameof(LabelGroupSummary));
 
         InvalidateEditPreview(
-            "Calculate a placemark selection before previewing style changes.");
+            MatchedPlacemarkCount == 0
+                ? "Choose a scope containing at least one placemark."
+                : "Selection updated automatically. Choose style changes, then preview them.");
+
         RaiseCommandStates();
+    }
+
+    private string BuildGroupSummary(
+        int count,
+        string pluralText,
+        string singularText)
+    {
+        if (MatchedPlacemarkCount == 0)
+            return "no placemarks selected";
+
+        if (count == 0)
+            return $"none of these {MatchedPlacemarkCount:N0} placemarks {pluralText}";
+
+        if (count == MatchedPlacemarkCount)
+            return $"all {MatchedPlacemarkCount:N0} placemarks {pluralText}";
+
+        if (count == 1)
+            return $"1 of {MatchedPlacemarkCount:N0} placemarks {singularText}";
+
+        return $"{count:N0} of {MatchedPlacemarkCount:N0} placemarks {pluralText}";
     }
 
     private void InvalidateEditPreview(string message)
@@ -1555,6 +1750,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         OpenKmlCommand.RaiseCanExecuteChanged();
         SaveAsCommand.RaiseCanExecuteChanged();
         CalculateSelectionCommand.RaiseCanExecuteChanged();
+        SetSelectionModeCommand.RaiseCanExecuteChanged();
         BrowseIconFileCommand.RaiseCanExecuteChanged();
         PickIconColorCommand.RaiseCanExecuteChanged();
         PickLabelColorCommand.RaiseCanExecuteChanged();
