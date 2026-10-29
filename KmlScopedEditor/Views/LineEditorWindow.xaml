@@ -35,7 +35,7 @@
                                   Width="72"
                                   Height="32"
                                   Margin="0,0,14,6"
-                                  ToolTip="Pan the view (H). Space+drag and middle-drag also pan."
+                                  ToolTip="Pan the view (H). Right-drag pans from any tool; Space+drag and middle-drag also pan."
                                   Click="OnPanToolClick" />
 
                     <Button Focusable="False" Content="Undo"
