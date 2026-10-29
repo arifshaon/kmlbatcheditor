@@ -634,14 +634,13 @@ public partial class LineEditorWindow : Window
         StopEditingGuide();
         _guides.RemoveAll(
             guide => !guide.Applied);
-        _draftWillReplacePending = false;
         _cutPoints.Clear();
         ResetIncrementalSplitPreview();
         RefreshSurface();
         UpdatePendingGuidePreview();
         UpdateCutScopeDisplay();
         UpdateStatus(
-            "Pending split line removed. Ctrl+Z restores it.");
+            "Pending split line(s) removed. Ctrl+Z restores them.");
     }
 
     private void RemovePendingGuide(
@@ -696,7 +695,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Select =>
                 "Drag across lines · Shift+click adds · Alt+click/drag removes · Delete removes selected lines · right-drag pans",
             _ =>
-                "Click points or drag freehand · click the current split line to edit · Enter finishes drawing · Enter again or Apply split applies it · right-drag pans"
+                "Click points or drag freehand · click any pending split line to edit · Enter finishes drawing · only Apply split performs the split · right-drag pans"
         };
 
         UpdateCutScopeDisplay();
@@ -1419,7 +1418,7 @@ public partial class LineEditorWindow : Window
         UpdateCutScopeDisplay();
 
         UpdateStatus(
-            "Selected line is now the split line and is editable. Drag its orange handles if needed, then press Apply split or Enter. The helper line will be removed before splitting so it cannot split itself.");
+            "Selected line was added as another pending split line and is editable. Drag its orange handles if needed. Nothing is split until you choose Apply split.");
     }
 
     private void OnApplySplitClick(
@@ -2729,7 +2728,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Select =>
                 "V Select · click toggles · drag crosses lines · Ctrl+drag lasso adds · Lasso controls can add/remove · Delete removes selected · right-drag pan",
             _ =>
-                "Split · import or draw a line · click it to edit · Enter finishes drawing · Enter again / Apply split applies · Delete removes the split line, never map lines · right-drag pans"
+                "Split · import or draw lines · click a pending line to edit · Enter finishes drawing · only Apply split performs the split · Delete removes pending split lines, never map lines · right-drag pans"
         };
     }
 
