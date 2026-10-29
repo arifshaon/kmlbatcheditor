@@ -25,7 +25,12 @@ public sealed class KmlLineGeometryService
     private readonly XDocument _document;
     private readonly double? _fixedLongitudeScale;
     private readonly XName? _scopeMarkerAttribute;
+    private readonly Dictionary<long, List<IndexedSegment>> _segmentGrid = new();
     private double _longitudeScale = 1d;
+    private int _gridColumns;
+    private int _gridRows;
+    private double _gridCellWidth = 1d;
+    private double _gridCellHeight = 1d;
 
     public KmlLineGeometryService(
         XDocument document,
@@ -131,6 +136,7 @@ public sealed class KmlLineGeometryService
 
         Features = features;
         WorldBounds = bounds;
+        BuildSpatialIndex();
     }
 
     public IReadOnlyList<KmlLineFeature> FindIntersectingFeatures(
@@ -139,19 +145,36 @@ public sealed class KmlLineGeometryService
         if (stroke.Count < 2 || Features.Count == 0)
             return Array.Empty<KmlLineFeature>();
 
-        var strokeBounds = BuildBounds(stroke);
-        var matches = new List<KmlLineFeature>();
+        var matched = new HashSet<XElement>();
 
-        foreach (var feature in Features)
+        for (var strokeIndex = 0;
+             strokeIndex < stroke.Count - 1;
+             strokeIndex++)
         {
-            if (!BoundsOverlap(feature.WorldBounds, strokeBounds))
-                continue;
+            var c = stroke[strokeIndex];
+            var d = stroke[strokeIndex + 1];
+            var bounds = BuildSegmentBounds(c, d);
 
-            if (FeatureIntersectsStroke(feature, stroke))
-                matches.Add(feature);
+            foreach (var segment in QuerySegments(bounds))
+            {
+                if (matched.Contains(segment.Feature.LineStringElement))
+                    continue;
+
+                if (SegmentsIntersect(
+                        segment.A,
+                        segment.B,
+                        c,
+                        d))
+                {
+                    matched.Add(segment.Feature.LineStringElement);
+                }
+            }
         }
 
-        return matches;
+        return Features
+            .Where(feature =>
+                matched.Contains(feature.LineStringElement))
+            .ToList();
     }
 
     public KmlLineFeature? FindNearestFeature(
@@ -161,143 +184,147 @@ public sealed class KmlLineGeometryService
         if (Features.Count == 0 || tolerance < 0d)
             return null;
 
+        var queryBounds = new Rect(
+            point.X - tolerance,
+            point.Y - tolerance,
+            tolerance * 2d,
+            tolerance * 2d);
+
         KmlLineFeature? best = null;
         var bestDistance = tolerance;
 
-        foreach (var feature in Features)
+        foreach (var segment in QuerySegments(queryBounds))
         {
-            var expanded = feature.WorldBounds;
-            expanded.Inflate(tolerance, tolerance);
+            var distance = PointToSegmentDistance(
+                point,
+                segment.A,
+                segment.B);
 
-            if (!expanded.Contains(point))
-                continue;
-
-            var line = feature.WorldPoints;
-
-            for (var index = 0; index < line.Count - 1; index++)
+            if (distance <= bestDistance)
             {
-                var distance = PointToSegmentDistance(
-                    point,
-                    line[index],
-                    line[index + 1]);
-
-                if (distance <= bestDistance)
-                {
-                    bestDistance = distance;
-                    best = feature;
-                }
+                bestDistance = distance;
+                best = segment.Feature;
             }
         }
 
         return best;
     }
 
-    public LineCutPreview PreviewCutWithStroke(
+    public LineSplitPreview PreviewSplitWithStroke(
         IReadOnlyList<Point> stroke,
         IReadOnlySet<XElement>? targetLines = null)
     {
         if (stroke.Count < 2 || Features.Count == 0)
-            return new LineCutPreview(
+        {
+            return new LineSplitPreview(
                 0,
                 0,
                 Array.Empty<Point>(),
                 Array.Empty<XElement>());
+        }
 
-        var linesAffected = 0;
-        var intersectionCount = 0;
+        var eventsByFeature = FindSplitEventsByFeature(
+            stroke,
+            targetLines);
+
         var cutPoints = new List<Point>();
         var affectedLines = new List<XElement>();
-        var strokeBounds = BuildBounds(stroke);
 
         foreach (var feature in Features)
         {
-            if (targetLines is not null &&
-                !targetLines.Contains(feature.LineStringElement))
+            if (!eventsByFeature.TryGetValue(
+                    feature.LineStringElement,
+                    out var events))
             {
                 continue;
             }
 
-            if (!BoundsOverlap(feature.WorldBounds, strokeBounds))
-                continue;
+            var parts = BuildSplitParts(
+                feature.Coordinates,
+                events);
 
-            var events = FindCutEvents(feature, stroke);
-            if (events.Count == 0)
-                continue;
-
-            var parts = BuildSplitParts(feature.Coordinates, events);
             if (parts.Count == 0)
                 continue;
 
-            linesAffected++;
-            intersectionCount += events.Count;
-            cutPoints.AddRange(events.Select(item => item.Intersection));
             affectedLines.Add(feature.LineStringElement);
+            cutPoints.AddRange(
+                events.Select(item => item.Intersection));
         }
 
-        return new LineCutPreview(
-            linesAffected,
-            intersectionCount,
+        return new LineSplitPreview(
+            affectedLines.Count,
+            cutPoints.Count,
             cutPoints,
             affectedLines);
     }
 
-    public LineCutResult CutWithStroke(
+    public LineSplitResult SplitWithStroke(
         IReadOnlyList<Point> stroke,
         XName? targetMarkerAttribute = null)
     {
         if (stroke.Count < 2 || Features.Count == 0)
-            return new LineCutResult(0, 0, 0, Array.Empty<Point>());
+            return new LineSplitResult(0, 0, 0, Array.Empty<Point>());
+
+        IReadOnlySet<XElement>? targetLines = null;
+
+        if (targetMarkerAttribute is not null)
+        {
+            targetLines = Features
+                .Where(feature =>
+                    string.Equals(
+                        feature.LineStringElement
+                            .Attribute(targetMarkerAttribute)
+                            ?.Value,
+                        "true",
+                        StringComparison.Ordinal))
+                .Select(feature => feature.LineStringElement)
+                .ToHashSet();
+        }
+
+        var eventsByFeature = FindSplitEventsByFeature(
+            stroke,
+            targetLines);
 
         var linesSplit = 0;
         var intersectionCount = 0;
         var outputSegments = 0;
-        var cutPoints = new List<Point>();
+        var splitPoints = new List<Point>();
 
-        var strokeBounds = BuildBounds(stroke);
-
-        // Work from the current feature snapshot. Replacements do not disturb
-        // references to other LineStrings in the same XDocument. When a
-        // temporary target marker is supplied, cloned split parts retain it so
-        // several imported guides can continue to affect the same selected
-        // source lines within one operation.
         foreach (var feature in Features.ToList())
         {
-            if (targetMarkerAttribute is not null &&
-                !string.Equals(
-                    feature.LineStringElement.Attribute(targetMarkerAttribute)?.Value,
-                    "true",
-                    StringComparison.Ordinal))
+            if (!eventsByFeature.TryGetValue(
+                    feature.LineStringElement,
+                    out var events))
             {
                 continue;
             }
 
-            if (!BoundsOverlap(feature.WorldBounds, strokeBounds))
-                continue;
+            var parts = BuildSplitParts(
+                feature.Coordinates,
+                events);
 
-            var events = FindCutEvents(feature, stroke);
-            if (events.Count == 0)
-                continue;
-
-            var parts = BuildSplitParts(feature.Coordinates, events);
             if (parts.Count == 0)
                 continue;
 
-            ReplaceLineStringWithParts(feature.LineStringElement, parts);
+            ReplaceLineStringWithParts(
+                feature.LineStringElement,
+                parts);
 
             linesSplit++;
             intersectionCount += events.Count;
             outputSegments += parts.Count;
-            cutPoints.AddRange(events.Select(item => item.Intersection));
+            splitPoints.AddRange(
+                events.Select(item => item.Intersection));
         }
 
         if (linesSplit > 0)
             Reload();
 
-        return new LineCutResult(
+        return new LineSplitResult(
             linesSplit,
             intersectionCount,
             outputSegments,
-            cutPoints);
+            splitPoints);
     }
 
     public int DeleteLines(IEnumerable<XElement> lineStrings)
@@ -348,54 +375,33 @@ public sealed class KmlLineGeometryService
         return deleted;
     }
 
-    private bool FeatureIntersectsStroke(
-        KmlLineFeature feature,
-        IReadOnlyList<Point> stroke)
+    private Dictionary<XElement, List<CutEvent>> FindSplitEventsByFeature(
+        IReadOnlyList<Point> stroke,
+        IReadOnlySet<XElement>? targetLines)
     {
-        var line = feature.WorldPoints;
+        var result = new Dictionary<XElement, List<CutEvent>>();
 
-        for (var lineIndex = 0; lineIndex < line.Count - 1; lineIndex++)
+        for (var strokeIndex = 0;
+             strokeIndex < stroke.Count - 1;
+             strokeIndex++)
         {
-            var a = line[lineIndex];
-            var b = line[lineIndex + 1];
+            var c = stroke[strokeIndex];
+            var d = stroke[strokeIndex + 1];
+            var bounds = BuildSegmentBounds(c, d);
 
-            for (var strokeIndex = 0;
-                 strokeIndex < stroke.Count - 1;
-                 strokeIndex++)
+            foreach (var segment in QuerySegments(bounds))
             {
-                var c = stroke[strokeIndex];
-                var d = stroke[strokeIndex + 1];
+                var element = segment.Feature.LineStringElement;
 
-                if (SegmentsIntersect(a, b, c, d))
-                    return true;
-            }
-        }
-
-        return false;
-    }
-
-    private List<CutEvent> FindCutEvents(
-        KmlLineFeature feature,
-        IReadOnlyList<Point> stroke)
-    {
-        var events = new List<CutEvent>();
-        var line = feature.WorldPoints;
-
-        for (var lineIndex = 0; lineIndex < line.Count - 1; lineIndex++)
-        {
-            var a = line[lineIndex];
-            var b = line[lineIndex + 1];
-
-            for (var strokeIndex = 0;
-                 strokeIndex < stroke.Count - 1;
-                 strokeIndex++)
-            {
-                var c = stroke[strokeIndex];
-                var d = stroke[strokeIndex + 1];
+                if (targetLines is not null &&
+                    !targetLines.Contains(element))
+                {
+                    continue;
+                }
 
                 if (!TrySegmentIntersection(
-                        a,
-                        b,
+                        segment.A,
+                        segment.B,
                         c,
                         d,
                         out var targetT,
@@ -405,22 +411,41 @@ public sealed class KmlLineGeometryService
                     continue;
                 }
 
-                var pathPosition = lineIndex + targetT;
+                var pathPosition =
+                    segment.SegmentIndex + targetT;
+
+                if (!result.TryGetValue(
+                        element,
+                        out var events))
+                {
+                    events = new List<CutEvent>();
+                    result[element] = events;
+                }
 
                 if (events.Any(existing =>
-                        Math.Abs(existing.PathPosition - pathPosition) <
+                        Math.Abs(
+                            existing.PathPosition -
+                            pathPosition) <
                         0.0000001d))
                 {
                     continue;
                 }
 
-                events.Add(new CutEvent(pathPosition, intersection));
+                events.Add(
+                    new CutEvent(
+                        pathPosition,
+                        intersection));
             }
         }
 
-        return events
-            .OrderBy(item => item.PathPosition)
-            .ToList();
+        foreach (var events in result.Values)
+        {
+            events.Sort((left, right) =>
+                left.PathPosition.CompareTo(
+                    right.PathPosition));
+        }
+
+        return result;
     }
 
     private static List<List<KmlCoordinate>> BuildSplitParts(
@@ -714,6 +739,162 @@ public sealed class KmlLineGeometryService
         return Project(coordinate);
     }
 
+    private void BuildSpatialIndex()
+    {
+        _segmentGrid.Clear();
+
+        if (Features.Count == 0 ||
+            WorldBounds.IsEmpty)
+        {
+            _gridColumns = 0;
+            _gridRows = 0;
+            return;
+        }
+
+        var segmentCount = Features.Sum(feature =>
+            Math.Max(0, feature.WorldPoints.Count - 1));
+
+        var dimension = Math.Clamp(
+            (int)Math.Ceiling(
+                Math.Sqrt(
+                    Math.Max(1d, segmentCount / 8d))),
+            16,
+            160);
+
+        _gridColumns = dimension;
+        _gridRows = dimension;
+
+        _gridCellWidth = Math.Max(
+            WorldBounds.Width / _gridColumns,
+            0.000000000001d);
+
+        _gridCellHeight = Math.Max(
+            WorldBounds.Height / _gridRows,
+            0.000000000001d);
+
+        foreach (var feature in Features)
+        {
+            var points = feature.WorldPoints;
+
+            for (var index = 0;
+                 index < points.Count - 1;
+                 index++)
+            {
+                var segment = new IndexedSegment(
+                    feature,
+                    index,
+                    points[index],
+                    points[index + 1]);
+
+                var bounds = segment.Bounds;
+                var minX = GridX(bounds.Left);
+                var maxX = GridX(bounds.Right);
+                var minY = GridY(bounds.Top);
+                var maxY = GridY(bounds.Bottom);
+
+                for (var x = minX; x <= maxX; x++)
+                {
+                    for (var y = minY; y <= maxY; y++)
+                    {
+                        var key = GridKey(x, y);
+
+                        if (!_segmentGrid.TryGetValue(
+                                key,
+                                out var bucket))
+                        {
+                            bucket = new List<IndexedSegment>();
+                            _segmentGrid[key] = bucket;
+                        }
+
+                        bucket.Add(segment);
+                    }
+                }
+            }
+        }
+    }
+
+    private IEnumerable<IndexedSegment> QuerySegments(
+        Rect bounds)
+    {
+        if (_gridColumns <= 0 ||
+            _gridRows <= 0 ||
+            bounds.IsEmpty)
+        {
+            yield break;
+        }
+
+        var minX = GridX(bounds.Left);
+        var maxX = GridX(bounds.Right);
+        var minY = GridY(bounds.Top);
+        var maxY = GridY(bounds.Bottom);
+        var seen = new HashSet<IndexedSegment>();
+
+        for (var x = minX; x <= maxX; x++)
+        {
+            for (var y = minY; y <= maxY; y++)
+            {
+                if (!_segmentGrid.TryGetValue(
+                        GridKey(x, y),
+                        out var bucket))
+                {
+                    continue;
+                }
+
+                foreach (var segment in bucket)
+                {
+                    if (!seen.Add(segment))
+                        continue;
+
+                    if (BoundsOverlap(
+                            segment.Bounds,
+                            bounds))
+                    {
+                        yield return segment;
+                    }
+                }
+            }
+        }
+    }
+
+    private int GridX(double x)
+    {
+        if (_gridColumns <= 1)
+            return 0;
+
+        return Math.Clamp(
+            (int)Math.Floor(
+                (x - WorldBounds.Left) /
+                _gridCellWidth),
+            0,
+            _gridColumns - 1);
+    }
+
+    private int GridY(double y)
+    {
+        if (_gridRows <= 1)
+            return 0;
+
+        return Math.Clamp(
+            (int)Math.Floor(
+                (y - WorldBounds.Top) /
+                _gridCellHeight),
+            0,
+            _gridRows - 1);
+    }
+
+    private static long GridKey(int x, int y)
+    {
+        return ((long)x << 32) |
+               (uint)y;
+    }
+
+    private static Rect BuildSegmentBounds(
+        Point a,
+        Point b)
+    {
+        return new Rect(a, b);
+    }
+
     private static Rect BuildBounds(IReadOnlyList<Point> points)
     {
         if (points.Count == 0)
@@ -986,6 +1167,28 @@ public sealed class KmlLineGeometryService
         return (a.X * b.Y) - (a.Y * b.X);
     }
 
+    private sealed class IndexedSegment
+    {
+        public IndexedSegment(
+            KmlLineFeature feature,
+            int segmentIndex,
+            Point a,
+            Point b)
+        {
+            Feature = feature;
+            SegmentIndex = segmentIndex;
+            A = a;
+            B = b;
+            Bounds = BuildSegmentBounds(a, b);
+        }
+
+        public KmlLineFeature Feature { get; }
+        public int SegmentIndex { get; }
+        public Point A { get; }
+        public Point B { get; }
+        public Rect Bounds { get; }
+    }
+
     private sealed record CutEvent(
         double PathPosition,
         Point Intersection);
@@ -1019,13 +1222,13 @@ public readonly record struct KmlCoordinate(
     double Latitude,
     double? Altitude);
 
-public readonly record struct LineCutPreview(
+public readonly record struct LineSplitPreview(
     int LinesAffected,
     int IntersectionCount,
     IReadOnlyList<Point> CutPoints,
     IReadOnlyList<XElement> AffectedLines);
 
-public readonly record struct LineCutResult(
+public readonly record struct LineSplitResult(
     int LinesSplit,
     int IntersectionCount,
     int OutputSegments,
