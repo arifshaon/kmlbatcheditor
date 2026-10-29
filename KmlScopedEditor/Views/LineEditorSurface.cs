@@ -188,10 +188,11 @@ public sealed class LineEditorSurface : FrameworkElement
             if (IsLoaded)
                 FitView();
         }
-        else
-        {
-            InvalidateVisual();
-        }
+
+        // SetDocument may replace the initial empty surface after OnRender has
+        // already painted the "No KML LineStrings" message. Always invalidate
+        // the FrameworkElement itself so that stale background text is cleared.
+        InvalidateVisual();
     }
 
     public void SetSelection(IEnumerable<XElement> selected)
