@@ -182,6 +182,8 @@ public sealed class KmlBatchEditService
         string? labelOpacityDisplay = null;
         string? lineBgr = null;
         string? lineColorDisplay = null;
+        string? lineAlpha = null;
+        string? lineOpacityDisplay = null;
         string? lineWidth = null;
 
         if (settings.ChangeIconImage)
@@ -302,6 +304,17 @@ public sealed class KmlBatchEditService
             return false;
         }
 
+        if (settings.ChangeLineOpacity &&
+            !KmlColorUtility.TryParseOpacityPercent(
+                settings.LineOpacityText,
+                "Line opacity",
+                out lineAlpha,
+                out lineOpacityDisplay,
+                out error))
+        {
+            return false;
+        }
+
         changes = new StyleChangeSet
         {
             IconHref = iconHref,
@@ -318,6 +331,8 @@ public sealed class KmlBatchEditService
             LabelOpacityDisplay = labelOpacityDisplay,
             LineBgr = lineBgr,
             LineColorDisplay = lineColorDisplay,
+            LineAlpha = lineAlpha,
+            LineOpacityDisplay = lineOpacityDisplay,
             LineWidth = lineWidth
         };
 
@@ -385,6 +400,8 @@ public sealed class KmlBatchEditService
             lines.Add($"• Text opacity → {changes.LabelOpacityDisplay}");
         if (changes.LineBgr is not null)
             lines.Add($"• Line colour → {changes.LineColorDisplay} (existing opacity preserved)");
+        if (changes.LineAlpha is not null)
+            lines.Add($"• Line opacity → {changes.LineOpacityDisplay}");
         if (changes.LineWidth is not null)
             lines.Add($"• Line width → {changes.LineWidth}");
 
@@ -430,6 +447,8 @@ public sealed class KmlBatchEditService
         public string? LabelOpacityDisplay { get; init; }
         public string? LineBgr { get; init; }
         public string? LineColorDisplay { get; init; }
+        public string? LineAlpha { get; init; }
+        public string? LineOpacityDisplay { get; init; }
         public string? LineWidth { get; init; }
     }
 
@@ -700,11 +719,13 @@ public sealed class KmlBatchEditService
         }
 
         if (changes.LineBgr is not null ||
+            changes.LineAlpha is not null ||
             changes.LineWidth is not null)
         {
             var lineStyle = GetOrCreateSubStyle(style, "LineStyle");
 
-            if (changes.LineBgr is not null)
+            if (changes.LineBgr is not null ||
+                changes.LineAlpha is not null)
             {
                 var existingColor =
                     lineStyle.Element(KmlNs + "color")?.Value;
@@ -712,7 +733,7 @@ public sealed class KmlBatchEditService
                 var combined = KmlColorUtility.Combine(
                     existingColor,
                     changes.LineBgr,
-                    null);
+                    changes.LineAlpha);
 
                 SetOrderedChildValue(
                     lineStyle,
