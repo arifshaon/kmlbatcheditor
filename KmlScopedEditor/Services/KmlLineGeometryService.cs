@@ -179,6 +179,158 @@ public sealed class KmlLineGeometryService
             .ToList();
     }
 
+    public IReadOnlyList<KmlLineFeature> FindFeaturesInPolygon(
+        IReadOnlyList<Point> polygon)
+    {
+        if (polygon.Count < 3 ||
+            Features.Count == 0)
+        {
+            return Array.Empty<KmlLineFeature>();
+        }
+
+        var bounds =
+            BuildBounds(polygon);
+
+        if (bounds.IsEmpty)
+            return Array.Empty<KmlLineFeature>();
+
+        var matched =
+            new HashSet<XElement>();
+
+        foreach (var segment in
+                 QuerySegments(bounds))
+        {
+            if (matched.Contains(
+                    segment.Feature.LineStringElement))
+            {
+                continue;
+            }
+
+            if (PointInPolygonOrOnBoundary(
+                    segment.A,
+                    polygon) ||
+                PointInPolygonOrOnBoundary(
+                    segment.B,
+                    polygon) ||
+                SegmentCrossesPolygon(
+                    segment.A,
+                    segment.B,
+                    polygon))
+            {
+                matched.Add(
+                    segment.Feature.LineStringElement);
+            }
+        }
+
+        return Features
+            .Where(feature =>
+                matched.Contains(
+                    feature.LineStringElement))
+            .ToList();
+    }
+
+    private static bool SegmentCrossesPolygon(
+        Point a,
+        Point b,
+        IReadOnlyList<Point> polygon)
+    {
+        for (var index = 0;
+             index < polygon.Count;
+             index++)
+        {
+            var c = polygon[index];
+            var d = polygon[
+                (index + 1) %
+                polygon.Count];
+
+            if (SegmentsIntersect(
+                    a,
+                    b,
+                    c,
+                    d))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool PointInPolygonOrOnBoundary(
+        Point point,
+        IReadOnlyList<Point> polygon)
+    {
+        var inside = false;
+
+        for (var index = 0,
+                 previous = polygon.Count - 1;
+             index < polygon.Count;
+             previous = index++)
+        {
+            var a = polygon[previous];
+            var b = polygon[index];
+
+            if (PointOnSegment(
+                    point,
+                    a,
+                    b))
+            {
+                return true;
+            }
+
+            var crosses =
+                (a.Y > point.Y) !=
+                (b.Y > point.Y);
+
+            if (!crosses)
+                continue;
+
+            var xAtY =
+                ((b.X - a.X) *
+                 (point.Y - a.Y) /
+                 (b.Y - a.Y)) +
+                a.X;
+
+            if (point.X < xAtY)
+                inside = !inside;
+        }
+
+        return inside;
+    }
+
+    private static bool PointOnSegment(
+        Point point,
+        Point a,
+        Point b)
+    {
+        const double epsilon =
+            0.0000000001d;
+
+        var ab = b - a;
+        var ap = point - a;
+
+        if (Math.Abs(
+                Cross(ab, ap)) >
+            epsilon)
+        {
+            return false;
+        }
+
+        var dot =
+            (ap.X * ab.X) +
+            (ap.Y * ab.Y);
+
+        if (dot < -epsilon)
+            return false;
+
+        var lengthSquared =
+            (ab.X * ab.X) +
+            (ab.Y * ab.Y);
+
+        return dot <=
+            lengthSquared + epsilon;
+    }
+
     public KmlLineFeature? FindNearestFeature(
         Point point,
         double tolerance)
