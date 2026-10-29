@@ -463,11 +463,7 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
-        _hideAppliedSplitHistory = false;
         SetWorkflowStep(2);
-
-        // Starting another drawing must not remove imported or previously
-        // drawn pending split lines. They all belong to the same pending set.
         StopEditingGuide();
         CancelDraftCutLine(
             switchToSelect: false);
@@ -475,7 +471,9 @@ public partial class LineEditorWindow : Window
         BeginSplitMode();
 
         UpdateStatus(
-            "Draw another split line by clicking points or dragging. Existing pending split lines stay in place. Press Enter to finish this line, then Enter again or Apply split to apply all pending lines.");
+            _guides.Any(guide => !guide.Applied)
+                ? "Draw a new split line. The current split line will stay visible and will only be replaced when you finish the new drawing. Press Esc to cancel."
+                : "Draw the split line by clicking points or dragging. Press Enter to finish it, then Enter again or Apply split to apply it.");
     }
 
     private void BeginSplitMode()
@@ -536,11 +534,13 @@ public partial class LineEditorWindow : Window
                 guide,
                 removeMatchingSourceBeforeCut: false);
 
-        _guides.Add(state);
+        ReplacePendingSplitLines(
+            new[] { state });
 
         _draftCutPoints.Clear();
         _draftCutPreviewPoint = null;
         _draftCutDrawing = false;
+        _draftWillReplacePending = false;
         ResetIncrementalSplitPreview();
 
         EditorSurface.SetDraftCut(
@@ -548,6 +548,115 @@ public partial class LineEditorWindow : Window
             _draftCutPreviewPoint);
 
         return state;
+    }
+
+    private PendingGuideEditState
+        CapturePendingGuideEditState()
+    {
+        return new PendingGuideEditState(
+            _guides
+                .Where(guide => !guide.Applied)
+                .Select(guide =>
+                    new PendingGuideSnapshot(
+                        guide.Guide.Name,
+                        guide.Guide.Coordinates.ToList(),
+                        guide.RemoveMatchingSourceBeforeCut))
+                .ToList());
+    }
+
+    private void PushPendingGuideEditUndo()
+    {
+        _pendingEditUndo.Push(
+            CapturePendingGuideEditState());
+    }
+
+    private void PushPendingGuideEditUndo(
+        PendingGuideEditState state)
+    {
+        _pendingEditUndo.Push(state);
+    }
+
+    private void ReplacePendingSplitLines(
+        IReadOnlyList<CutGuideState> replacements)
+    {
+        PushPendingGuideEditUndo();
+        StopEditingGuide();
+
+        _guides.RemoveAll(
+            guide => !guide.Applied);
+
+        _guides.AddRange(replacements);
+        _draftWillReplacePending = false;
+    }
+
+    private void RestorePendingGuideEditState(
+        PendingGuideEditState state)
+    {
+        StopEditingGuide();
+
+        _guides.RemoveAll(
+            guide => !guide.Applied);
+
+        foreach (var snapshot in state.Guides)
+        {
+            _guides.Add(
+                new CutGuideState(
+                    new KmlCutGuide(
+                        snapshot.Name,
+                        snapshot.Coordinates.ToList()),
+                    snapshot.RemoveMatchingSourceBeforeCut));
+        }
+
+        CancelDraftCutLine(
+            switchToSelect: false);
+        _draftWillReplacePending = false;
+        RefreshSurface();
+        UpdatePendingGuidePreview();
+        UpdateCutScopeDisplay();
+    }
+
+    private void RemovePendingSplitSet()
+    {
+        if (!_guides.Any(
+                guide => !guide.Applied))
+        {
+            UpdateStatus(
+                "There is no pending split line to remove.");
+            return;
+        }
+
+        PushPendingGuideEditUndo();
+        StopEditingGuide();
+        _guides.RemoveAll(
+            guide => !guide.Applied);
+        _draftWillReplacePending = false;
+        _cutPoints.Clear();
+        ResetIncrementalSplitPreview();
+        RefreshSurface();
+        UpdatePendingGuidePreview();
+        UpdateCutScopeDisplay();
+        UpdateStatus(
+            "Pending split line removed. Ctrl+Z restores it.");
+    }
+
+    private void RemovePendingGuide(
+        CutGuideState guide)
+    {
+        if (guide.Applied ||
+            !_guides.Contains(guide))
+        {
+            return;
+        }
+
+        PushPendingGuideEditUndo();
+        StopEditingGuide();
+        _guides.Remove(guide);
+        _cutPoints.Clear();
+        RefreshSurface();
+        UpdatePendingGuidePreview();
+        UpdateCutScopeDisplay();
+        UpdateStatus(
+            "Split line removed. Ctrl+Z restores it.");
     }
 
     private void SetTool(LineEditorTool tool)
@@ -2775,6 +2884,14 @@ public partial class LineEditorWindow : Window
         bool HasPerformedCut,
         Dictionary<Guid, GuideUndoState> GuideStates,
         IReadOnlyList<Point> CutPoints);
+
+    private sealed record PendingGuideSnapshot(
+        string Name,
+        IReadOnlyList<KmlCoordinate> Coordinates,
+        bool RemoveMatchingSourceBeforeCut);
+
+    private sealed record PendingGuideEditState(
+        IReadOnlyList<PendingGuideSnapshot> Guides);
 }
 
 public sealed record LineEditorSessionGuideState(
