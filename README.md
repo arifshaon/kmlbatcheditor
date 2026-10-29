@@ -61,10 +61,10 @@ Typical workflow:
 3. **Cut Selected...** keeps the current selection as the cut target and switches to the Cut tool so you can draw the cutting path. If nothing is selected and you use Cut directly, the cut can affect any document line it crosses. The map overlay always shows which rule is active.
 4. Use **Cut (C)** to draw a cutline. Click to add connected points or press-and-drag for a freehand section. Live markers show the intersections and the overlay reports how many lines/points would be cut.
 5. **Right-click opens cut-line options at the pointer** (add point, finish/apply, undo point, cancel). You can also finish and apply with **double-click** or **Enter**. **Backspace** removes the last point; **Esc** cancels the draft.
-6. To use a Google Earth cutline, choose **Import Cut Lines...**. Imported guides are previewed first; choose **Apply Imported Guide** to commit them.
+6. To use a Google Earth cutline, choose **Import Cut Line...**. The imported cut line is previewed first; choose **Cut with Imported Line** to split the current cut target.
 7. To use a helper LineString already in the document, select exactly that line and choose **Use Selected as Cutline**. The helper is removed before cutting so it cannot cut itself.
-8. After cutting, return to **Select** and remove unwanted fragments. Choose **Apply to Document & Close**. Selection alone is temporary and is not saved; only actual cuts/deletions change the KML/KMZ. After applying real edits, the main window asks whether you want to save the edited file immediately.
+8. After cutting, return to **Select** and remove unwanted fragments. Choose **Apply & Close** to commit those geometry changes to the currently loaded working document in memory. You can reopen Line Editor and continue from those edits. Selection alone is temporary and is not stored in KML/KMZ. Use **Save As** only when you want to write the edited file to disk.
 
 Navigation: **Hand (H)** pans with left-drag; **Space+drag** and middle-drag also pan; the mouse wheel and **+/-** zoom; **F** fits the view; **Zoom Selection** fits the highlighted lines. **Ctrl+Z** undoes the last cut/deletion.
 
-Imported/applied guides remain overlay state and are not saved into the output KML/KMZ.
+Imported cut lines are temporary overlays and are not saved into the output KML/KMZ.
