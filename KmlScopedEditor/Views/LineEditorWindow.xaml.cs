@@ -1197,18 +1197,8 @@ public partial class LineEditorWindow : Window
             allPoints.AddRange(
                 preview.CutPoints);
 
-            foreach (var feature in
-                     _geometry.FindIntersectingFeatures(
-                         ProjectGuide(
-                             guideState.Guide)))
-            {
-                if (targetSet.Contains(
-                        feature.LineStringElement))
-                {
-                    lines.Add(
-                        feature.LineStringElement);
-                }
-            }
+            foreach (var line in preview.AffectedLines)
+                lines.Add(line);
         }
 
         _cutPoints.Clear();
@@ -1220,7 +1210,8 @@ public partial class LineEditorWindow : Window
             new LineCutPreview(
                 lines.Count,
                 intersections,
-                allPoints);
+                allPoints,
+                lines.ToList());
 
         UpdateCutScopeDisplay(
             previewSummary);
