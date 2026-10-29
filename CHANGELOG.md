@@ -4,6 +4,10 @@
 
 ### Line Editor
 
+- Added an explicit **Cut Selected...** action so a line selection clearly transitions into drawing the cutline for those selected targets.
+- Selection is now explicitly treated as temporary editor state; **Apply to Document & Close** refuses to imply that an unmodified selection was saved.
+- After committed line edits return to the main window, the application now asks whether to save the edited KML/KMZ immediately, avoiding accidental reopening of the unchanged original file.
+
 - Simplified the permanent toolbar to **Select**, **Cut**, **Hand**, Undo, Fit, Zoom Selection, and zoom controls; Select/Cut actions now appear contextually.
 - Added keyboard shortcuts: V Select, C Cut, H Hand, Ctrl+Z Undo, Delete, Backspace, Esc, F, and +/- zoom.
 - Added explicit Hand mode, Space+drag pan, middle-drag pan, cursor feedback, and Zoom Selection.
