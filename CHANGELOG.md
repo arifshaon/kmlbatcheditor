@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Reworked Draw Cut into point-by-point cut-line drawing: click to add connected vertices, preview the path, undo the last point, then Apply Cut explicitly.
+
 - Added KML/KMZ cut-guide import with temporary overlay display and explicit Apply Cut.
 - Added single-click line selection and Use Selected as Cutline for helper paths drawn in Google Earth.
 - Selection strokes now require real geometric crossings; Alt + stroke removes crossed lines from the selection.
