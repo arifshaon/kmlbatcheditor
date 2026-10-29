@@ -1255,12 +1255,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         ResetCalculatedSelection();
 
         StatusText =
-            $"Line edits applied: {lineCount:N0} LineString segment(s) remain. " +
-            $"Use Save As to create the edited output. " +
+            $"Line edits applied to the loaded working document: " +
+            $"{lineCount:N0} LineString segment(s) remain. " +
+            $"You can reopen Line Editor to continue editing, or use Save As whenever you are ready to write the edited KML/KMZ to disk. " +
             $"Completed in {FormatElapsed(stopwatch.Elapsed)}.";
 
         ShowNotification(
-            "Line edits applied to the working document. Use Save As when you are ready to create the edited KML/KMZ.",
+            "Line edits are kept in the currently loaded document. Reopen Line Editor to continue, or use Save As whenever you want to save a file.",
             NotificationKind.Success);
 
         RaiseCommandStates();
