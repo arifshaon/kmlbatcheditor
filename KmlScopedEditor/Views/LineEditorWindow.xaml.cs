@@ -966,7 +966,7 @@ public partial class LineEditorWindow : Window
         UpdateCutScopeDisplay();
 
         UpdateStatus(
-            "Last cut/deletion undone. Guide overlays remain available.");
+            "Last cut/deletion undone. Imported cut-line overlays remain available.");
     }
 
     private void OnFitViewClick(
