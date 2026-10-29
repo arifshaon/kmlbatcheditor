@@ -538,11 +538,13 @@
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
                             <Rectangle Width="22"
-                                       Height="2"
-                                       Fill="#743DAA"
+                                       Height="3"
+                                       Fill="Transparent"
+                                       Stroke="#743DAA"
+                                       StrokeThickness="2"
+                                       StrokeDashArray="3,2"
                                        VerticalAlignment="Center"
-                                       Margin="0,0,5,0"
-                                       StrokeDashArray="3,2" />
+                                       Margin="0,0,5,0" />
                             <TextBlock Text="Pending split line" FontSize="11" Foreground="#52606D" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
