@@ -189,6 +189,80 @@ public sealed class KmlSelectionService
         return result;
     }
 
+    public IReadOnlyList<XElement> GetPlacemarksForTickedNodes(
+        IEnumerable<KmlTreeNode> roots)
+    {
+        var result =
+            new List<XElement>();
+        var seen =
+            new HashSet<XElement>();
+
+        foreach (var root in roots)
+        {
+            CollectTickedPlacemarks(
+                root,
+                result,
+                seen);
+        }
+
+        return result;
+    }
+
+    private static void CollectTickedPlacemarks(
+        KmlTreeNode node,
+        List<XElement> result,
+        HashSet<XElement> seen)
+    {
+        if (node.IsChecked == false)
+            return;
+
+        if (node.IsChecked == true)
+        {
+            if (node.NodeType ==
+                    KmlNodeType.Placemark &&
+                node.SourceElement is not null)
+            {
+                if (seen.Add(
+                        node.SourceElement))
+                {
+                    result.Add(
+                        node.SourceElement);
+                }
+
+                return;
+            }
+
+            if (node.SourceElement is not null)
+            {
+                foreach (var placemark in
+                         node.SourceElement
+                             .Descendants(
+                                 KmlNs +
+                                 "Placemark"))
+                {
+                    if (seen.Add(
+                            placemark))
+                    {
+                        result.Add(
+                            placemark);
+                    }
+                }
+
+                return;
+            }
+        }
+
+        // Indeterminate nodes contain a mixture of checked and unchecked
+        // descendants, so only their children need to be inspected.
+        foreach (var child in node.Children)
+        {
+            CollectTickedPlacemarks(
+                child,
+                result,
+                seen);
+        }
+    }
+
     public IReadOnlyList<XElement> GetPlacemarksForIconTypes(
         IEnumerable<IconTypeOption> selectedIconTypes,
         IProgress<OperationProgress>? progress = null,
