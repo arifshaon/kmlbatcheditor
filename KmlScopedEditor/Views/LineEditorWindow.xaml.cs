@@ -878,8 +878,12 @@ public partial class LineEditorWindow : Window
 
             UpdateStatus(
                 _draftCutPoints.Count < 2
-                    ? "Split line started. Add at least one more point."
-                    : $"Split line has {_draftCutPoints.Count:N0} point(s). Press Enter to finish drawing; press Enter again or Apply split to apply it.");
+                    ? _draftWillReplacePending
+                        ? "New split line started. Finishing this line will replace the current split line; press Esc to cancel."
+                        : "Split line started. Add at least one more point."
+                    : _draftWillReplacePending
+                        ? $"New split line has {_draftCutPoints.Count:N0} point(s). Finishing it will replace the current split line; press Esc to cancel."
+                        : $"Split line has {_draftCutPoints.Count:N0} point(s). Press Enter to finish drawing; press Enter again or Apply split to apply it.");
 
             return;
         }
@@ -1032,6 +1036,38 @@ public partial class LineEditorWindow : Window
             FindPendingGuideNearPoint(
                 e.WorldPoint,
                 EditorSurface.WorldToleranceFromPixels(8d));
+
+        if (clickedPendingGuide is not null &&
+            !ReferenceEquals(
+                clickedPendingGuide,
+                editingGuide))
+        {
+            AddContextMenuItem(
+                menu,
+                "Edit this split line",
+                () =>
+                {
+                    StartEditingGuide(
+                        clickedPendingGuide);
+                    RefreshSurface();
+                    UpdateStatus(
+                        "Split line selected for editing.");
+                });
+
+            AddContextMenuItem(
+                menu,
+                "Remove this split line",
+                () => RemovePendingGuide(
+                    clickedPendingGuide));
+
+            AddContextMenuItem(
+                menu,
+                "Apply split",
+                ApplyCurrentSplit);
+
+            menu.IsOpen = true;
+            return;
+        }
 
         if (editingGuide is not null)
         {
