@@ -748,7 +748,10 @@
                         <ProgressBar Height="18"
                                      Minimum="0"
                                      Maximum="100"
-                                     Value="{Binding BusyProgress}"
+                                     Value="{Binding BusyProgress,
+                                                     Mode=OneWay,
+                                                     FallbackValue=0,
+                                                     TargetNullValue=0}"
                                      IsIndeterminate="{Binding IsBusyProgressIndeterminate}"
                                      Margin="0,0,0,10" />
                         <TextBlock Text="{Binding BusyDetail}"
