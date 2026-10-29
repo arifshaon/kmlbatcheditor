@@ -2,7 +2,7 @@
 
 A Windows desktop application for safely batch-editing placemark styles and interactively editing line geometry in Google Earth **KML** and **KMZ** files.
 
-KML Scoped Editor lets you select placemarks by folder, icon image, or icon variant, then change one or more style properties without deliberately changing unrelated placemark data or style settings.
+KML Scoped Editor lets you select placemarks by tree item, placemark name, icon image, or icon variant, then change one or more style properties without deliberately changing unrelated placemark data or style settings.
 
 The application is built with **C#**, **.NET 8**, and **WPF**.
 
@@ -14,10 +14,9 @@ KML Scoped Editor is designed for controlled changes across large groups of Goog
 
 You can change:
 
-- icon size;
-- icon colour;
-- text or label size;
-- text or label colour.
+- line colour, width, and opacity;
+- icon image, size, colour, and opacity;
+- text or label size, colour, and opacity.
 
 Each property is enabled separately. If a property is not selected, the application leaves that property unchanged.
 
@@ -30,13 +29,15 @@ For example, you can change the text colour of every placemark in a folder while
 - Opens both `.kml` and `.kmz` files.
 - Displays the document, folders, subfolders, placemarks, overlays, and network links in a hierarchical tree.
 - Selects placemarks by:
-  - folder;
+  - tree item;
+  - placemark name;
   - icon image;
   - icon variant.
 - Optionally includes placemarks in nested subfolders.
-- Calculates and displays the number of matching placemarks before editing.
-- Changes icon size, icon colour, text size, and text colour independently or together.
-- Previews the proposed changes before applying them.
+- Updates the matching placemark count automatically as the scope changes.
+- Groups available style changes into Lines, Icons, and Labels.
+- Changes line, icon, and label appearance independently or together.
+- Updates the built-in current/proposed preview automatically before Apply.
 - Shows style diagnostics for an individual placemark.
 - Handles inline styles, shared styles, and KML `StyleMap` references.
 - Clones shared styles where necessary to avoid changing placemarks outside the selected scope.
@@ -52,21 +53,19 @@ For example, you can change the text colour of every placemark in a folder while
 
 ## Experimental Line Editor
 
-The Line Editor is intended for dependable manual line cleanup and splitting rather than automatic interpretation.
+The Line Editor follows the manual cleanup workflow directly:
 
-Typical workflow:
+1. **Remove unwanted lines** — drag across source lines to select them, then delete them. Shift+click adds one line; Alt+click/drag removes from the selection.
+2. **Split** — import a KML/KMZ split path, draw a new split path, or use one selected document line as the split path. Imported paths are editable: drag their vertex handles, or right-click to add/delete vertices.
+3. **Remove pieces** — after the split is applied, select the unwanted resulting pieces and delete them.
 
-1. Open the KML/KMZ and choose **Line Editor**. The editor always opens with nothing selected.
-2. Use **Select (V)** to draw across lines. Only real crossings are selected. **Shift+click** adds one line; **Alt+click/drag** removes lines from the selection.
-3. Choose **Split Selected Lines...** to keep the current selection as the split target and switch to **Split (S)**. If nothing is selected and you use Split directly, any document line crossed by the split line can be affected.
-4. Draw a split line by clicking connected points or dragging freehand. Live markers and the map status show how many lines and intersection points would be split.
-5. Right-click for split-line actions at the pointer, or use **double-click** / **Enter** to finish and apply. **Backspace** removes the last split point; **Esc** cancels the draft.
-6. To use a Google Earth path, choose **Import Split Line...**. The imported line is editable before splitting: drag its vertex handles, or right-click for add/delete vertex options. Review the markers, then choose **Split with Imported Line**.
-7. To use a helper LineString already present in the document, select exactly that line and choose **Use Selected as Split Line**. The helper is removed before the split so it cannot split itself.
-8. After splitting, return to **Select** and delete unwanted pieces. Choose **Apply & Close** to keep those geometry changes in the currently loaded working document. Reopen Line Editor to continue. Use **Save As** only when you want to write the edited file to disk.
-9. In the main editor, line colour and line width can be changed using the same scoped style-edit workflow as icon/text properties.
+Nothing needs to be selected for a normal split. By default, any line crossed by the split path can be split. To deliberately restrict the operation, select the target lines first and tick **Only split the selected lines**.
 
-Navigation: **right-drag pans from any tool**; **Hand (H)** pans with left-drag; **Space+drag** and middle-drag also pan; the mouse wheel and **+/-** zoom; **F** fits the view; **Zoom Selection** fits the highlighted lines. **Ctrl+Z** undoes the last split/deletion.
+There is one **Apply split** action for both imported and drawn split paths; **Enter** does the same thing. Double-click finishes a drawn path but does not apply it automatically. The preview summary reports how many lines and intersection points would be split.
+
+After a successful split, the editor advances to **Remove pieces** and hides the temporary split overlay. **Done — keep changes** returns the geometry edits to the loaded working document; **Cancel — discard** closes without keeping them. The main-window **Save As** command is still required to write a KML/KMZ file to disk.
+
+Navigation: **right-drag** or **Space+drag** pans from any step; middle-drag also pans; the mouse wheel and on-map controls zoom; **F** fits the view; **To selection** fits highlighted lines. **Ctrl+Z** undoes the last split/deletion.
 
 Imported split lines are temporary overlays and are not saved into the output KML/KMZ.
 
