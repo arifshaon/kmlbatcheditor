@@ -1357,7 +1357,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Select =>
                 "V Select · drag across lines · Alt+drag deselect · Delete remove · Space+drag pan",
             _ =>
-                "C Cut · click points or drag freehand · double-click/right-click/Enter finish · Backspace undo point · Esc cancel"
+                "C Cut · click points or drag freehand · right-click options · double-click/Enter finish · Backspace undo point · Esc cancel"
         };
     }
 
