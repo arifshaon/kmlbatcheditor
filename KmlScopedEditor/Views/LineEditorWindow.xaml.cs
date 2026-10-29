@@ -76,10 +76,7 @@ public partial class LineEditorWindow : Window
             _workingDocument,
             _projectionScale);
 
-        InitialiseSelectionFromTree(
-            initialSelectedPlacemarkIndexes);
-
-        _initialSelectedLineCount = _selected.Count;
+        _initialSelectedLineCount = 0;
 
         if (!string.IsNullOrWhiteSpace(sourceName))
             Title = $"Line Editor - {sourceName}";
@@ -145,7 +142,7 @@ public partial class LineEditorWindow : Window
 
     private void BeginCutMode()
     {
-        SetTool(LineEditorTool.Cut);
+        SetTool(LineEditorTool.Split);
         _draftCutDrawing = true;
         _draftCutPreviewPoint = null;
 
@@ -169,7 +166,7 @@ public partial class LineEditorWindow : Window
 
         PanToolButton.IsChecked = tool == LineEditorTool.Pan;
         SelectToolButton.IsChecked = tool == LineEditorTool.Select;
-        CutToolButton.IsChecked = tool == LineEditorTool.Cut;
+        CutToolButton.IsChecked = tool == LineEditorTool.Split;
 
         SelectActionsPanel.Visibility =
             tool == LineEditorTool.Select
@@ -177,7 +174,7 @@ public partial class LineEditorWindow : Window
                 : Visibility.Collapsed;
 
         CutActionsPanel.Visibility =
-            tool == LineEditorTool.Cut
+            tool == LineEditorTool.Split
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
@@ -185,7 +182,7 @@ public partial class LineEditorWindow : Window
         {
             LineEditorTool.Pan =>
                 System.Windows.Input.Cursors.Hand,
-            LineEditorTool.Cut =>
+            LineEditorTool.Split =>
                 System.Windows.Input.Cursors.Cross,
             _ =>
                 System.Windows.Input.Cursors.Arrow
@@ -250,7 +247,7 @@ public partial class LineEditorWindow : Window
             return;
         }
 
-        if (e.Tool != LineEditorTool.Cut)
+        if (e.Tool != LineEditorTool.Split)
             return;
 
         _draftCutDrawing = true;
@@ -272,7 +269,7 @@ public partial class LineEditorWindow : Window
         object? sender,
         LineEditorStrokeEventArgs e)
     {
-        if (e.Tool != LineEditorTool.Cut)
+        if (e.Tool != LineEditorTool.Split)
             return;
 
         var stroke = _draftCutPoints.ToList();
@@ -304,7 +301,7 @@ public partial class LineEditorWindow : Window
         object? sender,
         LineEditorClickEventArgs e)
     {
-        if (e.Tool == LineEditorTool.Cut)
+        if (e.Tool == LineEditorTool.Split)
         {
             if (!_draftCutDrawing)
                 _draftCutDrawing = true;
@@ -366,7 +363,7 @@ public partial class LineEditorWindow : Window
         object? sender,
         LineEditorPointerEventArgs e)
     {
-        if (EditorSurface.Tool == LineEditorTool.Cut)
+        if (EditorSurface.Tool == LineEditorTool.Split)
         {
             EditorSurface.SetHovered(null);
 
@@ -436,7 +433,7 @@ public partial class LineEditorWindow : Window
                 System.Windows.Controls.Primitives.PlacementMode.MousePoint
         };
 
-        if (EditorSurface.Tool == LineEditorTool.Cut)
+        if (EditorSurface.Tool == LineEditorTool.Split)
         {
             if (_draftCutPoints.Count == 0)
             {
@@ -502,7 +499,7 @@ public partial class LineEditorWindow : Window
                 {
                     CancelDraftCutLine(
                         switchToSelect: false);
-                    SetTool(LineEditorTool.Cut);
+                    SetTool(LineEditorTool.Split);
                     _draftCutDrawing = true;
                     AddDraftCutPoint(e.WorldPoint);
                     UpdateLiveCutPreview();
@@ -1009,6 +1006,13 @@ public partial class LineEditorWindow : Window
             (Keyboard.Modifiers & ModifierKeys.Control) ==
             ModifierKeys.Control;
 
+        if (e.Key == Key.Space)
+        {
+            EditorSurface.Focus();
+            e.Handled = true;
+            return;
+        }
+
         if (control && e.Key == Key.Z)
         {
             OnUndoClick(this, new RoutedEventArgs());
@@ -1050,7 +1054,7 @@ public partial class LineEditorWindow : Window
                     switchToSelect: false);
             }
             else if (EditorSurface.Tool ==
-                     LineEditorTool.Cut)
+                     LineEditorTool.Split)
             {
                 SetTool(LineEditorTool.Select);
             }
@@ -1070,7 +1074,7 @@ public partial class LineEditorWindow : Window
                 e.Handled = true;
                 break;
 
-            case Key.C:
+            case Key.S:
                 OnCutToolClick(
                     this,
                     new RoutedEventArgs());
