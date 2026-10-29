@@ -1091,6 +1091,7 @@ public partial class LineEditorWindow : Window
         _draftCutPreviewPoint = null;
         _draftCutDrawing = false;
         _cutPoints.Clear();
+        EditorSurface.SetCutPoints(_cutPoints);
 
         EditorSurface.SetDraftCut(
             _draftCutPoints,
@@ -1120,7 +1121,7 @@ public partial class LineEditorWindow : Window
         if (stroke.Count < 2)
         {
             _cutPoints.Clear();
-            RefreshSurface();
+            EditorSurface.SetCutPoints(_cutPoints);
             UpdateCutScopeDisplay();
             return;
         }
@@ -1133,7 +1134,7 @@ public partial class LineEditorWindow : Window
         _cutPoints.AddRange(
             preview.CutPoints);
 
-        RefreshSurface();
+        EditorSurface.SetCutPoints(_cutPoints);
         UpdateCutScopeDisplay(preview);
     }
 
@@ -1213,7 +1214,7 @@ public partial class LineEditorWindow : Window
         _cutPoints.Clear();
         _cutPoints.AddRange(allPoints);
 
-        RefreshSurface();
+        EditorSurface.SetCutPoints(_cutPoints);
 
         var previewSummary =
             new LineCutPreview(
