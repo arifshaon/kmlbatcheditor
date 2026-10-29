@@ -436,6 +436,16 @@ public sealed class LineEditorSurface : FrameworkElement
                 e.Handled = true;
                 return;
             }
+
+            // A small miss beside an editable split path must not start a
+            // completely new replacement drawing.
+            if (IsNearEditableGuide(
+                    world,
+                    WorldToleranceFromPixels(8d)))
+            {
+                e.Handled = true;
+                return;
+            }
         }
 
         if (Tool == LineEditorTool.Split)
@@ -1449,6 +1459,27 @@ public sealed class LineEditorSurface : FrameworkElement
             LineEditorTool.Split => Cursors.Cross,
             _ => Cursors.Arrow
         };
+    }
+
+    private bool IsNearEditableGuide(
+        Point worldPoint,
+        double tolerance)
+    {
+        for (var index = 0;
+             index < _editableGuidePoints.Count - 1;
+             index++)
+        {
+            if (PointToSegmentDistanceSquared(
+                    worldPoint,
+                    _editableGuidePoints[index],
+                    _editableGuidePoints[index + 1]) <=
+                tolerance * tolerance)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private int FindNearestEditableGuideVertex(
