@@ -794,6 +794,15 @@ public partial class LineEditorWindow : Window
             return;
         }
 
+        if (!_draftWillReplacePending &&
+            _draftCutPoints.Count == 0 &&
+            _guides.Any(
+                guide => !guide.Applied))
+        {
+            _draftWillReplacePending = true;
+            RefreshSurface();
+        }
+
         if (_activeStrokePreviewProcessedPoints <= 0)
             _activeStrokePreviewProcessedPoints = 1;
 
@@ -2522,8 +2531,7 @@ public partial class LineEditorWindow : Window
         var points =
             new List<Point>();
 
-        if (!_draftWillReplacePending ||
-            _draftCutPoints.Count == 0)
+        if (!_draftWillReplacePending)
         {
             MergePendingGuidePreviews(
                 lines,
