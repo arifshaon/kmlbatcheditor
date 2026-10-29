@@ -61,9 +61,9 @@
                                                VerticalAlignment="Center" />
                                 </Border>
                                 <StackPanel>
-                                    <TextBlock Text="Remove unwanted lines"
+                                    <TextBlock Text="Optional cleanup"
                                                FontWeight="SemiBold" />
-                                    <TextBlock Text="Select lines, then Delete"
+                                    <TextBlock Text="Delete whole lines before splitting"
                                                FontSize="10"
                                                Foreground="#7A8494" />
                                 </StackPanel>
@@ -123,9 +123,9 @@
                                                VerticalAlignment="Center" />
                                 </Border>
                                 <StackPanel>
-                                    <TextBlock Text="Remove pieces"
+                                    <TextBlock Text="Cleanup after split"
                                                FontWeight="SemiBold" />
-                                    <TextBlock Text="Select pieces, then Delete"
+                                    <TextBlock Text="Delete unwanted split pieces"
                                                FontSize="10"
                                                Foreground="#7A8494" />
                                 </StackPanel>
