@@ -42,9 +42,17 @@ public sealed class KmlPlacemarkAppearancePreview
 
     public MediaBrush LabelBrush { get; init; } = MediaBrushes.White;
 
+    public MediaBrush LineBrush { get; init; } = MediaBrushes.White;
+
+    public double LineStrokeWidth { get; init; } = 2d;
+
     public string KmlIconColor { get; init; } = "ffffffff";
 
     public string KmlLabelColor { get; init; } = "ffffffff";
+
+    public string KmlLineColor { get; init; } = "ffffffff";
+
+    public string LineWidth { get; init; } = "1";
 
     public string IconScale { get; init; } = "1";
 
