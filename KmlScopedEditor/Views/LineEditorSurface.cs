@@ -88,7 +88,7 @@ public sealed class LineEditorSurface : FrameworkElement
     public LineEditorTool Tool { get; set; } = LineEditorTool.Select;
 
     public event EventHandler<LineEditorStrokeEventArgs>? StrokeCompleted;
-    public event EventHandler<LineEditorStrokeEventArgs>? CutStrokePreviewChanged;
+    public event EventHandler<LineEditorStrokeEventArgs>? SplitStrokePreviewChanged;
     public event EventHandler<LineEditorClickEventArgs>? LineClicked;
     public event EventHandler<LineEditorPointerEventArgs>? PointerMoved;
     public event EventHandler? PointerExited;
@@ -455,9 +455,9 @@ public sealed class LineEditorSurface : FrameworkElement
             _cutClickPending = false;
             ReleaseMouseCapture();
 
-            var cutGestureDistance = (screen - _strokeStartScreen).Length;
+            var splitGestureDistance = (screen - _strokeStartScreen).Length;
 
-            if (cutGestureDistance < 4d)
+            if (splitGestureDistance < 4d)
             {
                 LineClicked?.Invoke(
                     this,
@@ -603,7 +603,7 @@ public sealed class LineEditorSurface : FrameworkElement
             _lastStrokeScreen = screen;
             _strokeWorld.Add(ScreenToWorld(screen));
 
-            CutStrokePreviewChanged?.Invoke(
+            SplitStrokePreviewChanged?.Invoke(
                 this,
                 new LineEditorStrokeEventArgs(
                     Tool,
