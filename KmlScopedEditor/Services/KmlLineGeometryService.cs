@@ -26,6 +26,8 @@ public sealed class KmlLineGeometryService
     private readonly double? _fixedLongitudeScale;
     private readonly XName? _scopeMarkerAttribute;
     private readonly Dictionary<long, List<IndexedSegment>> _segmentGrid = new();
+    private readonly Dictionary<XElement, List<IndexedSegment>> _segmentsByFeature = new();
+    private Rect _indexBounds = Rect.Empty;
     private double _longitudeScale = 1d;
     private int _gridColumns;
     private int _gridRows;
@@ -307,6 +309,8 @@ public sealed class KmlLineGeometryService
             if (parts.Count == 0)
                 continue;
 
+            RemoveFeatureFromSpatialIndex(feature);
+
             var replacementElements =
                 ReplaceLineStringWithParts(
                     feature.LineStringElement,
@@ -337,6 +341,9 @@ public sealed class KmlLineGeometryService
                 updatedFeatures.InsertRange(
                     featureIndex,
                     replacements);
+
+                foreach (var replacement in replacements)
+                    AddFeatureToSpatialIndex(replacement);
             }
 
             linesSplit++;
@@ -350,7 +357,6 @@ public sealed class KmlLineGeometryService
         {
             Features = updatedFeatures;
             RecalculateWorldBounds();
-            BuildSpatialIndex();
         }
 
         return new LineSplitResult(
@@ -404,13 +410,20 @@ public sealed class KmlLineGeometryService
 
         if (deleted > 0)
         {
+            var removedFeatures = Features
+                .Where(feature =>
+                    feature.LineStringElement.Document != _document)
+                .ToList();
+
+            foreach (var feature in removedFeatures)
+                RemoveFeatureFromSpatialIndex(feature);
+
             Features = Features
                 .Where(feature =>
                     feature.LineStringElement.Document == _document)
                 .ToList();
 
             RecalculateWorldBounds();
-            BuildSpatialIndex();
         }
 
         return deleted;
@@ -914,9 +927,11 @@ public sealed class KmlLineGeometryService
     private void BuildSpatialIndex()
     {
         _segmentGrid.Clear();
+        _segmentsByFeature.Clear();
+        _indexBounds = WorldBounds;
 
         if (Features.Count == 0 ||
-            WorldBounds.IsEmpty)
+            _indexBounds.IsEmpty)
         {
             _gridColumns = 0;
             _gridRows = 0;
@@ -937,51 +952,106 @@ public sealed class KmlLineGeometryService
         _gridRows = dimension;
 
         _gridCellWidth = Math.Max(
-            WorldBounds.Width / _gridColumns,
+            _indexBounds.Width / _gridColumns,
             0.000000000001d);
 
         _gridCellHeight = Math.Max(
-            WorldBounds.Height / _gridRows,
+            _indexBounds.Height / _gridRows,
             0.000000000001d);
 
         foreach (var feature in Features)
+            AddFeatureToSpatialIndex(feature);
+    }
+
+    private void AddFeatureToSpatialIndex(
+        KmlLineFeature feature)
+    {
+        if (_gridColumns <= 0 ||
+            _gridRows <= 0 ||
+            feature.WorldPoints.Count < 2)
         {
-            var points = feature.WorldPoints;
+            return;
+        }
 
-            for (var index = 0;
-                 index < points.Count - 1;
-                 index++)
+        var segments = new List<IndexedSegment>(
+            feature.WorldPoints.Count - 1);
+
+        for (var index = 0;
+             index < feature.WorldPoints.Count - 1;
+             index++)
+        {
+            var segment = new IndexedSegment(
+                feature,
+                index,
+                feature.WorldPoints[index],
+                feature.WorldPoints[index + 1]);
+
+            segments.Add(segment);
+
+            foreach (var key in GridKeysForBounds(
+                         segment.Bounds))
             {
-                var segment = new IndexedSegment(
-                    feature,
-                    index,
-                    points[index],
-                    points[index + 1]);
-
-                var bounds = segment.Bounds;
-                var minX = GridX(bounds.Left);
-                var maxX = GridX(bounds.Right);
-                var minY = GridY(bounds.Top);
-                var maxY = GridY(bounds.Bottom);
-
-                for (var x = minX; x <= maxX; x++)
+                if (!_segmentGrid.TryGetValue(
+                        key,
+                        out var bucket))
                 {
-                    for (var y = minY; y <= maxY; y++)
-                    {
-                        var key = GridKey(x, y);
-
-                        if (!_segmentGrid.TryGetValue(
-                                key,
-                                out var bucket))
-                        {
-                            bucket = new List<IndexedSegment>();
-                            _segmentGrid[key] = bucket;
-                        }
-
-                        bucket.Add(segment);
-                    }
+                    bucket = new List<IndexedSegment>();
+                    _segmentGrid[key] = bucket;
                 }
+
+                bucket.Add(segment);
             }
+        }
+
+        _segmentsByFeature[
+            feature.LineStringElement] = segments;
+    }
+
+    private void RemoveFeatureFromSpatialIndex(
+        KmlLineFeature feature)
+    {
+        if (!_segmentsByFeature.TryGetValue(
+                feature.LineStringElement,
+                out var segments))
+        {
+            return;
+        }
+
+        foreach (var segment in segments)
+        {
+            foreach (var key in GridKeysForBounds(
+                         segment.Bounds))
+            {
+                if (!_segmentGrid.TryGetValue(
+                        key,
+                        out var bucket))
+                {
+                    continue;
+                }
+
+                bucket.Remove(segment);
+
+                if (bucket.Count == 0)
+                    _segmentGrid.Remove(key);
+            }
+        }
+
+        _segmentsByFeature.Remove(
+            feature.LineStringElement);
+    }
+
+    private IEnumerable<long> GridKeysForBounds(
+        Rect bounds)
+    {
+        var minX = GridX(bounds.Left);
+        var maxX = GridX(bounds.Right);
+        var minY = GridY(bounds.Top);
+        var maxY = GridY(bounds.Bottom);
+
+        for (var x = minX; x <= maxX; x++)
+        {
+            for (var y = minY; y <= maxY; y++)
+                yield return GridKey(x, y);
         }
     }
 
@@ -995,34 +1065,27 @@ public sealed class KmlLineGeometryService
             yield break;
         }
 
-        var minX = GridX(bounds.Left);
-        var maxX = GridX(bounds.Right);
-        var minY = GridY(bounds.Top);
-        var maxY = GridY(bounds.Bottom);
         var seen = new HashSet<IndexedSegment>();
 
-        for (var x = minX; x <= maxX; x++)
+        foreach (var key in GridKeysForBounds(bounds))
         {
-            for (var y = minY; y <= maxY; y++)
+            if (!_segmentGrid.TryGetValue(
+                    key,
+                    out var bucket))
             {
-                if (!_segmentGrid.TryGetValue(
-                        GridKey(x, y),
-                        out var bucket))
-                {
+                continue;
+            }
+
+            foreach (var segment in bucket)
+            {
+                if (!seen.Add(segment))
                     continue;
-                }
 
-                foreach (var segment in bucket)
+                if (BoundsOverlap(
+                        segment.Bounds,
+                        bounds))
                 {
-                    if (!seen.Add(segment))
-                        continue;
-
-                    if (BoundsOverlap(
-                            segment.Bounds,
-                            bounds))
-                    {
-                        yield return segment;
-                    }
+                    yield return segment;
                 }
             }
         }
@@ -1035,7 +1098,7 @@ public sealed class KmlLineGeometryService
 
         return Math.Clamp(
             (int)Math.Floor(
-                (x - WorldBounds.Left) /
+                (x - _indexBounds.Left) /
                 _gridCellWidth),
             0,
             _gridColumns - 1);
@@ -1048,7 +1111,7 @@ public sealed class KmlLineGeometryService
 
         return Math.Clamp(
             (int)Math.Floor(
-                (y - WorldBounds.Top) /
+                (y - _indexBounds.Top) /
                 _gridCellHeight),
             0,
             _gridRows - 1);
