@@ -55,7 +55,8 @@ public partial class LineEditorWindow : Window
 
     public LineEditorWindow(
         XDocument sourceDocument,
-        string? sourceName = null)
+        string? sourceName = null,
+        LineEditorSessionState? sessionState = null)
     {
         InitializeComponent();
 
@@ -68,6 +69,8 @@ public partial class LineEditorWindow : Window
             _workingDocument);
 
         _projectionScale = _geometry.LongitudeScale;
+
+        RestoreSessionState(sessionState);
 
         if (!string.IsNullOrWhiteSpace(sourceName))
             Title = $"Edit Lines — {sourceName}";
@@ -90,6 +93,72 @@ public partial class LineEditorWindow : Window
     }
 
     public XDocument EditedDocument => CreateOutputDocument();
+
+    public LineEditorSessionState SessionState =>
+        CreateSessionState();
+
+    private void RestoreSessionState(
+        LineEditorSessionState? sessionState)
+    {
+        if (sessionState is null)
+            return;
+
+        _hideAppliedSplitHistory =
+            sessionState.HideAppliedSplitHistory;
+
+        foreach (var item in sessionState.AppliedGuides)
+        {
+            var guide =
+                new KmlCutGuide(
+                    item.Name,
+                    item.GuideCoordinates.ToList());
+
+            var state =
+                new CutGuideState(
+                    guide,
+                    removeMatchingSourceBeforeCut: false)
+                {
+                    Applied = true,
+                    AppliedSequence =
+                        item.AppliedSequence,
+                    AppliedCutPoints =
+                        item.CutPoints
+                            .Select(_geometry.Project)
+                            .ToList()
+                };
+
+            _guides.Add(state);
+        }
+
+        _nextAppliedSequence =
+            _guides
+                .Where(guide => guide.Applied)
+                .Select(guide =>
+                    guide.AppliedSequence)
+                .DefaultIfEmpty(0)
+                .Max();
+    }
+
+    private LineEditorSessionState
+        CreateSessionState()
+    {
+        var appliedGuides =
+            _guides
+                .Where(guide => guide.Applied)
+                .Select(guide =>
+                    new LineEditorSessionGuideState(
+                        guide.Guide.Name,
+                        guide.Guide.Coordinates.ToList(),
+                        guide.AppliedSequence,
+                        guide.AppliedCutPoints
+                            .Select(_geometry.Unproject)
+                            .ToList()))
+                .ToList();
+
+        return new LineEditorSessionState(
+            appliedGuides,
+            _hideAppliedSplitHistory);
+    }
 
     private void OnPanToolClick(
         object sender,
@@ -2432,3 +2501,13 @@ public partial class LineEditorWindow : Window
         Dictionary<Guid, GuideUndoState> GuideStates,
         IReadOnlyList<Point> CutPoints);
 }
+
+public sealed record LineEditorSessionGuideState(
+    string Name,
+    IReadOnlyList<KmlCoordinate> GuideCoordinates,
+    int AppliedSequence,
+    IReadOnlyList<KmlCoordinate> CutPoints);
+
+public sealed record LineEditorSessionState(
+    IReadOnlyList<LineEditorSessionGuideState> AppliedGuides,
+    bool HideAppliedSplitHistory);
