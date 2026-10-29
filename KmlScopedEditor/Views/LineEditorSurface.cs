@@ -1158,32 +1158,132 @@ public sealed class LineEditorSurface : FrameworkElement
         if (points.Count <= 2 || tolerance <= 0d)
             return points;
 
-        var simplified = new List<Point>
+        var isClosed =
+            points.Count >= 4 &&
+            (points[0] - points[^1]).Length <= 0.000000000001d;
+
+        var sourceCount = isClosed
+            ? points.Count - 1
+            : points.Count;
+
+        if (sourceCount <= 2)
+            return points;
+
+        var keep = new bool[sourceCount];
+        keep[0] = true;
+        keep[sourceCount - 1] = true;
+
+        var toleranceSquared =
+            tolerance * tolerance;
+
+        var stack =
+            new Stack<(int Start, int End)>();
+
+        stack.Push((0, sourceCount - 1));
+
+        while (stack.Count > 0)
         {
-            points[0]
-        };
+            var (start, end) = stack.Pop();
 
-        var lastKept = points[0];
-
-        for (var index = 1;
-             index < points.Count - 1;
-             index++)
-        {
-            var point = points[index];
-
-            if ((point - lastKept).Length < tolerance)
+            if (end <= start + 1)
                 continue;
 
-            simplified.Add(point);
-            lastKept = point;
+            var maxDistanceSquared = -1d;
+            var maxIndex = -1;
+
+            for (var index = start + 1;
+                 index < end;
+                 index++)
+            {
+                var distanceSquared =
+                    PointToSegmentDistanceSquared(
+                        points[index],
+                        points[start],
+                        points[end]);
+
+                if (distanceSquared >
+                    maxDistanceSquared)
+                {
+                    maxDistanceSquared =
+                        distanceSquared;
+                    maxIndex = index;
+                }
+            }
+
+            if (maxIndex < 0 ||
+                maxDistanceSquared <=
+                toleranceSquared)
+            {
+                continue;
+            }
+
+            keep[maxIndex] = true;
+            stack.Push((start, maxIndex));
+            stack.Push((maxIndex, end));
         }
 
-        var last = points[^1];
+        var simplified =
+            new List<Point>(sourceCount + 1);
 
-        if ((last - simplified[^1]).Length > 0d)
-            simplified.Add(last);
+        for (var index = 0;
+             index < sourceCount;
+             index++)
+        {
+            if (keep[index])
+                simplified.Add(points[index]);
+        }
+
+        if (isClosed)
+        {
+            // A valid display ring needs at least three distinct vertices.
+            // If DP collapses more aggressively than that, keep the original
+            // ring rather than changing its visible topology.
+            if (simplified.Count < 3)
+                return points;
+
+            simplified.Add(simplified[0]);
+        }
 
         return simplified;
+    }
+
+    private static double PointToSegmentDistanceSquared(
+        Point point,
+        Point start,
+        Point end)
+    {
+        var dx = end.X - start.X;
+        var dy = end.Y - start.Y;
+        var lengthSquared =
+            (dx * dx) + (dy * dy);
+
+        if (lengthSquared <= double.Epsilon)
+        {
+            var px = point.X - start.X;
+            var py = point.Y - start.Y;
+            return (px * px) + (py * py);
+        }
+
+        var t =
+            ((point.X - start.X) * dx +
+             (point.Y - start.Y) * dy) /
+            lengthSquared;
+
+        t = Math.Clamp(t, 0d, 1d);
+
+        var projectedX =
+            start.X + (t * dx);
+        var projectedY =
+            start.Y + (t * dy);
+
+        var offsetX =
+            point.X - projectedX;
+        var offsetY =
+            point.Y - projectedY;
+
+        return
+            (offsetX * offsetX) +
+            (offsetY * offsetY);
     }
 
     private static SolidColorBrush CreateFrozenBrush(
