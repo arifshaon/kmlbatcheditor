@@ -2116,51 +2116,27 @@ public partial class LineEditorWindow : Window
                 .Where(guide => !guide.Applied)
                 .ToList();
 
-        var latestAppliedSequence =
+        var appliedGuides =
             _guides
                 .Where(guide => guide.Applied)
-                .Select(guide =>
+                .OrderBy(guide =>
                     guide.AppliedSequence)
-                .DefaultIfEmpty(0)
-                .Max();
-
-        var latestAppliedGuides =
-            latestAppliedSequence > 0
-                ? _guides
-                    .Where(guide =>
-                        guide.Applied &&
-                        guide.AppliedSequence ==
-                            latestAppliedSequence)
-                    .ToList()
-                : new List<CutGuideState>();
+                .ToList();
 
         var visibleGuides =
             new List<CutGuideState>();
 
-        if (_workflowStep == 1 &&
-            !_hideAppliedSplitHistory)
+        if (!_hideAppliedSplitHistory)
         {
             visibleGuides.AddRange(
-                latestAppliedGuides);
+                appliedGuides);
         }
-        else if (_workflowStep == 2)
-        {
-            if (pendingGuides.Count > 0)
-            {
-                visibleGuides.AddRange(
-                    pendingGuides);
-            }
-            else if (!_hideAppliedSplitHistory)
-            {
-                visibleGuides.AddRange(
-                    latestAppliedGuides);
-            }
-        }
-        else if (_workflowStep == 3 &&
-                 !_hideAppliedSplitHistory)
+
+        if (_workflowStep == 2 &&
+            pendingGuides.Count > 0)
         {
             visibleGuides.AddRange(
-                latestAppliedGuides);
+                pendingGuides);
         }
 
         var guideVisuals =
@@ -2183,19 +2159,15 @@ public partial class LineEditorWindow : Window
                 : Array.Empty<Point>(),
             fitView);
 
-        var latestAppliedCutPoints =
-            latestAppliedGuides
+        var appliedCutPoints =
+            appliedGuides
                 .SelectMany(guide =>
                     guide.AppliedCutPoints)
                 .ToList();
 
         EditorSurface.SetAppliedCutPoints(
-            !_hideAppliedSplitHistory &&
-            (_workflowStep == 1 ||
-             (_workflowStep == 2 &&
-              pendingGuides.Count == 0) ||
-             _workflowStep == 3)
-                ? latestAppliedCutPoints
+            !_hideAppliedSplitHistory
+                ? appliedCutPoints
                 : Array.Empty<Point>());
 
         EditorSurface.SetDraftCut(
