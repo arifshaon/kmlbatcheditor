@@ -1778,7 +1778,7 @@ public partial class LineEditorWindow : Window
         RefreshSurface();
     }
 
-    private void OnClearSplitLinesClick(
+    private void OnRemovePendingSplitLineClick(
         object sender,
         RoutedEventArgs e)
     {
