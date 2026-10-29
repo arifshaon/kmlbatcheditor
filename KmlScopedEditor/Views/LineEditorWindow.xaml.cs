@@ -63,6 +63,9 @@ public partial class LineEditorWindow : Window
         MediaColor.FromRgb(142, 132, 168);
     private double _appliedHistoryThickness = 2d;
     private bool _historyAppearanceInitializing;
+    private bool _lassoControlsUpdating;
+    private bool _lassoModeEnabled;
+    private bool _lassoRemoveMode;
 
     public LineEditorWindow(
         XDocument sourceDocument,
@@ -723,8 +726,12 @@ public partial class LineEditorWindow : Window
     {
         if (e.Tool == LineEditorTool.Select)
         {
-            var matches = _geometry.FindIntersectingFeatures(
-                e.WorldPoints);
+            var matches =
+                e.IsLasso
+                    ? _geometry.FindFeaturesInPolygon(
+                        e.WorldPoints)
+                    : _geometry.FindIntersectingFeatures(
+                        e.WorldPoints);
 
             if (e.IsDeselect)
             {
@@ -745,10 +752,16 @@ public partial class LineEditorWindow : Window
 
             UpdateStatus(
                 matches.Count == 0
-                    ? $"No {noun} crossed by that selection stroke."
+                    ? e.IsLasso
+                        ? $"No {noun} found inside or crossing that lasso."
+                        : $"No {noun} crossed by that selection stroke."
                     : e.IsDeselect
-                        ? $"Removed {matches.Count:N0} crossed {noun} from the selection."
-                        : $"Added {matches.Count:N0} crossed {noun} to the selection.");
+                        ? e.IsLasso
+                            ? $"Removed {matches.Count:N0} {noun} with the lasso."
+                            : $"Removed {matches.Count:N0} crossed {noun} from the selection."
+                        : e.IsLasso
+                            ? $"Added {matches.Count:N0} {noun} with the lasso."
+                            : $"Added {matches.Count:N0} crossed {noun} to the selection.");
 
             return;
         }
@@ -1435,6 +1448,92 @@ public partial class LineEditorWindow : Window
         RoutedEventArgs e)
     {
         ApplyCurrentSplit();
+    }
+
+    private void OnLassoModeChanged(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_lassoControlsUpdating)
+            return;
+
+        var enabled =
+            sender is
+                System.Windows.Controls.Primitives.ToggleButton button &&
+            button.IsChecked == true;
+
+        _lassoModeEnabled = enabled;
+
+        _lassoControlsUpdating = true;
+
+        try
+        {
+            Step1LassoButton.IsChecked =
+                enabled;
+            Step3LassoButton.IsChecked =
+                enabled;
+        }
+        finally
+        {
+            _lassoControlsUpdating = false;
+        }
+
+        EditorSurface.LassoMode =
+            enabled;
+        EditorSurface.LassoRemove =
+            _lassoRemoveMode;
+
+        UpdateStatus(
+            enabled
+                ? $"Lasso mode on ({(_lassoRemoveMode ? "Remove" : "Add")}). Drag a closed outline around lines."
+                : "Lasso mode off. Ctrl+drag still performs a one-off additive lasso.");
+    }
+
+    private void OnLassoActionChanged(
+        object sender,
+        System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (_lassoControlsUpdating)
+            return;
+
+        var combo =
+            sender as
+                System.Windows.Controls.ComboBox;
+
+        if (combo?.SelectedItem is not
+            ComboBoxItem selected)
+        {
+            return;
+        }
+
+        _lassoRemoveMode =
+            string.Equals(
+                selected.Tag?.ToString(),
+                "Remove",
+                StringComparison.OrdinalIgnoreCase);
+
+        _lassoControlsUpdating = true;
+
+        try
+        {
+            Step1LassoActionComboBox.SelectedIndex =
+                _lassoRemoveMode ? 1 : 0;
+            Step3LassoActionComboBox.SelectedIndex =
+                _lassoRemoveMode ? 1 : 0;
+        }
+        finally
+        {
+            _lassoControlsUpdating = false;
+        }
+
+        EditorSurface.LassoRemove =
+            _lassoRemoveMode;
+
+        if (_lassoModeEnabled)
+        {
+            UpdateStatus(
+                $"Lasso action set to {(_lassoRemoveMode ? "Remove" : "Add")}.");
+        }
     }
 
     private void OnOnlySplitSelectedChanged(
@@ -2662,7 +2761,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Pan =>
                 "H Hand · right-drag / Space+drag / middle-drag pan · +/- zoom · F fit",
             LineEditorTool.Select =>
-                "V Select · drag across lines · Alt+drag deselect · Delete remove · right-drag pan · Space+drag pan",
+                "V Select · click toggles · drag crosses lines · Ctrl+drag lasso adds · Lasso controls can add/remove · Delete removes selected · right-drag pan",
             _ =>
                 "Split · import or draw a line · click it to edit · Enter finishes drawing · Enter again / Apply split applies · Delete removes the split line, never map lines · right-drag pans"
         };
