@@ -16,6 +16,12 @@
                 Padding="10">
             <StackPanel>
                 <WrapPanel>
+                    <ToggleButton x:Name="PanToolButton"
+                                  Content="Pan"
+                                  Width="76"
+                                  Height="32"
+                                  Margin="0,0,6,6"
+                                  Click="OnPanToolClick" />
                     <ToggleButton x:Name="SelectToolButton"
                                   Content="Select"
                                   Width="86"
@@ -93,8 +99,14 @@
                             Click="OnDeleteSelectedClick" />
                 </WrapPanel>
 
-                <TextBlock x:Name="InstructionText"
+                <TextBlock x:Name="ScopeText"
                            Margin="0,4,0,0"
+                           FontWeight="SemiBold"
+                           Foreground="#374151"
+                           TextWrapping="Wrap" />
+
+                <TextBlock x:Name="InstructionText"
+                           Margin="0,3,0,0"
                            Foreground="#4B5563"
                            TextWrapping="Wrap" />
             </StackPanel>
