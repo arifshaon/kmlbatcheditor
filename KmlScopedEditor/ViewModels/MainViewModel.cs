@@ -37,7 +37,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private string _statusText = "Ready.";
     private string _loadedFilePath = string.Empty;
     private string _batchEditMessage =
-        "Calculate a placemark selection, enable one or more properties, then preview the changes.";
+        "Choose a placemark scope and one or more style properties.";
     private bool _hasUnsavedChanges;
 
     private SelectionModeOption _selectedSelectionMode;
@@ -578,8 +578,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         EditSettings.PropertyChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(IconPackagingMessage));
-            InvalidateEditPreview(
-                "Style settings changed. Preview the changes again before applying them.");
+            RefreshStylePreviewLive();
         };
     }
 
@@ -1096,12 +1095,75 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IconGroupSummary));
         OnPropertyChanged(nameof(LabelGroupSummary));
 
-        InvalidateEditPreview(
-            MatchedPlacemarkCount == 0
-                ? "Choose a scope containing at least one placemark."
-                : "Selection updated automatically. Choose style changes, then preview them.");
+        if (MatchedPlacemarkCount == 0)
+        {
+            InvalidateEditPreview(
+                "Choose a scope containing at least one placemark.");
+        }
+        else
+        {
+            RefreshStylePreviewLive();
+        }
 
         RaiseCommandStates();
+    }
+
+    private void RefreshStylePreviewLive()
+    {
+        if (_documentContext is null ||
+            _currentSelection.Count == 0)
+        {
+            InvalidateEditPreview(
+                "Choose a scope containing at least one placemark.");
+            return;
+        }
+
+        KmlBatchEditPreview preview;
+
+        try
+        {
+            preview = _batchEditService.Preview(
+                _currentSelection,
+                _documentContext,
+                EditSettings);
+        }
+        catch (Exception ex)
+        {
+            InvalidateEditPreview(
+                $"The style preview could not be created: {ex.Message}");
+            return;
+        }
+
+        EditPreview = preview;
+        BatchEditMessage = preview.CanApply
+            ? preview.Summary
+            : preview.ValidationMessage;
+
+        if (preview.CanApply)
+        {
+            var selectedPlacemark =
+                SelectedNode?.SourceElement;
+
+            var selectedIndex =
+                selectedPlacemark is null
+                    ? -1
+                    : _currentSelection
+                        .ToList()
+                        .IndexOf(selectedPlacemark);
+
+            _previewPlacemarkIndex =
+                selectedIndex >= 0
+                    ? selectedIndex
+                    : 0;
+
+            BuildPlacemarkVisualPreview();
+        }
+        else
+        {
+            ClearPlacemarkVisualPreview();
+        }
+
+        ApplyChangesCommand.RaiseCanExecuteChanged();
     }
 
     private string BuildGroupSummary(
