@@ -345,7 +345,7 @@
                             Foreground="White"
                             FontWeight="SemiBold"
                             Click="OnApplySplitClick"
-                            ToolTip="Apply all pending split lines. Enter does the same when no line is currently being drawn." />
+                            ToolTip="Apply the current split line. Enter does the same when no line is currently being drawn." />
                 </Grid>
 
                 <Grid x:Name="Step3ActionsPanel"
