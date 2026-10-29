@@ -462,24 +462,16 @@ public partial class LineEditorWindow : Window
         _hideAppliedSplitHistory = false;
         SetWorkflowStep(2);
 
-        var pending = _guides
-            .Where(guide => !guide.Applied)
-            .ToList();
-
-        if (pending.Count > 0)
-        {
-            foreach (var guide in pending)
-                _guides.Remove(guide);
-
-            StopEditingGuide();
-        }
-
-        CancelDraftCutLine(switchToSelect: false);
+        // Starting another drawing must not remove imported or previously
+        // drawn pending split lines. They all belong to the same pending set.
+        StopEditingGuide();
+        CancelDraftCutLine(
+            switchToSelect: false);
         RefreshSurface();
         BeginSplitMode();
 
         UpdateStatus(
-            "Draw the split line by clicking points or dragging. Press Enter to finish drawing, then Apply split or press Enter again.");
+            "Draw another split line by clicking points or dragging. Existing pending split lines stay in place. Press Enter to finish this line, then Enter again or Apply split to apply all pending lines.");
     }
 
     private void BeginSplitMode()
@@ -504,25 +496,54 @@ public partial class LineEditorWindow : Window
 
     private void FinishDraftCutDrawing()
     {
-        if (_draftCutPoints.Count < 2)
+        var state =
+            CommitDraftCutAsPendingGuide();
+
+        if (state is null)
         {
             UpdateStatus(
                 "The split line needs at least two points before it can be finished.");
             return;
         }
 
-        _draftCutDrawing = false;
+        StartEditingGuide(state);
+        RefreshSurface();
+        UpdatePendingGuidePreview();
+
+        UpdateStatus(
+            "Split line finished and added to the pending split lines. Drag its orange handles to reshape it, draw another line, or press Apply split / Enter to apply all pending lines.");
+    }
+
+    private CutGuideState?
+        CommitDraftCutAsPendingGuide()
+    {
+        if (_draftCutPoints.Count < 2)
+            return null;
+
+        var guide =
+            new KmlCutGuide(
+                "Split line",
+                _draftCutPoints
+                    .Select(_geometry.Unproject)
+                    .ToList());
+
+        var state =
+            new CutGuideState(
+                guide,
+                removeMatchingSourceBeforeCut: false);
+
+        _guides.Add(state);
+
+        _draftCutPoints.Clear();
         _draftCutPreviewPoint = null;
+        _draftCutDrawing = false;
+        ResetIncrementalSplitPreview();
 
         EditorSurface.SetDraftCut(
             _draftCutPoints,
             _draftCutPreviewPoint);
 
-        RebuildCommittedSplitPreview();
-        UpdateLiveSplitPreview();
-
-        UpdateStatus(
-            $"Split line ready with {_draftCutPoints.Count:N0} point(s). Press Apply split or Enter to apply.");
+        return state;
     }
 
     private void SetTool(LineEditorTool tool)
@@ -602,6 +623,14 @@ public partial class LineEditorWindow : Window
         if (e.Tool != LineEditorTool.Split)
             return;
 
+        // A drag away from an editable pending line starts another ordinary
+        // split line; it does not discard the line that was being edited.
+        if (GetEditingGuide() is not null &&
+            _draftCutPoints.Count == 0)
+        {
+            StopEditingGuide();
+        }
+
         _draftCutDrawing = true;
         AppendDraftPoints(e.WorldPoints);
         _draftCutPreviewPoint = null;
@@ -664,8 +693,32 @@ public partial class LineEditorWindow : Window
     {
         if (e.Tool == LineEditorTool.Split)
         {
-            if (!_draftCutDrawing)
+            if (!_draftCutDrawing &&
+                _draftCutPoints.Count == 0)
+            {
+                var pendingGuide =
+                    FindPendingGuideNearPoint(
+                        e.WorldPoint,
+                        EditorSurface
+                            .WorldToleranceFromPixels(8d));
+
+                if (pendingGuide is not null)
+                {
+                    StartEditingGuide(
+                        pendingGuide);
+                    RefreshSurface();
+                    UpdateStatus(
+                        "Split line selected for editing. Drag the orange handles to reshape it, or click away from it to start drawing another line.");
+                    return;
+                }
+
+                StopEditingGuide();
                 _draftCutDrawing = true;
+            }
+            else if (!_draftCutDrawing)
+            {
+                _draftCutDrawing = true;
+            }
 
             AddDraftCutPoint(e.WorldPoint);
             UpdateLiveSplitPreview();
@@ -673,21 +726,14 @@ public partial class LineEditorWindow : Window
             if (e.IsDoubleClick &&
                 _draftCutPoints.Count >= 2)
             {
-                _draftCutDrawing = false;
-                _draftCutPreviewPoint = null;
-                EditorSurface.SetDraftCut(
-                    _draftCutPoints,
-                    _draftCutPreviewPoint);
-
-                UpdateStatus(
-                    $"Split line ready with {_draftCutPoints.Count:N0} point(s). Press Apply split or Enter.");
+                FinishDraftCutDrawing();
                 return;
             }
 
             UpdateStatus(
                 _draftCutPoints.Count < 2
                     ? "Split line started. Add at least one more point."
-                    : $"Split line has {_draftCutPoints.Count:N0} point(s). Press Enter to finish drawing; press Enter again or Apply split to apply.");
+                    : $"Split line has {_draftCutPoints.Count:N0} point(s). Press Enter to finish drawing; press Enter again or Apply split to apply all pending lines.");
 
             return;
         }
