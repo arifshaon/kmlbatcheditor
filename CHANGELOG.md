@@ -4,23 +4,20 @@
 
 ### Line Editor
 
-- Added an explicit **Cut Selected...** action so a line selection clearly transitions into drawing the cutline for those selected targets.
-- Selection is now explicitly treated as temporary editor state; **Apply to Document & Close** refuses to imply that an unmodified selection was saved.
-- After committed line edits return to the main window, the application now asks whether to save the edited KML/KMZ immediately, avoiding accidental reopening of the unchanged original file.
+- Renamed the geometry operation from **Cut** to **Split** throughout the Line Editor; the shortcut is now **S**.
+- The Line Editor now always opens with nothing selected.
+- Added **Shift+click** to add one line to the current selection; Alt+click/drag removes from it.
+- Added **Split Selected Lines...**, **Import Split Line...**, **Use Selected as Split Line**, and **Split with Imported Line**.
+- Live split preview uses the same spatial grid as selection, hover and the final split, and updates incrementally while drawing.
+- Added a segment-grid spatial index and incremental index updates after geometry edits.
+- Added three rendering layers: cached base geometry, selection/hover overlays, and split overlays; display geometry is simplified by zoom level and drawing resources are frozen/cached.
+- Unchanged line features and display geometries are retained after edits; the redundant second geometry parse was removed.
+- Space is reserved for pan and Line Editor buttons cannot be triggered by Space.
+- A single crossing of a closed ring now creates an opening measured in coordinate degrees, safely above the closed-ring tolerance.
+- Imported split lines remain temporary overlays and are not written to output KML/KMZ.
+- Split/deletion changes stay in the loaded working document after **Apply & Close** until the user chooses **Save As**.
+- Added main-editor **line colour** and **line width** editing through the existing scoped Style/StyleMap cloning workflow.
 
-- Simplified the permanent toolbar to **Select**, **Cut**, **Hand**, Undo, Fit, Zoom Selection, and zoom controls; Select/Cut actions now appear contextually.
-- Added keyboard shortcuts: V Select, C Cut, H Hand, Ctrl+Z Undo, Delete, Backspace, Esc, F, and +/- zoom.
-- Added explicit Hand mode, Space+drag pan, middle-drag pan, cursor feedback, and Zoom Selection.
-- Hand-drawn cuts support point-by-point and freehand input. Right-click opens contextual cut-line actions at the pointer; double-click or Enter finishes and applies as one undoable step.
-- Added live cut-impact preview markers and counts showing how many lines and intersections would be affected.
-- Cut scope follows the current line selection: selected lines only when present, otherwise all document lines. A main-tree choice now provides an initial selection rather than locking the rest of the document.
-- The map overlay permanently shows the active cut scope, while all document lines remain selectable/editable.
-- Fixed **Use Selected as Cutline** so the helper line is removed before the cut and cannot split itself.
-- Imported KML/KMZ cut guides remain preview-first and are committed explicitly with **Apply Imported Guide**.
-- Selection strokes use real geometric crossings only; Alt+drag deselects.
-- Added cached contour rendering, feature bounding-box rejection, hover highlighting, fixed projection for imported guides, and lightweight overlay-only live previews.
-- A single crossing of a closed ring opens it with a visually negligible gap so a later cut can split it normally.
-- Line edits remain on a working copy until **Apply & Close**.
 
 ## 1.1.0
 
