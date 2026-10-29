@@ -62,10 +62,18 @@
             <Grid Margin="2,2,4,2">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Column="0"
+                <CheckBox Grid.Column="0"
+                          IsThreeState="True"
+                          IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                          VerticalAlignment="Top"
+                          Margin="0,2,7,0"
+                          ToolTip="Tick this item to include its placemarks in Ticked items mode" />
+
+                <TextBlock Grid.Column="1"
                            Margin="0,1,6,0"
                            FontSize="13">
                     <TextBlock.Style>
@@ -92,7 +100,7 @@
                     </TextBlock.Style>
                 </TextBlock>
 
-                <StackPanel Grid.Column="1">
+                <StackPanel Grid.Column="2">
                     <TextBlock Text="{Binding Name}"
                                FontSize="13"
                                Foreground="#1F3A93"
@@ -203,7 +211,7 @@
                     <DockPanel>
                         <TextBlock DockPanel.Dock="Top"
                                    Margin="14,12,14,8"
-                                   Text="Click an item to inspect it, or to use it as the Tree item scope. No tick boxes — one click = one choice."
+                                   Text="Tick items to target them; click a row to inspect it or use it as the Tree item scope."
                                    Foreground="#52606D"
                                    TextWrapping="Wrap" />
 
@@ -264,6 +272,11 @@
                                                   IsChecked="{Binding IsFolderSelectionMode, Mode=OneWay}"
                                                   Command="{Binding SetSelectionModeCommand}"
                                                   CommandParameter="Folder" />
+                                    <ToggleButton Style="{StaticResource ModeButtonStyle}"
+                                                  Content="Ticked"
+                                                  IsChecked="{Binding IsTickedSelectionMode, Mode=OneWay}"
+                                                  Command="{Binding SetSelectionModeCommand}"
+                                                  CommandParameter="Ticked" />
                                     <ToggleButton Style="{StaticResource ModeButtonStyle}"
                                                   Content="Placemark name"
                                                   IsChecked="{Binding IsPlacemarkNameSelectionMode, Mode=OneWay}"
