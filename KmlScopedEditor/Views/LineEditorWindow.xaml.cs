@@ -1922,6 +1922,14 @@ public partial class LineEditorWindow : Window
         EditorSurface.SetDraftCut(
             _draftCutPoints,
             _draftCutPreviewPoint);
+
+        var editingGuide = GetEditingGuide();
+
+        EditorSurface.SetEditableGuide(
+            _workflowStep == 2 &&
+            editingGuide is not null
+                ? ProjectGuide(editingGuide.Guide)
+                : null);
     }
 
     private Rect GetDisplayBounds(
