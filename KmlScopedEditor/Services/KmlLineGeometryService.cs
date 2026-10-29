@@ -21,14 +21,17 @@ public sealed class KmlLineGeometryService
 
     private readonly XDocument _document;
     private readonly double? _fixedLongitudeScale;
+    private readonly XName? _scopeMarkerAttribute;
     private double _longitudeScale = 1d;
 
     public KmlLineGeometryService(
         XDocument document,
-        double? fixedLongitudeScale = null)
+        double? fixedLongitudeScale = null,
+        XName? scopeMarkerAttribute = null)
     {
         _document = document ?? throw new ArgumentNullException(nameof(document));
         _fixedLongitudeScale = fixedLongitudeScale;
+        _scopeMarkerAttribute = scopeMarkerAttribute;
         Reload();
     }
 
@@ -56,6 +59,15 @@ public sealed class KmlLineGeometryService
             var placemark = lineString
                 .Ancestors(KmlNs + "Placemark")
                 .FirstOrDefault();
+
+            if (_scopeMarkerAttribute is not null &&
+                !string.Equals(
+                    placemark?.Attribute(_scopeMarkerAttribute)?.Value,
+                    "true",
+                    StringComparison.Ordinal))
+            {
+                continue;
+            }
 
             var name = placemark?.Element(KmlNs + "name")?.Value?.Trim();
             raw.Add((
