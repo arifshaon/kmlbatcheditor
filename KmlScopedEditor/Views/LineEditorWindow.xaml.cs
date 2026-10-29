@@ -114,24 +114,6 @@ public partial class LineEditorWindow : Window
         BeginSplitMode();
     }
 
-    private void OnSplitSelectedClick(
-        object sender,
-        RoutedEventArgs e)
-    {
-        if (GetValidSelectedLines().Count == 0)
-        {
-            UpdateStatus(
-                "Select one or more lines first, then choose Split Selected Lines.");
-            return;
-        }
-
-        BeginSplitMode();
-
-        UpdateStatus(
-            $"Split Selected Lines is active for {GetValidSelectedLines().Count:N0} selected line(s). " +
-            "Now draw the split line across them; right-click for options, or double-click/Enter to finish.");
-    }
-
     private void BeginSplitMode()
     {
         SetTool(LineEditorTool.Split);
@@ -149,7 +131,7 @@ public partial class LineEditorWindow : Window
         UpdateStatus(
             _draftCutPoints.Count == 0
                 ? (GetValidSelectedLines().Count > 0
-                    ? $"Split Selected Lines is active for {GetValidSelectedLines().Count:N0} selected line(s). Draw the split line across them."
+                    ? $"Split is active for {GetValidSelectedLines().Count:N0} selected line(s). Draw the split line across them."
                     : "Split tool ready. No lines are selected, so the split will affect any document line it crosses.")
                 : $"Continuing split line from {_draftCutPoints.Count:N0} existing point(s).");
     }
@@ -187,7 +169,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Pan =>
                 "HAND: left-drag to pan. Mouse wheel zooms. Right-drag, Space+drag and middle-drag also pan.",
             LineEditorTool.Select =>
-                "SELECT: drag across lines to select real crossings. Shift+click adds one line; Alt+click/drag removes. Then choose Split Selected Lines... or Delete Selected.",
+                "SELECT: drag across lines to select real crossings. Shift+click adds one line; Alt+click/drag removes. Then click Split to draw the split line, or Delete Selected.",
             _ =>
                 "SPLIT: click points or drag freehand. Right-click opens split-line options at the pointer. Double-click or Enter finishes and applies. Backspace removes the last point; Esc cancels."
         };
@@ -197,7 +179,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Pan =>
                 "H Hand · right-drag / Space+drag / middle-drag pan · +/- zoom · F fit",
             LineEditorTool.Select =>
-                "V Select · drag across lines · Shift+click add · Alt+click/drag remove · Split Selected Lines... · Delete",
+                "V Select · drag across lines · Shift+click add · Alt+click/drag remove · Split · Delete",
             _ =>
                 "S Split · click points or drag freehand · right-click options · double-click/Enter finish · Backspace undo point · Esc cancel"
         };
@@ -1264,7 +1246,7 @@ public partial class LineEditorWindow : Window
         {
             System.Windows.MessageBox.Show(
                 this,
-                "No line geometry has been changed. Selection by itself is temporary and is not saved in KML/KMZ. Use Split Selected Lines... or Delete Selected first, or click Cancel to close without changes.",
+                "No line geometry has been changed. Selection by itself is temporary and is not saved in KML/KMZ. Select lines and click Split, or use Delete Selected, or click Cancel to close without changes.",
                 "No line edits to apply",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
