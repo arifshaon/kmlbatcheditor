@@ -28,7 +28,6 @@ public partial class LineEditorWindow : Window
     private readonly XDocument _originalDocument;
     private XDocument _workingDocument;
     private KmlLineGeometryService _geometry;
-    private KmlLineGeometryService _contextGeometry;
     private readonly double _projectionScale;
 
     private readonly KmlCutGuideService _cutGuideLoader = new();
@@ -58,10 +57,6 @@ public partial class LineEditorWindow : Window
             _workingDocument);
 
         _projectionScale = projectionGeometry.LongitudeScale;
-
-        _contextGeometry = new KmlLineGeometryService(
-            _workingDocument,
-            _projectionScale);
 
         _geometry = new KmlLineGeometryService(
             _workingDocument,
@@ -754,7 +749,6 @@ public partial class LineEditorWindow : Window
                                     helper.LineStringElement
                                 });
 
-                        _contextGeometry.Reload();
                         changed = true;
                     }
                 }
@@ -785,7 +779,6 @@ public partial class LineEditorWindow : Window
         {
             ClearCutTargetMarkers();
             _geometry.Reload();
-            _contextGeometry.Reload();
         }
 
         _selected.Clear();
@@ -859,7 +852,6 @@ public partial class LineEditorWindow : Window
 
         _undo.Push(snapshot);
         _selected.Clear();
-        _contextGeometry.Reload();
 
         RefreshSurface();
         UpdateCutScopeDisplay();
@@ -918,11 +910,6 @@ public partial class LineEditorWindow : Window
         var state = _undo.Pop();
 
         _workingDocument = state.Document;
-
-        _contextGeometry =
-            new KmlLineGeometryService(
-                _workingDocument,
-                _projectionScale);
 
         _geometry =
             new KmlLineGeometryService(
@@ -1501,7 +1488,6 @@ public partial class LineEditorWindow : Window
 
         EditorSurface.SetDocument(
             _geometry.Features,
-            Array.Empty<KmlLineFeature>(),
             _selected,
             GetDisplayBounds(
                 guideVisuals),
