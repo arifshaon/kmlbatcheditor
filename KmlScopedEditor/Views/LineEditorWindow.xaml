@@ -478,8 +478,13 @@
                             <TextBlock Text="Selected (for deleting)" FontSize="11" Foreground="#52606D" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,12,0">
-                            <Rectangle Width="22" Height="2" Fill="#743DAA" VerticalAlignment="Center" Margin="0,0,5,0" />
-                            <TextBlock Text="Split line" FontSize="11" Foreground="#52606D" />
+                            <Rectangle x:Name="AppliedHistoryLegendLine"
+                                       Width="22"
+                                       Height="3"
+                                       Fill="#4C2D67"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,5,0" />
+                            <TextBlock Text="Applied split history" FontSize="11" Foreground="#52606D" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <Ellipse Width="8" Height="8" Fill="#DA5E27" VerticalAlignment="Center" Margin="0,0,5,0" />
