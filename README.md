@@ -69,3 +69,5 @@ Typical workflow:
 Navigation: **right-drag pans from any tool**; **Hand (H)** pans with left-drag; **Space+drag** and middle-drag also pan; the mouse wheel and **+/-** zoom; **F** fits the view; **Zoom Selection** fits the highlighted lines. **Ctrl+Z** undoes the last split/deletion.
 
 Imported split lines are temporary overlays and are not saved into the output KML/KMZ.
+
+For large contour files, the Line Editor uses a shared spatial grid for hit-testing/splitting, retained rendering layers, and display-only Douglas–Peucker simplification. These optimizations do not change the stored KML coordinates.
