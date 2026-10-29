@@ -88,6 +88,7 @@ public partial class LineEditorWindow : Window
             Title = $"Line Editor - {sourceName}";
 
         EditorSurface.StrokeCompleted += OnStrokeCompleted;
+        EditorSurface.CutStrokePreviewChanged += OnCutStrokePreviewChanged;
         EditorSurface.LineClicked += OnLineClicked;
         EditorSurface.PointerMoved += OnPointerMoved;
         EditorSurface.PointerExited += OnPointerExited;
@@ -243,6 +244,38 @@ public partial class LineEditorWindow : Window
         UpdateStatus(
             $"Added a freehand section. Cut line now has {_draftCutPoints.Count:N0} sampled point(s). " +
             "Continue drawing, or right-click/Enter to finish.");
+    }
+
+    private void OnCutStrokePreviewChanged(
+        object? sender,
+        LineEditorStrokeEventArgs e)
+    {
+        if (e.Tool != LineEditorTool.Cut)
+            return;
+
+        var stroke = _draftCutPoints.ToList();
+
+        foreach (var point in e.WorldPoints)
+        {
+            if (stroke.Count == 0 ||
+                (stroke[^1] - point).Length >
+                EditorSurface.WorldToleranceFromPixels(1.5d))
+            {
+                stroke.Add(point);
+            }
+        }
+
+        if (stroke.Count < 2)
+            return;
+
+        var preview = _geometry.PreviewCutWithStroke(
+            stroke,
+            GetSelectedTargetSet());
+
+        _cutPoints.Clear();
+        _cutPoints.AddRange(preview.CutPoints);
+        EditorSurface.SetCutPoints(_cutPoints);
+        UpdateCutScopeDisplay(preview);
     }
 
     private void OnLineClicked(
