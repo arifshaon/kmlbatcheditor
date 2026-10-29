@@ -185,10 +185,16 @@ public partial class MainWindow : System.Windows.Window
             return;
         }
 
+        var scope = BuildLineEditorScope(
+            viewModel.DocumentContext.Document,
+            viewModel.SelectedNode);
+
         var editor = new LineEditorWindow(
             viewModel.DocumentContext.Document,
             System.IO.Path.GetFileName(
-                viewModel.DocumentContext.SourcePath))
+                viewModel.DocumentContext.SourcePath),
+            scope.PlacemarkIndexes,
+            scope.DisplayName)
         {
             Owner = this
         };
@@ -199,6 +205,62 @@ public partial class MainWindow : System.Windows.Window
         await viewModel.ApplyLineEditorDocumentAsync(
             editor.EditedDocument);
     }
+
+    private static LineEditorScope BuildLineEditorScope(
+        System.Xml.Linq.XDocument document,
+        KmlTreeNode? selectedNode)
+    {
+        System.Xml.Linq.XNamespace kml =
+            "http://www.opengis.net/kml/2.2";
+
+        var allPlacemarks = document
+            .Descendants(kml + "Placemark")
+            .ToList();
+
+        if (selectedNode?.SourceElement is null)
+        {
+            return new LineEditorScope(
+                null,
+                "Entire document");
+        }
+
+        IEnumerable<System.Xml.Linq.XElement> scopedPlacemarks =
+            selectedNode.NodeType == KmlNodeType.Placemark
+                ? new[] { selectedNode.SourceElement }
+                : selectedNode.SourceElement
+                    .Descendants(kml + "Placemark");
+
+        var scopedSet = scopedPlacemarks.ToHashSet();
+
+        var indexes = allPlacemarks
+            .Select((placemark, index) => new
+            {
+                Placemark = placemark,
+                Index = index
+            })
+            .Where(item => scopedSet.Contains(item.Placemark))
+            .Select(item => item.Index)
+            .ToList();
+
+        if (indexes.Count == allPlacemarks.Count)
+        {
+            return new LineEditorScope(
+                null,
+                "Entire document");
+        }
+
+        var displayName = string.IsNullOrWhiteSpace(selectedNode.Name)
+            ? selectedNode.NodeType.ToString()
+            : $"{selectedNode.NodeType}: {selectedNode.Name}";
+
+        return new LineEditorScope(
+            indexes,
+            displayName);
+    }
+
+    private sealed record LineEditorScope(
+        IReadOnlyCollection<int>? PlacemarkIndexes,
+        string DisplayName);
 
     private void OnTreeViewItemSelected(
         object sender,
