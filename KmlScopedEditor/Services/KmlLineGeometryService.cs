@@ -19,6 +19,9 @@ public sealed class KmlLineGeometryService
     private static readonly XNamespace KmlNs =
         "http://www.opengis.net/kml/2.2";
 
+    private const double CoordinateToleranceDegrees = 0.000000001d;
+    private const double OpenRingTrimDegrees = 0.0000001d;
+
     private readonly XDocument _document;
     private readonly double? _fixedLongitudeScale;
     private readonly XName? _scopeMarkerAttribute;
@@ -483,16 +486,17 @@ public sealed class KmlLineGeometryService
         closedCuts = DeduplicatePositions(
             closedCuts.OrderBy(position => position).ToList());
 
-        // A single crossing opens the ring at the cut point. We leave a
-        // microscopic gap centred on that crossing so the resulting line is
-        // genuinely open and a later cut can split it normally. The gap is
-        // intentionally far below visible illustration scale.
+        // A single crossing opens the ring at the cut point. The actual
+        // opening is defined in longitude/latitude degrees, not as an arbitrary
+        // fraction of a source segment. Each side is trimmed by 1e-7 degrees,
+        // deliberately well above the 1e-9 degree IsClosed tolerance while
+        // remaining visually negligible at illustration scale.
         if (closedCuts.Count == 1)
         {
-            const double gapInSegmentUnits = 0.000001d;
+            const double seedOffsetInSegmentUnits = 0.000000001d;
             var cut = closedCuts[0];
-            var start = cut + gapInSegmentUnits;
-            var end = cut - gapInSegmentUnits;
+            var start = cut + seedOffsetInSegmentUnits;
+            var end = cut - seedOffsetInSegmentUnits;
 
             while (start >= segmentCount)
                 start -= segmentCount;
@@ -506,7 +510,11 @@ public sealed class KmlLineGeometryService
                 end,
                 segmentCount);
 
-            return HasLength(opened)
+            opened = TrimPolylineEndsByDegrees(
+                opened,
+                OpenRingTrimDegrees);
+
+            return HasLength(opened) && !IsClosed(opened)
                 ? new List<List<KmlCoordinate>> { opened }
                 : new List<List<KmlCoordinate>>();
         }
@@ -812,8 +820,8 @@ public sealed class KmlLineGeometryService
         var first = coordinates[0];
         var last = coordinates[^1];
 
-        return Math.Abs(first.Longitude - last.Longitude) < 0.000000001d &&
-               Math.Abs(first.Latitude - last.Latitude) < 0.000000001d;
+        return Math.Abs(first.Longitude - last.Longitude) < CoordinateToleranceDegrees &&
+               Math.Abs(first.Latitude - last.Latitude) < CoordinateToleranceDegrees;
     }
 
     private static List<double> DeduplicatePositions(
@@ -866,8 +874,8 @@ public sealed class KmlLineGeometryService
 
     private static bool SamePoint(KmlCoordinate a, KmlCoordinate b)
     {
-        return Math.Abs(a.Longitude - b.Longitude) < 0.000000001d &&
-               Math.Abs(a.Latitude - b.Latitude) < 0.000000001d;
+        return Math.Abs(a.Longitude - b.Longitude) < CoordinateToleranceDegrees &&
+               Math.Abs(a.Latitude - b.Latitude) < CoordinateToleranceDegrees;
     }
 
     private static bool IsGeometryElement(XElement element)
