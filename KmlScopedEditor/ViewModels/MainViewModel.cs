@@ -451,7 +451,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     public AsyncRelayCommand SaveAsCommand { get; }
 
-    public AsyncRelayCommand CalculateSelectionCommand { get; }
+    public RelayCommand TickAllCommand { get; }
+
+    public RelayCommand UntickAllCommand { get; }
 
     public RelayCommand SetSelectionModeCommand { get; }
 
@@ -525,9 +527,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 _ => SaveAsAsync(),
                 _ => !IsBusy && _documentContext is not null);
 
-        CalculateSelectionCommand =
-            new AsyncRelayCommand(
-                _ => CalculateSelectionAsync(),
+        TickAllCommand =
+            new RelayCommand(
+                _ => SetAllTreeChecks(true),
+                _ => !IsBusy && _documentContext is not null);
+
+        UntickAllCommand =
+            new RelayCommand(
+                _ => SetAllTreeChecks(false),
                 _ => !IsBusy && _documentContext is not null);
 
         SetSelectionModeCommand =
@@ -619,129 +626,6 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         SelectedStyle = _styleInspector.Inspect(
             SelectedNode.SourceElement,
             _documentContext);
-    }
-
-    private async Task CalculateSelectionAsync()
-    {
-        if (_documentContext is null)
-        {
-            SelectionSummary = "Open a KML or KMZ file first.";
-            ShowNotification(SelectionSummary, NotificationKind.Warning);
-            return;
-        }
-
-        var selectionMode = SelectedSelectionMode.Value;
-        var selectedNode = SelectedNode;
-        var includeSubfolders = IncludeSubfolders;
-        var selectedIconTypes = IconTypes
-            .Where(option => option.IsSelected)
-            .ToList();
-        var selectedPlacemarkNames = GetSelectedPlacemarkNameOptions();
-
-        if (selectionMode == PlacemarkSelectionMode.Folder &&
-            selectedNode is null)
-        {
-            SelectionSummary = "Select a folder or placemark.";
-            ShowNotification(SelectionSummary, NotificationKind.Warning);
-            return;
-        }
-
-        if (selectionMode == PlacemarkSelectionMode.PlacemarkName &&
-            selectedPlacemarkNames.Count == 0)
-        {
-            SelectionSummary = "Select at least one placemark name.";
-            ShowNotification(SelectionSummary, NotificationKind.Warning);
-            return;
-        }
-
-        if ((selectionMode == PlacemarkSelectionMode.IconImage ||
-             selectionMode == PlacemarkSelectionMode.IconVariant) &&
-            selectedIconTypes.Count == 0)
-        {
-            SelectionSummary =
-                "Select at least one icon image or icon variant.";
-            ShowNotification(SelectionSummary, NotificationKind.Warning);
-            return;
-        }
-
-        IReadOnlyList<XElement>? calculatedSelection = null;
-        var stopwatch = Stopwatch.StartNew();
-
-        var completed = await RunBusyOperationAsync(
-            title: "Calculating placemark selection",
-            initialMessage: "Preparing the selected scope...",
-            canCancel: true,
-            operation: async (progress, cancellationToken) =>
-            {
-                calculatedSelection = await Task.Run(
-                    () => selectionMode switch
-                    {
-                        PlacemarkSelectionMode.Folder =>
-                            _selectionService.GetPlacemarksForFolder(
-                                selectedNode!,
-                                includeSubfolders,
-                                progress,
-                                cancellationToken),
-                        PlacemarkSelectionMode.PlacemarkName =>
-                            _placemarkNameSelectionService.GetPlacemarksForNames(
-                                selectedPlacemarkNames,
-                                progress,
-                                cancellationToken),
-                        _ => _selectionService.GetPlacemarksForIconTypes(
-                            selectedIconTypes,
-                            progress,
-                            cancellationToken)
-                    },
-                    cancellationToken);
-            });
-
-        stopwatch.Stop();
-
-        if (!completed || calculatedSelection is null)
-            return;
-
-        _currentSelection = calculatedSelection;
-        MatchedPlacemarkCount = _currentSelection.Count;
-
-        if (selectionMode == PlacemarkSelectionMode.Folder)
-        {
-            var scopeDescription = includeSubfolders
-                ? "including nested subfolders"
-                : "excluding nested subfolders";
-
-            SelectionSummary =
-                $"{MatchedPlacemarkCount:N0} placemarks matched in " +
-                $"“{selectedNode!.Name}”, {scopeDescription}.";
-        }
-        else if (selectionMode == PlacemarkSelectionMode.PlacemarkName)
-        {
-            SelectionSummary =
-                $"{MatchedPlacemarkCount:N0} placemarks matched across " +
-                $"{selectedPlacemarkNames.Count:N0} selected names.";
-        }
-        else
-        {
-            var groupDescription =
-                selectionMode == PlacemarkSelectionMode.IconVariant
-                    ? "icon variants"
-                    : "icon images";
-
-            SelectionSummary =
-                $"{MatchedPlacemarkCount:N0} placemarks matched across " +
-                $"{selectedIconTypes.Count:N0} selected {groupDescription}.";
-        }
-
-        InvalidateEditPreview(
-            "Selection calculated. Enable the properties to change, then preview the operation.");
-
-        StatusText =
-            $"{SelectionSummary} Completed in {FormatElapsed(stopwatch.Elapsed)}.";
-
-        ShowNotification(
-            $"Selection ready: {MatchedPlacemarkCount:N0} placemarks matched.",
-            NotificationKind.Success);
-
-        RaiseCommandStates();
     }
 
     private async Task PreviewChangesAsync()
@@ -1018,6 +902,25 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             root.SetChecksChangedCallback(
                 OnTreeChecksChanged);
         }
+    }
+
+    private void SetAllTreeChecks(
+        bool isChecked)
+    {
+        foreach (var root in RootNodes)
+        {
+            root.SetChecksChangedCallback(
+                null);
+        }
+
+        foreach (var root in RootNodes)
+        {
+            root.IsChecked =
+                isChecked;
+        }
+
+        WireTreeCheckCallbacks();
+        OnTreeChecksChanged();
     }
 
     private void OnTreeChecksChanged()
@@ -1591,11 +1494,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         StatusText =
             $"Line edits applied to the loaded working document: " +
             $"{lineCount:N0} LineString segment(s) remain. " +
+            "Tree ticks were reset when the tree was rebuilt. " +
             $"You can reopen Line Editor to continue editing, or use Save As whenever you are ready to write the edited KML/KMZ to disk. " +
             $"Completed in {FormatElapsed(stopwatch.Elapsed)}.";
 
         ShowNotification(
-            "Line edits are kept in the currently loaded document. Reopen Line Editor to continue, or use Save As whenever you want to save a file.",
+            "Line edits are kept in the currently loaded document. Tree ticks were reset because the tree was rebuilt. Reopen Line Editor to continue, or use Save As whenever you want to save a file.",
             NotificationKind.Success);
 
         RaiseCommandStates();
@@ -1860,7 +1764,8 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     {
         OpenKmlCommand.RaiseCanExecuteChanged();
         SaveAsCommand.RaiseCanExecuteChanged();
-        CalculateSelectionCommand.RaiseCanExecuteChanged();
+        TickAllCommand.RaiseCanExecuteChanged();
+        UntickAllCommand.RaiseCanExecuteChanged();
         SetSelectionModeCommand.RaiseCanExecuteChanged();
         BrowseIconFileCommand.RaiseCanExecuteChanged();
         PickIconColorCommand.RaiseCanExecuteChanged();
