@@ -57,13 +57,13 @@ The Line Editor is intended for dependable manual contour cleanup and cutting ra
 Typical workflow:
 
 1. In the main document tree, you can select a placemark/folder before opening **Line Editor**. Its lines are used as the initial selection, but **all lines in the document remain selectable and editable**. Choosing the whole document/root opens with no lines preselected.
-2. Use **Select (V)** to draw across unwanted contours. Only real crossings are selected. **Alt+drag** removes crossed lines from the selection. **Delete** removes the highlighted lines.
-3. If any lines are selected, a cut affects only those selected lines. If nothing is selected, the cut affects every line in the document. The map overlay always shows which rule is active.
+2. Use **Select (V)** to draw across unwanted contours. Only real crossings are selected. **Alt+drag** removes crossed lines from the selection. After selecting, choose **Cut Selected...** to split only those lines, or **Delete Selected** to remove them.
+3. **Cut Selected...** keeps the current selection as the cut target and switches to the Cut tool so you can draw the cutting path. If nothing is selected and you use Cut directly, the cut can affect any document line it crosses. The map overlay always shows which rule is active.
 4. Use **Cut (C)** to draw a cutline. Click to add connected points or press-and-drag for a freehand section. Live markers show the intersections and the overlay reports how many lines/points would be cut.
 5. **Right-click opens cut-line options at the pointer** (add point, finish/apply, undo point, cancel). You can also finish and apply with **double-click** or **Enter**. **Backspace** removes the last point; **Esc** cancels the draft.
 6. To use a Google Earth cutline, choose **Import Cut Lines...**. Imported guides are previewed first; choose **Apply Imported Guide** to commit them.
 7. To use a helper LineString already in the document, select exactly that line and choose **Use Selected as Cutline**. The helper is removed before cutting so it cannot cut itself.
-8. After cutting, return to **Select** and remove unwanted fragments. Then choose **Apply & Close** and use **Save As** in the main window.
+8. After cutting, return to **Select** and remove unwanted fragments. Choose **Apply to Document & Close**. Selection alone is temporary and is not saved; only actual cuts/deletions change the KML/KMZ. After applying real edits, the main window asks whether you want to save the edited file immediately.
 
 Navigation: **Hand (H)** pans with left-drag; **Space+drag** and middle-drag also pan; the mouse wheel and **+/-** zoom; **F** fits the view; **Zoom Selection** fits the highlighted lines. **Ctrl+Z** undoes the last cut/deletion.
 
