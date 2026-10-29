@@ -158,10 +158,14 @@ public sealed class LineEditorSurface : FrameworkElement
             UpdateChangedFeatureGeometry(previousFeatures);
             RebuildGuideGeometry();
             RebuildBaseLayerFromCachedGeometry();
+            RedrawSelectionLayer();
+            RedrawOverlayLayer();
+            UpdateLayerTransforms();
         }
         else
         {
             InvalidateRenderCache();
+            EnsureRenderCache();
         }
 
         if (_hovered is not null &&
@@ -712,8 +716,169 @@ public sealed class LineEditorSurface : FrameworkElement
             _worldCenter.Y + (worldBefore.Y - worldAfter.Y));
 
         _fitPending = false;
-        InvalidateVisual();
+        RefreshViewLayers();
         e.Handled = true;
+    }
+
+    private void DrawBaseLayer()
+    {
+        using var context = _baseVisual.RenderOpen();
+
+        if (_baseLayer is not null)
+            context.DrawDrawing(_baseLayer);
+    }
+
+    private void RedrawSelectionLayer()
+    {
+        using var context = _selectionVisual.RenderOpen();
+
+        if (_selectedPen is not null)
+        {
+            foreach (var element in _selected)
+            {
+                if (_featureGeometry.TryGetValue(
+                        element,
+                        out var geometry))
+                {
+                    context.DrawGeometry(
+                        null,
+                        _selectedPen,
+                        geometry);
+                }
+            }
+        }
+
+        if (_hovered is not null &&
+            !_selected.Contains(_hovered) &&
+            _hoverPen is not null &&
+            _featureGeometry.TryGetValue(
+                _hovered,
+                out var hoveredGeometry))
+        {
+            context.DrawGeometry(
+                null,
+                _hoverPen,
+                hoveredGeometry);
+        }
+    }
+
+    private void RedrawOverlayLayer()
+    {
+        using var context = _overlayVisual.RenderOpen();
+
+        var safeScale = Math.Max(
+            double.IsFinite(_renderScaleBucket)
+                ? _renderScaleBucket
+                : _scale,
+            0.000001d);
+
+        foreach (var item in _guideGeometry)
+        {
+            var splitLinePen = item.Guide.Applied
+                ? _appliedSplitLinePen
+                : _activeSplitLinePen;
+
+            if (splitLinePen is not null)
+            {
+                context.DrawGeometry(
+                    null,
+                    splitLinePen,
+                    item.Geometry);
+            }
+        }
+
+        if (_editableGuidePoints.Count >= 2)
+        {
+            context.DrawGeometry(
+                null,
+                _draftSplitPen,
+                BuildGeometry(_editableGuidePoints));
+
+            var handleRadius = 5.0d / safeScale;
+
+            foreach (var point in _editableGuidePoints)
+            {
+                context.DrawEllipse(
+                    _splitVertexBrush,
+                    _hoverPen,
+                    point,
+                    handleRadius,
+                    handleRadius);
+            }
+        }
+
+        if (_draftCutPoints.Count > 0)
+        {
+            var draftPoints = _draftCutPoints.ToList();
+
+            if (_draftCutPreviewPoint.HasValue)
+                draftPoints.Add(_draftCutPreviewPoint.Value);
+
+            if (draftPoints.Count >= 2)
+            {
+                context.DrawGeometry(
+                    null,
+                    _draftSplitPen,
+                    BuildGeometry(draftPoints));
+            }
+
+            var vertexRadius = 4.2d / safeScale;
+
+            foreach (var point in _draftCutPoints)
+            {
+                context.DrawEllipse(
+                    _splitVertexBrush,
+                    null,
+                    point,
+                    vertexRadius,
+                    vertexRadius);
+            }
+        }
+
+        if (_cutPoints.Count > 0)
+        {
+            var radius = 2.6d / safeScale;
+
+            foreach (var point in _cutPoints)
+            {
+                context.DrawEllipse(
+                    _splitPointBrush,
+                    null,
+                    point,
+                    radius,
+                    radius);
+            }
+        }
+
+        if (_strokeWorld.Count >= 2)
+        {
+            var strokePen = Tool == LineEditorTool.Split
+                ? _splitStrokePen
+                : _selectStrokePen;
+
+            if (strokePen is not null)
+            {
+                context.DrawGeometry(
+                    null,
+                    strokePen,
+                    BuildGeometry(_strokeWorld));
+            }
+        }
+    }
+
+    private void RefreshViewLayers()
+    {
+        EnsureRenderCache();
+        UpdateLayerTransforms();
+    }
+
+    private void UpdateLayerTransforms()
+    {
+        var transform = CreateWorldTransform();
+
+        _baseVisual.Transform = transform;
+        _selectionVisual.Transform = transform;
+        _overlayVisual.Transform = transform;
     }
 
     private bool CanIncrementallyUpdateRenderCache(
@@ -827,6 +992,7 @@ public sealed class LineEditorSurface : FrameworkElement
 
         baseLayer.Freeze();
         _baseLayer = baseLayer;
+        DrawBaseLayer();
     }
 
     private void InvalidateRenderCache()
@@ -835,6 +1001,18 @@ public sealed class LineEditorSurface : FrameworkElement
         _baseLayer = null;
         _featureGeometry.Clear();
         _guideGeometry.Clear();
+
+        using (_baseVisual.RenderOpen())
+        {
+        }
+
+        using (_selectionVisual.RenderOpen())
+        {
+        }
+
+        using (_overlayVisual.RenderOpen())
+        {
+        }
     }
 
     private void EnsureRenderCache()
@@ -926,6 +1104,10 @@ public sealed class LineEditorSurface : FrameworkElement
         _baseLayer = baseLayer;
 
         RebuildGuideGeometry();
+        DrawBaseLayer();
+        RedrawSelectionLayer();
+        RedrawOverlayLayer();
+        UpdateLayerTransforms();
     }
 
     private static double GetScaleBucket(double scale)
