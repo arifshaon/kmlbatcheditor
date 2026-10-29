@@ -61,11 +61,11 @@ Typical workflow:
 3. Choose **Split Selected Lines...** to keep the current selection as the split target and switch to **Split (S)**. If nothing is selected and you use Split directly, any document line crossed by the split line can be affected.
 4. Draw a split line by clicking connected points or dragging freehand. Live markers and the map status show how many lines and intersection points would be split.
 5. Right-click for split-line actions at the pointer, or use **double-click** / **Enter** to finish and apply. **Backspace** removes the last split point; **Esc** cancels the draft.
-6. To use a Google Earth path, choose **Import Split Line...**, review the markers, then choose **Split with Imported Line**.
+6. To use a Google Earth path, choose **Import Split Line...**. The imported line is editable before splitting: drag its vertex handles, or right-click for add/delete vertex options. Review the markers, then choose **Split with Imported Line**.
 7. To use a helper LineString already present in the document, select exactly that line and choose **Use Selected as Split Line**. The helper is removed before the split so it cannot split itself.
 8. After splitting, return to **Select** and delete unwanted pieces. Choose **Apply & Close** to keep those geometry changes in the currently loaded working document. Reopen Line Editor to continue. Use **Save As** only when you want to write the edited file to disk.
 9. In the main editor, line colour and line width can be changed using the same scoped style-edit workflow as icon/text properties.
 
-Navigation: **Hand (H)** pans with left-drag; **Space+drag** and middle-drag also pan; the mouse wheel and **+/-** zoom; **F** fits the view; **Zoom Selection** fits the highlighted lines. **Ctrl+Z** undoes the last split/deletion.
+Navigation: **right-drag pans from any tool**; **Hand (H)** pans with left-drag; **Space+drag** and middle-drag also pan; the mouse wheel and **+/-** zoom; **F** fits the view; **Zoom Selection** fits the highlighted lines. **Ctrl+Z** undoes the last split/deletion.
 
 Imported split lines are temporary overlays and are not saved into the output KML/KMZ.
