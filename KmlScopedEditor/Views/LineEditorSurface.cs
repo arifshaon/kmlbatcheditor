@@ -28,6 +28,11 @@ namespace KmlScopedEditor.Views;
 /// </summary>
 public sealed class LineEditorSurface : FrameworkElement
 {
+    private readonly DrawingVisual _baseVisual = new();
+    private readonly DrawingVisual _selectionVisual = new();
+    private readonly DrawingVisual _overlayVisual = new();
+    private readonly VisualCollection _visualLayers;
+
     private IReadOnlyList<KmlLineFeature> _features =
         Array.Empty<KmlLineFeature>();
 
@@ -82,10 +87,16 @@ public sealed class LineEditorSurface : FrameworkElement
 
     public LineEditorSurface()
     {
+        _visualLayers = new VisualCollection(this)
+        {
+            _baseVisual,
+            _selectionVisual,
+            _overlayVisual
+        };
+
         Focusable = true;
         ClipToBounds = true;
         SnapsToDevicePixels = true;
-        CacheMode = new BitmapCache();
 
         Loaded += (_, _) =>
         {
@@ -98,8 +109,22 @@ public sealed class LineEditorSurface : FrameworkElement
             if (_fitPending)
                 FitView();
             else
+            {
+                RefreshViewLayers();
                 InvalidateVisual();
+            }
         };
+    }
+
+    protected override int VisualChildrenCount =>
+        _visualLayers.Count;
+
+    protected override Visual GetVisualChild(int index)
+    {
+        if (index < 0 || index >= _visualLayers.Count)
+            throw new ArgumentOutOfRangeException(nameof(index));
+
+        return _visualLayers[index];
     }
 
     public LineEditorTool Tool { get; set; } = LineEditorTool.Select;
@@ -164,14 +189,16 @@ public sealed class LineEditorSurface : FrameworkElement
     public void SetSelection(IEnumerable<XElement> selected)
     {
         _selected = selected?.ToHashSet() ?? new HashSet<XElement>();
-        InvalidateVisual();
+        EnsureRenderCache();
+        RedrawSelectionLayer();
     }
 
     public void SetCutPoints(
         IReadOnlyList<Point> cutPoints)
     {
         _cutPoints = cutPoints ?? Array.Empty<Point>();
-        InvalidateVisual();
+        EnsureRenderCache();
+        RedrawOverlayLayer();
     }
 
     public void SetDraftCut(
@@ -180,7 +207,8 @@ public sealed class LineEditorSurface : FrameworkElement
     {
         _draftCutPoints = points ?? Array.Empty<Point>();
         _draftCutPreviewPoint = previewPoint;
-        InvalidateVisual();
+        EnsureRenderCache();
+        RedrawOverlayLayer();
     }
 
     public void SetEditableGuide(
@@ -188,7 +216,8 @@ public sealed class LineEditorSurface : FrameworkElement
     {
         _editableGuidePoints = points?.ToList() ?? new List<Point>();
         _dragGuideVertexIndex = -1;
-        InvalidateVisual();
+        EnsureRenderCache();
+        RedrawOverlayLayer();
     }
 
     public void SetHovered(XElement? hovered)
@@ -197,7 +226,8 @@ public sealed class LineEditorSurface : FrameworkElement
             return;
 
         _hovered = hovered;
-        InvalidateVisual();
+        EnsureRenderCache();
+        RedrawSelectionLayer();
     }
 
     public double WorldToleranceFromPixels(double pixels)
@@ -224,7 +254,7 @@ public sealed class LineEditorSurface : FrameworkElement
             1000000000d);
 
         _fitPending = false;
-        InvalidateVisual();
+        RefreshViewLayers();
     }
 
     public bool ZoomToSelection()
@@ -278,7 +308,7 @@ public sealed class LineEditorSurface : FrameworkElement
             bounds.Top + (bounds.Height / 2d));
 
         _fitPending = false;
-        InvalidateVisual();
+        RefreshViewLayers();
     }
 
     protected override void OnRender(DrawingContext drawingContext)
@@ -289,6 +319,9 @@ public sealed class LineEditorSurface : FrameworkElement
             Brushes.White,
             null,
             new Rect(0d, 0d, ActualWidth, ActualHeight));
+
+        EnsureRenderCache();
+        UpdateLayerTransforms();
 
         if (_features.Count == 0 &&
             _guides.Count == 0)
@@ -307,142 +340,7 @@ public sealed class LineEditorSurface : FrameworkElement
                 new Point(
                     Math.Max(20d, (ActualWidth - text.Width) / 2d),
                     Math.Max(20d, (ActualHeight - text.Height) / 2d)));
-
-            return;
         }
-
-        var safeScale = Math.Max(_scale, 0.000001d);
-        EnsureRenderCache();
-
-        drawingContext.PushTransform(CreateWorldTransform());
-
-        if (_baseLayer is not null)
-            drawingContext.DrawDrawing(_baseLayer);
-
-        // Layer 2: selection and hover overlays. The base layer remains cached,
-        // so selection changes do not force every contour to be redrawn.
-        if (_selectedPen is not null)
-        {
-            foreach (var element in _selected)
-            {
-                if (_featureGeometry.TryGetValue(
-                        element,
-                        out var geometry))
-                {
-                    drawingContext.DrawGeometry(
-                        null,
-                        _selectedPen,
-                        geometry);
-                }
-            }
-        }
-
-        if (_hovered is not null &&
-            !_selected.Contains(_hovered) &&
-            _hoverPen is not null &&
-            _featureGeometry.TryGetValue(
-                _hovered,
-                out var hoveredGeometry))
-        {
-            drawingContext.DrawGeometry(
-                null,
-                _hoverPen,
-                hoveredGeometry);
-        }
-
-        // Layer 3 starts here: split lines, vertices, intersection markers and
-        // the active selection/split stroke.
-        foreach (var item in _guideGeometry)
-        {
-            var splitLinePen = item.Guide.Applied
-                ? _appliedSplitLinePen
-                : _activeSplitLinePen;
-
-            if (splitLinePen is not null)
-            {
-                drawingContext.DrawGeometry(
-                    null,
-                    splitLinePen,
-                    item.Geometry);
-            }
-        }
-
-        if (_editableGuidePoints.Count >= 2)
-        {
-            drawingContext.DrawGeometry(
-                null,
-                _draftSplitPen,
-                BuildGeometry(_editableGuidePoints));
-
-            var handleRadius = 5.0d / safeScale;
-
-            foreach (var point in _editableGuidePoints)
-            {
-                drawingContext.DrawEllipse(
-                    _splitVertexBrush,
-                    _hoverPen,
-                    point,
-                    handleRadius,
-                    handleRadius);
-            }
-        }
-
-        if (_draftCutPoints.Count > 0)
-        {
-            var draftPoints = _draftCutPoints.ToList();
-
-            if (_draftCutPreviewPoint.HasValue)
-                draftPoints.Add(_draftCutPreviewPoint.Value);
-
-            if (draftPoints.Count >= 2)
-            {
-                drawingContext.DrawGeometry(
-                    null,
-                    _draftSplitPen,
-                    BuildGeometry(draftPoints));
-            }
-
-            var vertexRadius = 4.2d / safeScale;
-
-            foreach (var point in _draftCutPoints)
-            {
-                drawingContext.DrawEllipse(
-                    _splitVertexBrush,
-                    null,
-                    point,
-                    vertexRadius,
-                    vertexRadius);
-            }
-        }
-
-        if (_cutPoints.Count > 0)
-        {
-            var radius = 2.6d / safeScale;
-
-            foreach (var point in _cutPoints)
-            {
-                drawingContext.DrawEllipse(
-                    _splitPointBrush,
-                    null,
-                    point,
-                    radius,
-                    radius);
-            }
-        }
-
-        if (_strokeWorld.Count >= 2)
-        {
-            var strokePen = Tool == LineEditorTool.Split
-                ? _splitStrokePen
-                : _selectStrokePen;
-
-            var strokeGeometry = BuildGeometry(_strokeWorld);
-
-            if (strokePen is not null)
-                drawingContext.DrawGeometry(null, strokePen, strokeGeometry);
-        }
-
-        drawingContext.Pop();
     }
 
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
