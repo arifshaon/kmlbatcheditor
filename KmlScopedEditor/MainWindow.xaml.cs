@@ -204,21 +204,6 @@ public partial class MainWindow : System.Windows.Window
 
         await viewModel.ApplyLineEditorDocumentAsync(
             editor.EditedDocument);
-
-        if (!viewModel.HasUnsavedChanges)
-            return;
-
-        var saveNow = System.Windows.MessageBox.Show(
-            this,
-            "The line edits are now applied to the working document, but they are not yet saved to disk.\n\nSave the edited KML/KMZ now?\n\nIf you reopen the original file without saving, the cuts will not be there.",
-            "Save line edits",
-            System.Windows.MessageBoxButton.YesNo,
-            System.Windows.MessageBoxImage.Question);
-
-        if (saveNow == System.Windows.MessageBoxResult.Yes)
-        {
-            await viewModel.SaveCurrentDocumentAsAsync();
-        }
     }
 
     private static LineEditorInitialSelection BuildLineEditorInitialSelection(
