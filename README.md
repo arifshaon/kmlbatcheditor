@@ -52,16 +52,19 @@ For example, you can change the text colour of every placemark in a folder while
 
 ## Experimental Line Editor
 
-The Line Editor is intended for manual contour cleanup and cutting rather than automatic interpretation.
+The Line Editor is intended for dependable manual contour cleanup and cutting rather than automatic interpretation.
 
 Typical workflow:
 
-1. Open the contour KML/KMZ and choose **Line Editor**.
-2. Use **Select** and draw across unwanted contours. Only real crossings are selected. Hold **Alt** while drawing to remove crossed lines from the selection.
-3. Click **Delete Selected** to remove the highlighted lines. **Undo** restores the previous cut/deletion.
-4. To use a cutline drawn in Google Earth, choose **Import Cut Lines...**, select a KML/KMZ, review the purple guide, then choose **Apply Cut**.
-5. Alternatively, single-click one helper path already present in the document and choose **Use Selected as Cutline**.
-6. After cutting, use **Select** again to mark unwanted line fragments and delete them.
-7. Choose **Apply & Close**, then use **Save As** in the main window.
+1. In the main document tree, select the placemark/folder you want to edit, then open **Line Editor**. That tree selection becomes the outer editing scope; lines outside it remain visible in light grey but are locked.
+2. Use **Select (V)** to draw across unwanted contours. Only real crossings are selected. **Alt+drag** removes crossed lines from the selection. **Delete** removes the highlighted lines.
+3. If any editable lines are selected, a cut affects only those selected lines. If nothing is selected, the cut affects every editable line in the current tree scope. The map overlay always shows the active cut scope.
+4. Use **Cut (C)** to draw a cutline. Click to add connected points or press-and-drag for a freehand section. Live markers show the intersections and the overlay reports how many lines/points would be cut.
+5. Finish a hand-drawn cut with **double-click**, **right-click**, or **Enter**. The cut is applied immediately as one undoable step. **Backspace** removes the last cut point; **Esc** cancels the draft.
+6. To use a Google Earth cutline, choose **Import Cut Lines...**. Imported guides are previewed first; choose **Apply Imported Guide** to commit them.
+7. To use a helper LineString already in the document, select exactly that line and choose **Use Selected as Cutline**. The helper is removed before cutting so it cannot cut itself.
+8. After cutting, return to **Select** and remove unwanted fragments. Then choose **Apply & Close** and use **Save As** in the main window.
 
-Imported guides are temporary overlays and are not saved into the output. Applied guides remain visible in a faded form so the cut location is easy to see. Orange markers show recent cut points. Mouse wheel zooms; right- or middle-drag pans; **Fit to View** includes imported guides.
+Navigation: **Hand (H)** pans with left-drag; **Space+drag** and middle-drag also pan; the mouse wheel and **+/-** zoom; **F** fits the view; **Zoom Selection** fits the highlighted lines. **Ctrl+Z** undoes the last cut/deletion.
+
+Imported/applied guides remain overlay state and are not saved into the output KML/KMZ.
