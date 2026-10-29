@@ -28,11 +28,21 @@
                                   Height="32"
                                   Margin="0,0,6,6"
                                   Click="OnCutToolClick" />
+                    <Button Content="Finish Line"
+                            Width="95"
+                            Height="32"
+                            Margin="0,0,6,6"
+                            Click="OnFinishCutLineClick" />
                     <Button Content="Undo Point"
                             Width="95"
                             Height="32"
-                            Margin="0,0,12,6"
+                            Margin="0,0,6,6"
                             Click="OnUndoCutPointClick" />
+                    <Button Content="Cancel Line"
+                            Width="95"
+                            Height="32"
+                            Margin="0,0,12,6"
+                            Click="OnCancelCutLineClick" />
 
                     <Button Content="Import Cut Lines..."
                             Width="125"
