@@ -262,7 +262,7 @@ public sealed class KmlLineGeometryService
     {
         var inside = false;
 
-        for (var index = 0,
+        for (int index = 0,
                  previous = polygon.Count - 1;
              index < polygon.Count;
              previous = index++)
