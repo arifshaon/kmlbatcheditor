@@ -578,7 +578,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Select =>
                 "Drag across lines · Shift+click adds · Alt+click/drag removes · Delete removes selected lines · right-drag pans",
             _ =>
-                "Click points or drag freehand · Enter finishes while drawing · Enter again or Apply split applies · imported split vertices are draggable · right-drag pans"
+                "Click points or drag freehand · click any pending split line to edit its vertices · Enter finishes while drawing · Enter again or Apply split applies all pending lines · right-drag pans"
         };
 
         UpdateCutScopeDisplay();
@@ -1438,6 +1438,21 @@ public partial class LineEditorWindow : Window
                 : string.Empty));
 
         _hideAppliedSplitHistory = false;
+
+        var remainingPending =
+            _guides.Count(
+                guide => !guide.Applied);
+
+        if (remainingPending > 0)
+        {
+            SetWorkflowStep(2);
+            RefreshSurface();
+            UpdatePendingGuidePreview();
+            UpdateStatus(
+                $"Split applied to the lines that crossed geometry. {remainingPending:N0} pending split line(s) did not split anything and remain editable.");
+            return;
+        }
+
         _step3InstructionOverride =
             $"Split applied: {totalLines:N0} line(s) split at {totalIntersections:N0} point(s). Select the pieces you want to remove.";
         SetWorkflowStep(3);
@@ -2259,7 +2274,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Select =>
                 "V Select · drag across lines · Alt+drag deselect · Delete remove · right-drag pan · Space+drag pan",
             _ =>
-                "Split · import or draw a path · Enter finishes while drawing · Enter again / Apply split applies · Backspace removes a drawn point · right-drag pans"
+                "Split · import or draw paths · click a pending line to edit · Enter finishes drawing · Enter again / Apply split applies all pending lines · Backspace removes a drawn point · right-drag pans"
         };
     }
 
