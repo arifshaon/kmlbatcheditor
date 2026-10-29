@@ -48,6 +48,7 @@ public partial class LineEditorWindow : Window
     private readonly Stack<UndoState> _undo = new();
 
     private bool _hasPerformedCut;
+    private int _workflowStep = 1;
 
     public LineEditorWindow(
         XDocument sourceDocument,
@@ -66,7 +67,7 @@ public partial class LineEditorWindow : Window
         _projectionScale = _geometry.LongitudeScale;
 
         if (!string.IsNullOrWhiteSpace(sourceName))
-            Title = $"Line Editor - {sourceName}";
+            Title = $"Edit Lines — {sourceName}";
 
         EditorSurface.StrokeCompleted += OnStrokeCompleted;
         EditorSurface.SplitStrokePreviewChanged += OnSplitStrokePreviewChanged;
@@ -79,9 +80,9 @@ public partial class LineEditorWindow : Window
 
         Loaded += (_, _) =>
         {
-            SetTool(LineEditorTool.Select);
+            SetWorkflowStep(1);
             RefreshSurface(fitView: true);
-            UpdateStatus("Ready.");
+            UpdateStatus("Ready. Remove any unwanted source lines, or go straight to Split.");
         };
     }
 
@@ -107,7 +108,88 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        SetWorkflowStep(2);
         BeginSplitMode();
+    }
+
+    private void OnStep1Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        SetWorkflowStep(1);
+    }
+
+    private void OnStep2Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        SetWorkflowStep(2);
+    }
+
+    private void OnStep3Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        SetWorkflowStep(3);
+    }
+
+    private void SetWorkflowStep(int step)
+    {
+        _workflowStep = Math.Clamp(step, 1, 3);
+
+        Step1Button.IsChecked = _workflowStep == 1;
+        Step2Button.IsChecked = _workflowStep == 2;
+        Step3Button.IsChecked = _workflowStep == 3;
+
+        Step1ActionsPanel.Visibility =
+            _workflowStep == 1
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        Step2ActionsPanel.Visibility =
+            _workflowStep == 2
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        Step3ActionsPanel.Visibility =
+            _workflowStep == 3
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        PauseDraftCut();
+
+        SetTool(
+            _workflowStep == 2
+                ? LineEditorTool.Split
+                : LineEditorTool.Select);
+
+        UpdateCutScopeDisplay();
+    }
+
+    private void OnDrawSplitLineClick(
+        object sender,
+        RoutedEventArgs e)
+    {
+        SetWorkflowStep(2);
+
+        var pending = _guides
+            .Where(guide => !guide.Applied)
+            .ToList();
+
+        if (pending.Count > 0)
+        {
+            foreach (var guide in pending)
+                _guides.Remove(guide);
+
+            StopEditingGuide();
+        }
+
+        CancelDraftCutLine(switchToSelect: false);
+        RefreshSurface();
+        BeginSplitMode();
+
+        UpdateStatus(
+            "Draw the split line by clicking points or dragging. Press Apply split or Enter when it is ready.");
     }
 
     private void BeginSplitMode()
@@ -126,29 +208,13 @@ public partial class LineEditorWindow : Window
 
         UpdateStatus(
             _draftCutPoints.Count == 0
-                ? (GetValidSelectedLines().Count > 0
-                    ? $"Split is active for {GetValidSelectedLines().Count:N0} selected line(s). Draw the split line across them."
-                    : "Split tool ready. No lines are selected, so the split will affect any document line it crosses.")
+                ? "Draw or import a split line. Nothing needs to be selected unless you want to limit the split."
                 : $"Continuing split line from {_draftCutPoints.Count:N0} existing point(s).");
     }
 
     private void SetTool(LineEditorTool tool)
     {
         EditorSurface.Tool = tool;
-
-        PanToolButton.IsChecked = tool == LineEditorTool.Pan;
-        SelectToolButton.IsChecked = tool == LineEditorTool.Select;
-        SplitToolButton.IsChecked = tool == LineEditorTool.Split;
-
-        SelectActionsPanel.Visibility =
-            tool == LineEditorTool.Select
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-
-        SplitActionsPanel.Visibility =
-            tool == LineEditorTool.Split
-                ? Visibility.Visible
-                : Visibility.Collapsed;
 
         EditorSurface.Cursor = tool switch
         {
@@ -160,24 +226,24 @@ public partial class LineEditorWindow : Window
                 System.Windows.Input.Cursors.Arrow
         };
 
-        InstructionText.Text = tool switch
+        InstructionText.Text = _workflowStep switch
         {
-            LineEditorTool.Pan =>
-                "HAND: left-drag to pan. Mouse wheel zooms. Right-drag, Space+drag and middle-drag also pan.",
-            LineEditorTool.Select =>
-                "SELECT: drag across lines to select real crossings. Shift+click adds one line; Alt+click/drag removes. Then click Split to draw the split line, or Delete Selected.",
+            1 =>
+                "Remove unwanted source lines. Drag across lines to select them, then Delete selected.",
+            2 =>
+                "Nothing needs to be selected. Import a split line or draw one; orange dots show where lines will be split.",
             _ =>
-                "SPLIT: click points or drag freehand. Right-click opens split-line options at the pointer. Double-click or Enter finishes and applies. Backspace removes the last point; Esc cancels."
+                "Remove unwanted pieces after the split. Drag across pieces to select them, then Delete selected."
         };
 
         ToolHintText.Text = tool switch
         {
             LineEditorTool.Pan =>
-                "H Hand · right-drag / Space+drag / middle-drag pan · +/- zoom · F fit",
+                "Right-drag / Space+drag / middle-drag pans · mouse wheel zooms · F fits the view",
             LineEditorTool.Select =>
-                "V Select · drag across lines · Shift+click add · Alt+click/drag remove · Split · Delete",
+                "Drag across lines · Shift+click adds · Alt+click/drag removes · Delete removes selected lines · right-drag pans",
             _ =>
-                "S Split · click points or drag freehand · right-click options · double-click/Enter finish · Backspace undo point · Esc cancel"
+                "Click points or drag freehand · imported split vertices are draggable · Apply split or Enter applies · right-drag pans"
         };
 
         UpdateCutScopeDisplay();
