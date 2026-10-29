@@ -194,11 +194,16 @@ public sealed class KmlLineGeometryService
         IReadOnlySet<XElement>? targetLines = null)
     {
         if (stroke.Count < 2 || Features.Count == 0)
-            return new LineCutPreview(0, 0, Array.Empty<Point>());
+            return new LineCutPreview(
+                0,
+                0,
+                Array.Empty<Point>(),
+                Array.Empty<XElement>());
 
         var linesAffected = 0;
         var intersectionCount = 0;
         var cutPoints = new List<Point>();
+        var affectedLines = new List<XElement>();
         var strokeBounds = BuildBounds(stroke);
 
         foreach (var feature in Features)
@@ -223,12 +228,14 @@ public sealed class KmlLineGeometryService
             linesAffected++;
             intersectionCount += events.Count;
             cutPoints.AddRange(events.Select(item => item.Intersection));
+            affectedLines.Add(feature.LineStringElement);
         }
 
         return new LineCutPreview(
             linesAffected,
             intersectionCount,
-            cutPoints);
+            cutPoints,
+            affectedLines);
     }
 
     public LineCutResult CutWithStroke(
@@ -1007,7 +1014,8 @@ public readonly record struct KmlCoordinate(
 public readonly record struct LineCutPreview(
     int LinesAffected,
     int IntersectionCount,
-    IReadOnlyList<Point> CutPoints);
+    IReadOnlyList<Point> CutPoints,
+    IReadOnlyList<XElement> AffectedLines);
 
 public readonly record struct LineCutResult(
     int LinesSplit,
