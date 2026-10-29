@@ -109,7 +109,7 @@
                             Width="130"
                             Height="30"
                             Margin="0,0,6,6"
-                            ToolTip="Show draggable vertex handles for the pending imported split line"
+                            ToolTip="Edit the pending imported/existing split line before applying it. Drag vertex handles or right-click for vertex options."
                             Click="OnEditImportedLineClick" />
                     <Button Focusable="False" Content="Use Selected as Split Line"
                             Width="165"
@@ -120,7 +120,7 @@
                             Width="145"
                             Height="30"
                             Margin="0,0,6,6"
-                            ToolTip="Use the imported/existing split line to split the current target. Hand-drawn split lines apply when you finish drawing."
+                            ToolTip="Only for a pending imported/existing split line. Hand-drawn splits apply automatically when you finish drawing."
                             Click="OnApplyImportedSplitLineClick" />
                     <Button Focusable="False" Content="Clear Split Lines"
                             Width="100"
