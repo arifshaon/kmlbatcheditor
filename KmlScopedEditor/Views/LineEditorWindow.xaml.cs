@@ -2944,6 +2944,8 @@ public partial class LineEditorWindow : Window
             }
         }
 
+        PushPendingGuideEditUndo();
+
         points.Insert(
             bestSegment + 1,
             worldPoint);
@@ -2993,6 +2995,8 @@ public partial class LineEditorWindow : Window
             return;
         }
 
+        PushPendingGuideEditUndo();
+
         points.RemoveAt(nearestIndex);
 
         UpdateGuideFromWorldPoints(
@@ -3040,7 +3044,7 @@ public partial class LineEditorWindow : Window
             $"{_geometry.Features.Count:N0} editable {CurrentLineLabel}; " +
             $"{_selected.Count:N0} selected; " +
             $"{_guides.Count:N0} split line(s); " +
-            $"{_undo.Count:N0} undo step(s).";
+            $"{_pendingEditUndo.Count + _undo.Count:N0} undo step(s).";
     }
 
     private void ClearCutTargetMarkers()
