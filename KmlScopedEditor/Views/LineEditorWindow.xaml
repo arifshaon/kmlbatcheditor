@@ -85,6 +85,12 @@
                             Height="30"
                             Margin="0,0,6,6"
                             Click="OnInvertSelectionClick" />
+                    <Button Content="Cut Selected..."
+                            Width="115"
+                            Height="30"
+                            Margin="0,0,6,6"
+                            ToolTip="Keep the current selection as the cut target, then draw a cut line across it"
+                            Click="OnCutSelectedClick" />
                     <Button Content="Delete Selected"
                             Width="115"
                             Height="30"
@@ -148,9 +154,10 @@
                             Height="32"
                             Margin="0,0,8,0"
                             Click="OnCancelClick" />
-                    <Button Content="Apply &amp; Close"
-                            Width="120"
+                    <Button Content="Apply to Document &amp; Close"
+                            Width="180"
                             Height="32"
+                            ToolTip="Commits line edits to the application's working document. You will then be asked whether to save an edited KML/KMZ file."
                             Click="OnApplyClick" />
                 </StackPanel>
 
@@ -158,7 +165,7 @@
                     <TextBlock x:Name="StatusText"
                                FontWeight="SemiBold"
                                TextWrapping="Wrap" />
-                    <TextBlock Text="Delete remains two-stage: select first, then delete. Hand-drawn cuts are previewed before they commit and remain undoable."
+                    <TextBlock Text="Selection is temporary targeting and is not saved in KML/KMZ. To change geometry, use Cut Selected... or Delete Selected. Applied cuts/deletions are undoable."
                                Foreground="#6B7280"
                                FontSize="11"
                                Margin="0,3,12,0"
