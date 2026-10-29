@@ -57,7 +57,6 @@ public partial class LineEditorWindow : Window
     private int _workflowStep = 1;
     private int _nextAppliedSequence;
     private bool _hideAppliedSplitHistory;
-    private bool _draftWillReplacePending;
     private string? _step3InstructionOverride;
     private MediaColor _appliedHistoryColor =
         MediaColor.FromRgb(142, 132, 168);
@@ -493,8 +492,8 @@ public partial class LineEditorWindow : Window
 
         UpdateStatus(
             _guides.Any(guide => !guide.Applied)
-                ? "Draw a new split line. The current split line will stay visible and will only be replaced when you finish the new drawing. Press Esc to cancel."
-                : "Draw the split line by clicking points or dragging. Press Enter to finish it, then Enter again or Apply split to apply it.");
+                ? "Draw another split line. Existing imported or drawn split lines stay pending. Press Enter or double-click to finish this drawing; nothing is applied until you choose Apply split."
+                : "Draw the split line by clicking points or dragging. Press Enter or double-click to finish the drawing; nothing is applied until you choose Apply split.");
     }
 
     private void BeginSplitMode()
@@ -534,7 +533,7 @@ public partial class LineEditorWindow : Window
         UpdatePendingGuidePreview();
 
         UpdateStatus(
-            "Split line finished. It is now the current split line. Drag its orange handles to reshape it, draw a replacement line, or press Apply split / Enter.");
+            "Split line finished and added to the pending split lines. Drag its orange handles to reshape it, draw another line, or choose Apply split when all split lines are ready.");
     }
 
     private CutGuideState?
@@ -555,13 +554,12 @@ public partial class LineEditorWindow : Window
                 guide,
                 removeMatchingSourceBeforeCut: false);
 
-        ReplacePendingSplitLines(
-            new[] { state });
+        PushPendingGuideEditUndo();
+        _guides.Add(state);
 
         _draftCutPoints.Clear();
         _draftCutPreviewPoint = null;
         _draftCutDrawing = false;
-        _draftWillReplacePending = false;
         ResetIncrementalSplitPreview();
 
         EditorSurface.SetDraftCut(
@@ -597,19 +595,6 @@ public partial class LineEditorWindow : Window
         _pendingEditUndo.Push(state);
     }
 
-    private void ReplacePendingSplitLines(
-        IReadOnlyList<CutGuideState> replacements)
-    {
-        PushPendingGuideEditUndo();
-        StopEditingGuide();
-
-        _guides.RemoveAll(
-            guide => !guide.Applied);
-
-        _guides.AddRange(replacements);
-        _draftWillReplacePending = false;
-    }
-
     private void RestorePendingGuideEditState(
         PendingGuideEditState state)
     {
@@ -630,7 +615,6 @@ public partial class LineEditorWindow : Window
 
         CancelDraftCutLine(
             switchToSelect: false);
-        _draftWillReplacePending = false;
         RefreshSurface();
         UpdatePendingGuidePreview();
         UpdateCutScopeDisplay();
@@ -787,7 +771,7 @@ public partial class LineEditorWindow : Window
 
         UpdateStatus(
             $"Drawn split line has {_draftCutPoints.Count:N0} sampled point(s). " +
-            "Continue drawing, or press Enter to finish. Press Enter again or Apply split to apply.");
+            "Continue drawing, or press Enter to finish. Choose Apply split when you are ready to perform the split.");
     }
 
     private void OnSplitStrokePreviewChanged(
@@ -798,15 +782,6 @@ public partial class LineEditorWindow : Window
             e.WorldPoints.Count < 2)
         {
             return;
-        }
-
-        if (!_draftWillReplacePending &&
-            _draftCutPoints.Count == 0 &&
-            _guides.Any(
-                guide => !guide.Applied))
-        {
-            _draftWillReplacePending = true;
-            RefreshSurface();
         }
 
         if (_activeStrokePreviewProcessedPoints <= 0)
@@ -870,7 +845,7 @@ public partial class LineEditorWindow : Window
                     StopEditingGuide();
                     RefreshSurface();
                     UpdateStatus(
-                        "Finished editing the split line. Click or drag again on empty space to start a replacement line.");
+                        "Finished editing the split line. Click or drag again on empty space to draw another pending split line.");
                     return;
                 }
 
@@ -893,12 +868,8 @@ public partial class LineEditorWindow : Window
 
             UpdateStatus(
                 _draftCutPoints.Count < 2
-                    ? _draftWillReplacePending
-                        ? "New split line started. Finishing this line will replace the current split line; press Esc to cancel."
-                        : "Split line started. Add at least one more point."
-                    : _draftWillReplacePending
-                        ? $"New split line has {_draftCutPoints.Count:N0} point(s). Finishing it will replace the current split line; press Esc to cancel."
-                        : $"Split line has {_draftCutPoints.Count:N0} point(s). Press Enter to finish drawing; press Enter again or Apply split to apply it.");
+                    ? "Split line started. Add at least one more point."
+                    : $"Split line has {_draftCutPoints.Count:N0} point(s). Press Enter or double-click to finish this drawing. It will remain pending until you choose Apply split.");
 
             return;
         }
@@ -1292,8 +1263,8 @@ public partial class LineEditorWindow : Window
         if (dialog.ShowDialog(this) != true)
             return;
 
-        // All paths imported in one action form one pending split set.
-        // The existing pending set is replaced only after the import succeeds.
+        // Imported and drawn paths share the same pending collection.
+        // Importing adds paths without removing existing pending lines.
         var importedStates =
             new List<CutGuideState>();
 
@@ -1334,7 +1305,8 @@ public partial class LineEditorWindow : Window
 
         CancelDraftCutLine(
             switchToSelect: false);
-        ReplacePendingSplitLines(
+        PushPendingGuideEditUndo();
+        _guides.AddRange(
             importedStates);
 
         RefreshSurface(fitView: true);
@@ -1348,7 +1320,7 @@ public partial class LineEditorWindow : Window
         UpdatePendingGuidePreview();
 
         UpdateStatus(
-            $"Imported {importedStates.Count:N0} split path(s) as the current split line set. Drag orange handles to reshape a path, or draw a new line to replace this set when the drawing is finished.");
+            $"Imported {importedStates.Count:N0} split path(s). They remain pending alongside any existing split lines. Drag orange handles to reshape a path, draw another line, or choose Apply split when ready.");
     }
 
     private void OnEditableGuideChanged(
@@ -1432,8 +1404,9 @@ public partial class LineEditorWindow : Window
 
         CancelDraftCutLine(
             switchToSelect: false);
-        ReplacePendingSplitLines(
-            new[] { createdGuide });
+        PushPendingGuideEditUndo();
+        _guides.Add(
+            createdGuide);
 
         // This selection identified the helper line. Clearing it prevents the
         // helper from also becoming the split target scope.
@@ -2185,14 +2158,14 @@ public partial class LineEditorWindow : Window
 
         if (e.Key == Key.Enter)
         {
-            if (_draftCutDrawing &&
-                _draftCutPoints.Count > 0)
+            if (_draftCutPoints.Count > 0)
             {
                 FinishDraftCutDrawing();
             }
             else
             {
-                ApplyCurrentSplit();
+                UpdateStatus(
+                    "Split line(s) are ready. Choose Apply split when you want to perform the split.");
             }
 
             e.Handled = true;
@@ -2207,7 +2180,7 @@ public partial class LineEditorWindow : Window
                 CancelDraftCutLine(
                     switchToSelect: false);
                 UpdateStatus(
-                    "New split-line drawing cancelled. The current split line was kept.");
+                    "Split-line drawing cancelled. Existing pending split lines were kept.");
             }
             else if (GetEditingGuide() is not null)
             {
@@ -2368,14 +2341,6 @@ public partial class LineEditorWindow : Window
                 _committedPreviewPoints);
         }
 
-        if (_draftCutPoints.Count == 0)
-        {
-            _draftWillReplacePending =
-                _guides.Any(
-                    guide => !guide.Applied);
-            RefreshSurface();
-        }
-
         _draftCutPoints.Add(point);
         _draftCutPreviewPoint = null;
 
@@ -2419,18 +2384,11 @@ public partial class LineEditorWindow : Window
             _draftCutPoints,
             _draftCutPreviewPoint);
 
-        if (_draftCutPoints.Count == 0 &&
-            _draftWillReplacePending)
-        {
-            _draftWillReplacePending = false;
-            RefreshSurface();
-        }
-
         UpdateLiveSplitPreview();
 
         UpdateStatus(
             _draftCutPoints.Count == 0
-                ? "Drawn split line cleared. The current split line was kept."
+                ? "Drawn split line cleared. Existing pending split lines were kept."
                 : $"Removed the last split point. {_draftCutPoints.Count:N0} point(s) remain.");
     }
 
@@ -2447,13 +2405,9 @@ public partial class LineEditorWindow : Window
     private void CancelDraftCutLine(
         bool switchToSelect)
     {
-        var restorePendingAppearance =
-            _draftWillReplacePending;
-
         _draftCutPoints.Clear();
         _draftCutPreviewPoint = null;
         _draftCutDrawing = false;
-        _draftWillReplacePending = false;
         _cutPoints.Clear();
         ResetIncrementalSplitPreview();
         EditorSurface.SetCutPoints(_cutPoints);
@@ -2461,9 +2415,6 @@ public partial class LineEditorWindow : Window
         EditorSurface.SetDraftCut(
             _draftCutPoints,
             _draftCutPreviewPoint);
-
-        if (restorePendingAppearance)
-            RefreshSurface();
 
         if (switchToSelect)
             SetTool(LineEditorTool.Select);
@@ -2537,12 +2488,9 @@ public partial class LineEditorWindow : Window
         var points =
             new List<Point>();
 
-        if (!_draftWillReplacePending)
-        {
-            MergePendingGuidePreviews(
-                lines,
-                points);
-        }
+        MergePendingGuidePreviews(
+            lines,
+            points);
 
         lines.UnionWith(
             _committedPreviewLines);
@@ -2902,9 +2850,7 @@ public partial class LineEditorWindow : Window
                     new LineEditorGuideVisual(
                         ProjectGuide(
                             guide.Guide),
-                        guide.Applied,
-                        !guide.Applied &&
-                        _draftWillReplacePending))
+                        guide.Applied)
                 .ToList();
 
         EditorSurface.SetDocument(
