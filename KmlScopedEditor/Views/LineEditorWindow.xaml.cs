@@ -1745,10 +1745,30 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        if (_workflowStep == 2 &&
+            _draftCutPoints.Count > 0)
+        {
+            UndoLastDraftCutPoint();
+            return;
+        }
+
+        if (_pendingEditUndo.Count > 0)
+        {
+            var editState =
+                _pendingEditUndo.Pop();
+
+            RestorePendingGuideEditState(
+                editState);
+
+            UpdateStatus(
+                "Split-line edit undone.");
+            return;
+        }
+
         if (_undo.Count == 0)
         {
             UpdateStatus(
-                "There is no split or deletion to undo.");
+                "There is no split-line edit, split, or deletion to undo.");
             return;
         }
 
@@ -1817,6 +1837,113 @@ public partial class LineEditorWindow : Window
                     ? "Split undone — the split line is ready to apply again."
                     : "Split undone."
                 : "Deletion undone.");
+    }
+
+    private void HandleStep2Delete()
+    {
+        if (_draftCutPoints.Count > 0)
+        {
+            UpdateStatus(
+                "A split line is currently being drawn. Use Backspace to remove its last point or Esc to cancel the drawing.");
+            return;
+        }
+
+        var editingGuide =
+            GetEditingGuide();
+
+        if (editingGuide is not null)
+        {
+            if (_lastPointerWorldPoint.HasValue)
+            {
+                var vertexIndex =
+                    FindNearestGuideVertexIndex(
+                        editingGuide,
+                        _lastPointerWorldPoint.Value,
+                        EditorSurface.WorldToleranceFromPixels(14d));
+
+                if (vertexIndex >= 0 &&
+                    editingGuide.Guide.Coordinates.Count > 2)
+                {
+                    PushPendingGuideEditUndo();
+
+                    var points =
+                        ProjectGuide(
+                            editingGuide.Guide)
+                            .ToList();
+
+                    points.RemoveAt(
+                        vertexIndex);
+
+                    UpdateGuideFromWorldPoints(
+                        editingGuide,
+                        points);
+
+                    RefreshSurface();
+                    UpdatePendingGuidePreview();
+                    UpdateStatus(
+                        "Deleted one split-line point. Ctrl+Z restores it.");
+                    return;
+                }
+            }
+
+            RemovePendingGuide(
+                editingGuide);
+            return;
+        }
+
+        if (!_guides.Any(
+                guide => !guide.Applied))
+        {
+            UpdateStatus(
+                "There is no pending split line to remove.");
+            return;
+        }
+
+        var result =
+            System.Windows.MessageBox.Show(
+                this,
+                "Remove the pending split line?",
+                "Remove split line",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+        if (result ==
+            MessageBoxResult.Yes)
+        {
+            RemovePendingSplitSet();
+        }
+    }
+
+    private int FindNearestGuideVertexIndex(
+        CutGuideState state,
+        Point worldPoint,
+        double tolerance)
+    {
+        var points =
+            ProjectGuide(
+                state.Guide);
+
+        var nearestIndex = -1;
+        var nearestDistance = tolerance;
+
+        for (var index = 0;
+             index < points.Count;
+             index++)
+        {
+            var distance =
+                (points[index] - worldPoint)
+                    .Length;
+
+            if (distance <=
+                nearestDistance)
+            {
+                nearestDistance =
+                    distance;
+                nearestIndex = index;
+            }
+        }
+
+        return nearestIndex;
     }
 
     private void OnHideMapInstructionsClick(
@@ -1897,17 +2024,33 @@ public partial class LineEditorWindow : Window
 
         if (e.Key == Key.Delete)
         {
-            OnDeleteSelectedClick(
-                this,
-                new RoutedEventArgs());
+            if (_workflowStep == 2)
+            {
+                HandleStep2Delete();
+            }
+            else
+            {
+                OnDeleteSelectedClick(
+                    this,
+                    new RoutedEventArgs());
+            }
+
             e.Handled = true;
             return;
         }
 
-        if (e.Key == Key.Back &&
-            _draftCutPoints.Count > 0)
+        if (e.Key == Key.Back)
         {
-            UndoLastDraftCutPoint();
+            if (_workflowStep == 2 &&
+                _draftCutPoints.Count > 0)
+            {
+                UndoLastDraftCutPoint();
+            }
+            else if (_workflowStep == 2)
+            {
+                HandleStep2Delete();
+            }
+
             e.Handled = true;
             return;
         }
@@ -1935,6 +2078,15 @@ public partial class LineEditorWindow : Window
             {
                 CancelDraftCutLine(
                     switchToSelect: false);
+                UpdateStatus(
+                    "New split-line drawing cancelled. The current split line was kept.");
+            }
+            else if (GetEditingGuide() is not null)
+            {
+                StopEditingGuide();
+                RefreshSurface();
+                UpdateStatus(
+                    "Finished editing the split line.");
             }
             else if (EditorSurface.Tool ==
                      LineEditorTool.Split)
