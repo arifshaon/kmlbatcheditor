@@ -185,16 +185,10 @@ public partial class MainWindow : System.Windows.Window
             return;
         }
 
-        var initialSelection = BuildLineEditorInitialSelection(
-            viewModel.DocumentContext.Document,
-            viewModel.SelectedNode);
-
         var editor = new LineEditorWindow(
             viewModel.DocumentContext.Document,
             System.IO.Path.GetFileName(
-                viewModel.DocumentContext.SourcePath),
-            initialSelection.PlacemarkIndexes,
-            initialSelection.DisplayName)
+                viewModel.DocumentContext.SourcePath))
         {
             Owner = this
         };
@@ -205,64 +199,6 @@ public partial class MainWindow : System.Windows.Window
         await viewModel.ApplyLineEditorDocumentAsync(
             editor.EditedDocument);
     }
-
-    private static LineEditorInitialSelection BuildLineEditorInitialSelection(
-        System.Xml.Linq.XDocument document,
-        KmlTreeNode? selectedNode)
-    {
-        System.Xml.Linq.XNamespace kml =
-            "http://www.opengis.net/kml/2.2";
-
-        var allPlacemarks = document
-            .Descendants(kml + "Placemark")
-            .ToList();
-
-        if (selectedNode?.SourceElement is null)
-        {
-            return new LineEditorInitialSelection(
-                null,
-                "No initial tree selection");
-        }
-
-        IEnumerable<System.Xml.Linq.XElement> scopedPlacemarks =
-            selectedNode.NodeType == KmlNodeType.Placemark
-                ? new[] { selectedNode.SourceElement }
-                : selectedNode.SourceElement
-                    .Descendants(kml + "Placemark");
-
-        var scopedSet = scopedPlacemarks.ToHashSet();
-
-        var indexes = allPlacemarks
-            .Select((placemark, index) => new
-            {
-                Placemark = placemark,
-                Index = index
-            })
-            .Where(item => scopedSet.Contains(item.Placemark))
-            .Select(item => item.Index)
-            .ToList();
-
-        if (indexes.Count == allPlacemarks.Count)
-        {
-            // Treat a whole-document/root choice as "everything is available"
-            // rather than opening the line editor with every line highlighted.
-            return new LineEditorInitialSelection(
-                null,
-                "Whole document selected in the main tree");
-        }
-
-        var displayName = string.IsNullOrWhiteSpace(selectedNode.Name)
-            ? selectedNode.NodeType.ToString()
-            : $"{selectedNode.NodeType}: {selectedNode.Name}";
-
-        return new LineEditorInitialSelection(
-            indexes,
-            displayName);
-    }
-
-    private sealed record LineEditorInitialSelection(
-        IReadOnlyCollection<int>? PlacemarkIndexes,
-        string DisplayName);
 
     private void OnTreeViewItemSelected(
         object sender,
