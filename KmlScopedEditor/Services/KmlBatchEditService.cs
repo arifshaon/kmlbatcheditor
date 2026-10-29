@@ -180,6 +180,9 @@ public sealed class KmlBatchEditService
         string? labelColorDisplay = null;
         string? labelAlpha = null;
         string? labelOpacityDisplay = null;
+        string? lineBgr = null;
+        string? lineColorDisplay = null;
+        string? lineWidth = null;
 
         if (settings.ChangeIconImage)
         {
@@ -278,6 +281,27 @@ public sealed class KmlBatchEditService
             return false;
         }
 
+        if (settings.ChangeLineColor &&
+            !KmlColorUtility.TryParseDisplayRgb(
+                settings.LineColorText,
+                "Line colour",
+                out lineBgr,
+                out lineColorDisplay,
+                out error))
+        {
+            return false;
+        }
+
+        if (settings.ChangeLineWidth &&
+            !TryNormalizeScale(
+                settings.LineWidthText,
+                "Line width",
+                out lineWidth,
+                out error))
+        {
+            return false;
+        }
+
         changes = new StyleChangeSet
         {
             IconHref = iconHref,
@@ -291,7 +315,10 @@ public sealed class KmlBatchEditService
             LabelBgr = labelBgr,
             LabelAlpha = labelAlpha,
             LabelColorDisplay = labelColorDisplay,
-            LabelOpacityDisplay = labelOpacityDisplay
+            LabelOpacityDisplay = labelOpacityDisplay,
+            LineBgr = lineBgr,
+            LineColorDisplay = lineColorDisplay,
+            LineWidth = lineWidth
         };
 
         return true;
@@ -356,6 +383,10 @@ public sealed class KmlBatchEditService
             lines.Add($"• Text colour → {changes.LabelColorDisplay} (existing opacity preserved)");
         if (changes.LabelAlpha is not null)
             lines.Add($"• Text opacity → {changes.LabelOpacityDisplay}");
+        if (changes.LineBgr is not null)
+            lines.Add($"• Line colour → {changes.LineColorDisplay} (existing opacity preserved)");
+        if (changes.LineWidth is not null)
+            lines.Add($"• Line width → {changes.LineWidth}");
 
         return string.Join(Environment.NewLine, lines);
     }
@@ -397,6 +428,9 @@ public sealed class KmlBatchEditService
         public string? LabelAlpha { get; init; }
         public string? LabelColorDisplay { get; init; }
         public string? LabelOpacityDisplay { get; init; }
+        public string? LineBgr { get; init; }
+        public string? LineColorDisplay { get; init; }
+        public string? LineWidth { get; init; }
     }
 
     private sealed class ApplyOperation
@@ -662,6 +696,38 @@ public sealed class KmlBatchEditService
                     "scale",
                     changes.LabelScale,
                     "color", "colorMode", "scale");
+            }
+        }
+
+        if (changes.LineBgr is not null ||
+            changes.LineWidth is not null)
+        {
+            var lineStyle = GetOrCreateSubStyle(style, "LineStyle");
+
+            if (changes.LineBgr is not null)
+            {
+                var existingColor =
+                    lineStyle.Element(KmlNs + "color")?.Value;
+
+                var combined = KmlColorUtility.Combine(
+                    existingColor,
+                    changes.LineBgr,
+                    null);
+
+                SetOrderedChildValue(
+                    lineStyle,
+                    "color",
+                    combined,
+                    "color", "colorMode", "width");
+            }
+
+            if (changes.LineWidth is not null)
+            {
+                SetOrderedChildValue(
+                    lineStyle,
+                    "width",
+                    changes.LineWidth,
+                    "color", "colorMode", "width");
             }
         }
     }
