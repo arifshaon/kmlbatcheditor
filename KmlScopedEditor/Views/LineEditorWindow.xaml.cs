@@ -662,6 +662,12 @@ public partial class LineEditorWindow : Window
         if (dialog.ShowDialog(this) != true)
             return;
 
+        // Step 2 intentionally has one pending split operation. Importing a
+        // new split line replaces any unapplied drawn/imported split state.
+        StopEditingGuide();
+        _guides.RemoveAll(guide => !guide.Applied);
+        CancelDraftCutLine(switchToSelect: false);
+
         var imported = 0;
 
         try
@@ -712,7 +718,7 @@ public partial class LineEditorWindow : Window
         UpdatePendingGuidePreview();
 
         UpdateStatus(
-            $"Imported {imported:N0} split line(s). The imported line is editable: drag its orange vertex handles, or right-click it to add/delete vertices. Then click Split with Imported Line.");
+            $"Imported {imported:N0} split line(s). Drag orange vertex handles if you need to reshape it, then press Apply split or Enter.");
     }
 
     private void OnEditImportedLineClick(
@@ -815,14 +821,55 @@ public partial class LineEditorWindow : Window
         UpdateCutScopeDisplay();
 
         UpdateStatus(
-            "Selected line is now the split line and is editable. Drag its orange handles or right-click to add/delete vertices. It will be removed before the split is calculated, so it cannot split itself.");
+            "Selected line is now the split line and is editable. Drag its orange handles if needed, then press Apply split or Enter. The helper line will be removed before splitting so it cannot split itself.");
     }
 
     private void OnApplyImportedSplitLineClick(
         object sender,
         RoutedEventArgs e)
     {
-        ApplyPendingGuides();
+        ApplyCurrentSplit();
+    }
+
+    private void OnApplySplitClick(
+        object sender,
+        RoutedEventArgs e)
+    {
+        ApplyCurrentSplit();
+    }
+
+    private void OnOnlySplitSelectedChanged(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_draftCutPoints.Count > 0)
+            RebuildCommittedSplitPreview();
+
+        UpdatePendingGuidePreview();
+        UpdateCutScopeDisplay();
+
+        UpdateStatus(
+            OnlySplitSelectedCheckBox.IsChecked == true
+                ? "Split scope limited to the currently selected lines."
+                : "Split scope is unrestricted; any crossed line can be split.");
+    }
+
+    private void ApplyCurrentSplit()
+    {
+        if (_draftCutPoints.Count >= 2)
+        {
+            FinishAndApplyDrawnSplit();
+            return;
+        }
+
+        if (_guides.Any(guide => !guide.Applied))
+        {
+            ApplyPendingGuides();
+            return;
+        }
+
+        UpdateStatus(
+            "There is no split line ready. Import one or choose Draw split line first.");
     }
 
     private void ApplyPendingGuides()
@@ -881,8 +928,6 @@ public partial class LineEditorWindow : Window
         ApplyGuideStates(
             new[] { state },
             "Drawn split applied.");
-
-        SetTool(LineEditorTool.Select);
     }
 
     private void ApplyGuideStates(
