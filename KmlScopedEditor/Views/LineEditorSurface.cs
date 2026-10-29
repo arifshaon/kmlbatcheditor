@@ -164,16 +164,59 @@ public sealed class LineEditorSurface : FrameworkElement
 
     public void FitView()
     {
+        FitBounds(_worldBounds);
+    }
+
+    public void ZoomBy(double factor)
+    {
+        if (!double.IsFinite(factor) || factor <= 0d)
+            return;
+
+        _scale = Math.Clamp(
+            _scale * factor,
+            0.000001d,
+            1000000000d);
+
+        _fitPending = false;
+        InvalidateVisual();
+    }
+
+    public bool ZoomToSelection()
+    {
+        var selectedFeatures = _features
+            .Where(feature =>
+                _selected.Contains(feature.LineStringElement))
+            .ToList();
+
+        if (selectedFeatures.Count == 0)
+            return false;
+
+        var bounds = Rect.Empty;
+
+        foreach (var feature in selectedFeatures)
+        {
+            if (bounds.IsEmpty)
+                bounds = feature.WorldBounds;
+            else
+                bounds.Union(feature.WorldBounds);
+        }
+
+        FitBounds(bounds);
+        return true;
+    }
+
+    private void FitBounds(Rect bounds)
+    {
         if (!IsLoaded ||
             ActualWidth <= 0d ||
             ActualHeight <= 0d ||
-            _worldBounds.IsEmpty)
+            bounds.IsEmpty)
         {
             return;
         }
 
-        var width = Math.Max(_worldBounds.Width, 0.000000001d);
-        var height = Math.Max(_worldBounds.Height, 0.000000001d);
+        var width = Math.Max(bounds.Width, 0.000000001d);
+        var height = Math.Max(bounds.Height, 0.000000001d);
         var usableWidth = Math.Max(ActualWidth - 40d, 20d);
         var usableHeight = Math.Max(ActualHeight - 40d, 20d);
 
@@ -185,8 +228,8 @@ public sealed class LineEditorSurface : FrameworkElement
             _scale = 1d;
 
         _worldCenter = new Point(
-            _worldBounds.Left + (_worldBounds.Width / 2d),
-            _worldBounds.Top + (_worldBounds.Height / 2d));
+            bounds.Left + (bounds.Width / 2d),
+            bounds.Top + (bounds.Height / 2d));
 
         _fitPending = false;
         InvalidateVisual();
@@ -363,7 +406,10 @@ public sealed class LineEditorSurface : FrameworkElement
         {
             CaptureMouse();
             _cutClickPending = true;
+            _strokeWorld.Clear();
             _strokeStartScreen = screen;
+            _lastStrokeScreen = screen;
+            _strokeWorld.Add(ScreenToWorld(screen));
             e.Handled = true;
             return;
         }
@@ -401,16 +447,36 @@ public sealed class LineEditorSurface : FrameworkElement
             _cutClickPending = false;
             ReleaseMouseCapture();
 
-            if ((screen - _strokeStartScreen).Length < 4d)
+            var clickDistance = (screen - _strokeStartScreen).Length;
+
+            if (clickDistance < 4d)
             {
                 LineClicked?.Invoke(
                     this,
                     new LineEditorClickEventArgs(
                         Tool,
                         ScreenToWorld(screen),
-                        alt));
+                        alt,
+                        e.ClickCount >= 2));
+            }
+            else
+            {
+                if ((screen - _lastStrokeScreen).Length >= 1d)
+                    _strokeWorld.Add(ScreenToWorld(screen));
+
+                if (_strokeWorld.Count >= 2)
+                {
+                    StrokeCompleted?.Invoke(
+                        this,
+                        new LineEditorStrokeEventArgs(
+                            Tool,
+                            _strokeWorld.ToList(),
+                            alt));
+                }
             }
 
+            _strokeWorld.Clear();
+            InvalidateVisual();
             e.Handled = true;
             return;
         }
@@ -430,7 +496,8 @@ public sealed class LineEditorSurface : FrameworkElement
                 new LineEditorClickEventArgs(
                     Tool,
                     ScreenToWorld(screen),
-                    alt));
+                    alt,
+                    e.ClickCount >= 2));
         }
         else
         {
@@ -514,6 +581,20 @@ public sealed class LineEditorSurface : FrameworkElement
                 InvalidateVisual();
             }
 
+            e.Handled = true;
+            return;
+        }
+
+        if (Tool == LineEditorTool.Cut &&
+            _cutClickPending &&
+            e.LeftButton == MouseButtonState.Pressed)
+        {
+            if ((screen - _lastStrokeScreen).Length < 5d)
+                return;
+
+            _lastStrokeScreen = screen;
+            _strokeWorld.Add(ScreenToWorld(screen));
+            InvalidateVisual();
             e.Handled = true;
             return;
         }
@@ -725,16 +806,19 @@ public sealed class LineEditorClickEventArgs : EventArgs
     public LineEditorClickEventArgs(
         LineEditorTool tool,
         Point worldPoint,
-        bool isDeselect)
+        bool isDeselect,
+        bool isDoubleClick)
     {
         Tool = tool;
         WorldPoint = worldPoint;
         IsDeselect = isDeselect;
+        IsDoubleClick = isDoubleClick;
     }
 
     public LineEditorTool Tool { get; }
     public Point WorldPoint { get; }
     public bool IsDeselect { get; }
+    public bool IsDoubleClick { get; }
 }
 
 public sealed class LineEditorPointerEventArgs : EventArgs
