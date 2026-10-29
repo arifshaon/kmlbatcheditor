@@ -122,6 +122,29 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        BeginCutMode();
+    }
+
+    private void OnCutSelectedClick(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (GetValidSelectedLines().Count == 0)
+        {
+            UpdateStatus(
+                "Select one or more lines first, then choose Cut Selected.");
+            return;
+        }
+
+        BeginCutMode();
+
+        UpdateStatus(
+            $"Cut Selected is active for {GetValidSelectedLines().Count:N0} selected line(s). " +
+            "Now draw the cut line across them; right-click for options, or double-click/Enter to finish.");
+    }
+
+    private void BeginCutMode()
+    {
         SetTool(LineEditorTool.Cut);
         _draftCutDrawing = true;
         _draftCutPreviewPoint = null;
@@ -134,7 +157,9 @@ public partial class LineEditorWindow : Window
 
         UpdateStatus(
             _draftCutPoints.Count == 0
-                ? "Cut tool ready. Click points or drag freehand to draw a cut line."
+                ? (GetValidSelectedLines().Count > 0
+                    ? $"Cut Selected is active for {GetValidSelectedLines().Count:N0} selected line(s). Draw the cut line across them."
+                    : "Cut tool ready. No lines are selected, so the cut will affect any document line it crosses.")
                 : $"Continuing cut line from {_draftCutPoints.Count:N0} existing point(s).");
     }
 
@@ -171,7 +196,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Pan =>
                 "HAND: left-drag to pan. Mouse wheel zooms. Space+drag and middle-drag also pan.",
             LineEditorTool.Select =>
-                "SELECT: drag across editable lines to select real crossings. Alt+drag deselects. Click selects the nearest line. Delete removes highlighted lines.",
+                "SELECT: drag across lines to select real crossings. After selecting, choose Cut Selected... to split only those lines, or Delete Selected to remove them. Alt+drag deselects.",
             _ =>
                 "CUT: click points or drag freehand. Right-click opens cut-line options at the pointer. Double-click or Enter finishes and applies. Backspace removes the last point; Esc cancels."
         };
@@ -181,7 +206,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Pan =>
                 "H Hand · Space+drag or middle-drag pan · +/- zoom · F fit",
             LineEditorTool.Select =>
-                "V Select · drag across lines · Alt+drag deselect · Delete remove · Space+drag pan",
+                "V Select · drag across lines · Cut Selected... splits the current selection · Delete removes it · Alt+drag deselect",
             _ =>
                 "C Cut · click points or drag freehand · right-click options · double-click/Enter finish · Backspace undo point · Esc cancel"
         };
@@ -1081,6 +1106,40 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        if (_draftCutPoints.Count >= 2)
+        {
+            var result = System.Windows.MessageBox.Show(
+                this,
+                "A drawn cut line has not been applied yet. Apply this cut before closing?",
+                "Unapplied cut line",
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Cancel)
+                return;
+
+            if (result == MessageBoxResult.Yes)
+                FinishAndApplyDrawnCut();
+            else
+                CancelDraftCutLine(switchToSelect: false);
+        }
+
+        if (_guides.Any(guide => !guide.Applied))
+        {
+            var result = System.Windows.MessageBox.Show(
+                this,
+                "One or more imported/existing cut guides have not been applied. Apply them before closing?",
+                "Unapplied cut guide",
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Cancel)
+                return;
+
+            if (result == MessageBoxResult.Yes)
+                ApplyPendingGuides();
+        }
+
         var outputDocument =
             CreateOutputDocument();
 
@@ -1088,8 +1147,13 @@ public partial class LineEditorWindow : Window
                 _originalDocument.Root,
                 outputDocument.Root))
         {
-            DialogResult = false;
-            Close();
+            System.Windows.MessageBox.Show(
+                this,
+                "No line geometry has been changed. Selection by itself is temporary and is not saved in KML/KMZ. Use Cut Selected... or Delete Selected first, or click Cancel to close without changes.",
+                "No line edits to apply",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
             return;
         }
 
