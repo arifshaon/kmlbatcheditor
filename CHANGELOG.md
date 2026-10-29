@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased
+- Added KML/KMZ cut-guide import with temporary overlay display and explicit Apply Cut.
+- Added single-click line selection and Use Selected as Cutline for helper paths drawn in Google Earth.
+- Selection strokes now require real geometric crossings; Alt + stroke removes crossed lines from the selection.
+- Added cached contour rendering, feature bounding-box rejection, hover highlighting, cut-point markers, and fixed projection for imported guides.
+- Imported guides survive undo and are not written into saved KML/KMZ output.
+- A single crossing of a closed ring now opens it with a visually negligible gap so a later cut can split it normally.
+
 
 ### Added
 
