@@ -311,6 +311,25 @@
                                     </WrapPanel>
                                 </StackPanel>
 
+                                <StackPanel Visibility="{Binding IsTickedSelectionMode, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                            Margin="0,0,0,10">
+                                    <WrapPanel>
+                                        <Button Content="Tick all"
+                                                Command="{Binding TickAllCommand}"
+                                                MinWidth="76"
+                                                Height="28"
+                                                Margin="0,0,6,0" />
+                                        <Button Content="Untick all"
+                                                Command="{Binding UntickAllCommand}"
+                                                MinWidth="86"
+                                                Height="28"
+                                                Margin="0,0,10,0" />
+                                        <TextBlock Text="{Binding SelectionSummary}"
+                                                   Foreground="#52606D"
+                                                   VerticalAlignment="Center" />
+                                    </WrapPanel>
+                                </StackPanel>
+
                                 <views:PlacemarkNameSelectionControl />
 
                                 <StackPanel Visibility="{Binding IsIconTypeSelectionMode, Converter={StaticResource BooleanToVisibilityConverter}}"
