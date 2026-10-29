@@ -375,9 +375,11 @@
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="Lines"
                                                        FontWeight="SemiBold" />
-                                            <TextBlock Text="{Binding LineGroupSummary, StringFormat= — {0}}"
+                                            <TextBlock Text=" — "
                                                        Foreground="#7A8494"
                                                        Margin="6,0,0,0" />
+                                            <TextBlock Text="{Binding LineGroupSummary}"
+                                                       Foreground="#7A8494" />
                                         </StackPanel>
                                     </Expander.Header>
                                     <Grid Margin="18,8,0,10"
@@ -443,9 +445,11 @@
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="Icons"
                                                        FontWeight="SemiBold" />
-                                            <TextBlock Text="{Binding IconGroupSummary, StringFormat= — {0}}"
+                                            <TextBlock Text=" — "
                                                        Foreground="#7A8494"
                                                        Margin="6,0,0,0" />
+                                            <TextBlock Text="{Binding IconGroupSummary}"
+                                                       Foreground="#7A8494" />
                                         </StackPanel>
                                     </Expander.Header>
                                     <Grid Margin="18,8,0,10"
@@ -526,9 +530,11 @@
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="Labels (text)"
                                                        FontWeight="SemiBold" />
-                                            <TextBlock Text="{Binding LabelGroupSummary, StringFormat= — {0}}"
+                                            <TextBlock Text=" — "
                                                        Foreground="#7A8494"
                                                        Margin="6,0,0,0" />
+                                            <TextBlock Text="{Binding LabelGroupSummary}"
+                                                       Foreground="#7A8494" />
                                         </StackPanel>
                                     </Expander.Header>
                                     <Grid Margin="18,8,0,10"
@@ -638,7 +644,7 @@
                                 </StackPanel>
 
                                 <Button Grid.Column="1"
-                                        Content="{Binding MatchedPlacemarkCount, StringFormat=Apply to {0:N0} placemarks}"
+                                        Content="{Binding ApplyStyleButtonText}"
                                         Command="{Binding ApplyChangesCommand}"
                                         Background="#2F6FCC"
                                         Foreground="White"
