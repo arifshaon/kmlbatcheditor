@@ -262,6 +262,8 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
                             <TextBlock Grid.Row="0" Grid.Column="0"
@@ -350,6 +352,24 @@
                                        Text="{Binding SelectedStyle.LabelColorDisplay}"
                                        Margin="0,3"
                                        TextWrapping="Wrap" />
+
+
+                            <TextBlock Grid.Row="10" Grid.Column="0"
+                                       Text="Line color:"
+                                       FontWeight="SemiBold"
+                                       Margin="0,3" />
+                            <TextBlock Grid.Row="10" Grid.Column="1"
+                                       Text="{Binding SelectedStyle.LineColorDisplay}"
+                                       Margin="0,3"
+                                       TextWrapping="Wrap" />
+
+                            <TextBlock Grid.Row="11" Grid.Column="0"
+                                       Text="Line width:"
+                                       FontWeight="SemiBold"
+                                       Margin="0,3" />
+                            <TextBlock Grid.Row="11" Grid.Column="1"
+                                       Text="{Binding SelectedStyle.LineWidthDisplay}"
+                                       Margin="0,3" />
                         </Grid>
                     </Border>
 
