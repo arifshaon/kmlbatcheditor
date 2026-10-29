@@ -48,7 +48,7 @@
                             Width="62"
                             Height="32"
                             Margin="0,0,6,6"
-                            ToolTip="Fit all lines and guides to the view (F)"
+                            ToolTip="Fit all lines and cut lines to the view (F)"
                             Click="OnFitViewClick" />
                     <Button Content="Zoom Selection"
                             Width="112"
@@ -101,27 +101,27 @@
 
                 <WrapPanel x:Name="CutActionsPanel"
                            Visibility="Collapsed">
-                    <TextBlock Text="Cut guides:"
+                    <TextBlock Text="Cut lines:"
                                VerticalAlignment="Center"
                                FontWeight="SemiBold"
                                Margin="0,0,8,6" />
-                    <Button Content="Import Cut Lines..."
+                    <Button Content="Import Cut Line..."
                             Width="125"
                             Height="30"
                             Margin="0,0,6,6"
                             Click="OnImportCutLinesClick" />
-                    <Button Content="Use Selected as Cutline"
+                    <Button Content="Use Selected as Cut Line"
                             Width="165"
                             Height="30"
                             Margin="0,0,6,6"
                             Click="OnUseSelectedAsCutlineClick" />
-                    <Button Content="Apply Imported Guide"
+                    <Button Content="Cut with Imported Line"
                             Width="145"
                             Height="30"
                             Margin="0,0,6,6"
-                            ToolTip="Apply imported/existing guide lines. Hand-drawn cuts apply when you finish drawing."
+                            ToolTip="Use the imported/existing cut line to split the current cut target. Hand-drawn cuts apply when you finish drawing."
                             Click="OnApplyCutLinesClick" />
-                    <Button Content="Clear Guides"
+                    <Button Content="Clear Cut Lines"
                             Width="100"
                             Height="30"
                             Margin="0,0,0,6"
@@ -154,10 +154,10 @@
                             Height="32"
                             Margin="0,0,8,0"
                             Click="OnCancelClick" />
-                    <Button Content="Apply to Document &amp; Close"
-                            Width="180"
+                    <Button Content="Apply &amp; Close"
+                            Width="120"
                             Height="32"
-                            ToolTip="Commits line edits to the application's working document. You will then be asked whether to save an edited KML/KMZ file."
+                            ToolTip="Keeps the line edits in the currently loaded document. Use Save As in the main window whenever you want to write them to disk."
                             Click="OnApplyClick" />
                 </StackPanel>
 
