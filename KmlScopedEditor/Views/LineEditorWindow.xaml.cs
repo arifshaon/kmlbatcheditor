@@ -6,16 +6,24 @@ using Point = System.Windows.Point;
 using Rect = System.Windows.Rect;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using Key = System.Windows.Input.Key;
+using ModifierKeys = System.Windows.Input.ModifierKeys;
+using Keyboard = System.Windows.Input.Keyboard;
 
 namespace KmlScopedEditor.Views;
 
 public partial class LineEditorWindow : Window
 {
+    private static readonly XNamespace KmlNs =
+        "http://www.opengis.net/kml/2.2";
+
     private static readonly XNamespace EditorNs =
         "urn:kml-scoped-editor:temporary";
 
     private static readonly XName ScopeMarkerAttribute =
         EditorNs + "line-editor-scope";
+
+    private static readonly XName CutTargetMarkerAttribute =
+        EditorNs + "line-editor-cut-target";
 
     private readonly XDocument _originalDocument;
     private XDocument _workingDocument;
@@ -24,7 +32,6 @@ public partial class LineEditorWindow : Window
     private readonly double _projectionScale;
     private readonly bool _isScoped;
     private readonly string _scopeDisplayName;
-    private readonly int _scopePlacemarkCount;
 
     private readonly KmlCutGuideService _cutGuideLoader = new();
     private readonly List<CutGuideState> _guides = new();
@@ -51,13 +58,9 @@ public partial class LineEditorWindow : Window
         _originalDocument = new XDocument(sourceDocument);
         _workingDocument = new XDocument(sourceDocument);
 
-        var allPlacemarkCount = _workingDocument
-            .Descendants(KmlNs + "Placemark")
-            .Count();
-
         _isScoped = scopedPlacemarkIndexes is not null;
         _scopeDisplayName = string.IsNullOrWhiteSpace(scopeDisplayName)
-            ? (_isScoped ? "Selected tree node" : "Entire document")
+            ? (_isScoped ? "selected tree scope" : "entire document")
             : scopeDisplayName;
 
         if (_isScoped)
@@ -65,12 +68,6 @@ public partial class LineEditorWindow : Window
             ApplyScopeMarkers(
                 _workingDocument,
                 scopedPlacemarkIndexes!);
-
-            _scopePlacemarkCount = scopedPlacemarkIndexes!.Count;
-        }
-        else
-        {
-            _scopePlacemarkCount = allPlacemarkCount;
         }
 
         var projectionGeometry = new KmlLineGeometryService(
@@ -99,8 +96,7 @@ public partial class LineEditorWindow : Window
 
         Loaded += (_, _) =>
         {
-            SetTool(LineEditorTool.Pan);
-            UpdateScopeText();
+            SetTool(LineEditorTool.Select);
             RefreshSurface(fitView: true);
             UpdateStatus("Ready.");
         };
@@ -108,84 +104,145 @@ public partial class LineEditorWindow : Window
 
     public XDocument EditedDocument => CreateOutputDocument();
 
-    private void OnPanToolClick(object sender, RoutedEventArgs e)
+    private void OnPanToolClick(
+        object sender,
+        RoutedEventArgs e)
     {
-        StopDraftPreview();
+        PauseDraftCut();
         SetTool(LineEditorTool.Pan);
     }
 
-    private void OnSelectToolClick(object sender, RoutedEventArgs e)
+    private void OnSelectToolClick(
+        object sender,
+        RoutedEventArgs e)
     {
-        StopDraftPreview();
+        PauseDraftCut();
         SetTool(LineEditorTool.Select);
     }
 
-    private void OnCutToolClick(object sender, RoutedEventArgs e)
+    private void OnCutToolClick(
+        object sender,
+        RoutedEventArgs e)
     {
         SetTool(LineEditorTool.Cut);
         _draftCutDrawing = true;
         _draftCutPreviewPoint = null;
+
         EditorSurface.SetDraftCut(
             _draftCutPoints,
             _draftCutPreviewPoint);
 
+        UpdateLiveCutPreview();
+
         UpdateStatus(
             _draftCutPoints.Count == 0
-                ? "Draw Cut Line started. Click to place the first point."
-                : $"Continuing the cut line from {_draftCutPoints.Count:N0} existing point(s). Click to add another point.");
+                ? "Cut tool ready. Click points or drag freehand to draw a cut line."
+                : $"Continuing cut line from {_draftCutPoints.Count:N0} existing point(s).");
     }
 
     private void SetTool(LineEditorTool tool)
     {
         EditorSurface.Tool = tool;
+
         PanToolButton.IsChecked = tool == LineEditorTool.Pan;
         SelectToolButton.IsChecked = tool == LineEditorTool.Select;
         CutToolButton.IsChecked = tool == LineEditorTool.Cut;
-        EditorSurface.Cursor = tool == LineEditorTool.Pan
-            ? System.Windows.Input.Cursors.Hand
-            : System.Windows.Input.Cursors.Arrow;
+
+        SelectActionsPanel.Visibility =
+            tool == LineEditorTool.Select
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        CutActionsPanel.Visibility =
+            tool == LineEditorTool.Cut
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        EditorSurface.Cursor = tool switch
+        {
+            LineEditorTool.Pan =>
+                System.Windows.Input.Cursors.Hand,
+            LineEditorTool.Cut =>
+                System.Windows.Input.Cursors.Cross,
+            _ =>
+                System.Windows.Input.Cursors.Arrow
+        };
 
         InstructionText.Text = tool switch
         {
             LineEditorTool.Pan =>
-                "PAN: left-drag to move around the map. Mouse wheel zooms. You can also hold Space and left-drag from any tool, or middle-drag.",
+                "HAND: left-drag to pan. Mouse wheel zooms. Space+drag and middle-drag also pan.",
             LineEditorTool.Select =>
-                "SELECT: drag across editable lines to select only lines that are actually crossed. Alt + drag removes crossed lines from the selection. Single-click selects the nearest editable line.",
+                "SELECT: drag across editable lines to select real crossings. Alt+drag deselects. Click selects the nearest line. Delete removes highlighted lines.",
             _ =>
-                "DRAW CUT LINE: click to add connected points. Right-click anywhere on the map for Add/Finish/Cancel options. Finish Line (or Enter) stops the preview; Esc cancels."
+                "CUT: click points or drag freehand. Double-click, right-click, or Enter finishes and applies the drawn cut. Backspace removes the last point; Esc cancels."
         };
+
+        ToolHintText.Text = tool switch
+        {
+            LineEditorTool.Pan =>
+                "H Hand · Space+drag or middle-drag pan · +/- zoom · F fit",
+            LineEditorTool.Select =>
+                "V Select · drag across lines · Alt+drag deselect · Delete remove · Space+drag pan",
+            _ =>
+                "C Cut · click points or drag freehand · double-click/right-click/Enter finish · Backspace undo point · Esc cancel"
+        };
+
+        UpdateCutScopeDisplay();
     }
 
     private void OnStrokeCompleted(
         object? sender,
         LineEditorStrokeEventArgs e)
     {
-        if (e.Tool != LineEditorTool.Select)
+        if (e.Tool == LineEditorTool.Select)
+        {
+            var matches = _geometry.FindIntersectingFeatures(
+                e.WorldPoints);
+
+            if (e.IsDeselect)
+            {
+                foreach (var feature in matches)
+                    _selected.Remove(feature.LineStringElement);
+            }
+            else
+            {
+                foreach (var feature in matches)
+                    _selected.Add(feature.LineStringElement);
+            }
+
+            EditorSurface.SetSelection(_selected);
+            UpdateCutScopeDisplay();
+            UpdatePendingGuidePreview();
+
+            var noun = CurrentLineNoun;
+
+            UpdateStatus(
+                matches.Count == 0
+                    ? $"No {noun} crossed by that selection stroke."
+                    : e.IsDeselect
+                        ? $"Removed {matches.Count:N0} crossed {noun} from the selection."
+                        : $"Added {matches.Count:N0} crossed {noun} to the selection.");
+
+            return;
+        }
+
+        if (e.Tool != LineEditorTool.Cut)
             return;
 
-        var matches = _geometry.FindIntersectingFeatures(e.WorldPoints);
+        _draftCutDrawing = true;
+        AppendDraftPoints(e.WorldPoints);
+        _draftCutPreviewPoint = null;
 
-        if (e.IsDeselect)
-        {
-            foreach (var feature in matches)
-                _selected.Remove(feature.LineStringElement);
-        }
-        else
-        {
-            foreach (var feature in matches)
-                _selected.Add(feature.LineStringElement);
-        }
+        EditorSurface.SetDraftCut(
+            _draftCutPoints,
+            _draftCutPreviewPoint);
 
-        EditorSurface.SetSelection(_selected);
-
-        var noun = CurrentLineNoun;
+        UpdateLiveCutPreview();
 
         UpdateStatus(
-            matches.Count == 0
-                ? $"No {noun} crossed by that selection stroke."
-                : e.IsDeselect
-                    ? $"Removed {matches.Count:N0} crossed {noun} from the selection."
-                    : $"Added {matches.Count:N0} crossed {noun} to the selection.");
+            $"Added a freehand section. Cut line now has {_draftCutPoints.Count:N0} sampled point(s). " +
+            "Continue drawing, or right-click/Enter to finish.");
     }
 
     private void OnLineClicked(
@@ -195,14 +252,22 @@ public partial class LineEditorWindow : Window
         if (e.Tool == LineEditorTool.Cut)
         {
             if (!_draftCutDrawing)
-                return;
+                _draftCutDrawing = true;
 
             AddDraftCutPoint(e.WorldPoint);
+            UpdateLiveCutPreview();
+
+            if (e.IsDoubleClick &&
+                _draftCutPoints.Count >= 2)
+            {
+                FinishAndApplyDrawnCut();
+                return;
+            }
 
             UpdateStatus(
                 _draftCutPoints.Count < 2
                     ? "Cut line started. Add at least one more point."
-                    : $"Cut line has {_draftCutPoints.Count:N0} point(s). Right-click to finish, or keep adding points.");
+                    : $"Cut line has {_draftCutPoints.Count:N0} point(s). Double-click, right-click, or press Enter to finish.");
 
             return;
         }
@@ -210,30 +275,36 @@ public partial class LineEditorWindow : Window
         if (e.Tool != LineEditorTool.Select)
             return;
 
-        var tolerance = EditorSurface.WorldToleranceFromPixels(6d);
+        var tolerance =
+            EditorSurface.WorldToleranceFromPixels(6d);
+
         var feature = _geometry.FindNearestFeature(
             e.WorldPoint,
             tolerance);
 
         if (feature is null)
         {
-            UpdateStatus("No line close enough to that click.");
+            UpdateStatus("No editable line close enough to that click.");
             return;
         }
 
         if (e.IsDeselect)
         {
             _selected.Remove(feature.LineStringElement);
-            UpdateStatus($"Removed one {CurrentLineNoun} from the selection.");
+            UpdateStatus(
+                $"Removed one {CurrentLineNoun} from the selection.");
         }
         else
         {
             _selected.Clear();
             _selected.Add(feature.LineStringElement);
-            UpdateStatus($"Selected one {CurrentLineNoun}.");
+            UpdateStatus(
+                $"Selected one {CurrentLineNoun}.");
         }
 
         EditorSurface.SetSelection(_selected);
+        UpdateCutScopeDisplay();
+        UpdatePendingGuidePreview();
     }
 
     private void OnPointerMoved(
@@ -244,12 +315,16 @@ public partial class LineEditorWindow : Window
         {
             EditorSurface.SetHovered(null);
 
-            if (_draftCutDrawing && _draftCutPoints.Count > 0)
+            if (_draftCutDrawing &&
+                _draftCutPoints.Count > 0)
             {
                 _draftCutPreviewPoint = e.WorldPoint;
+
                 EditorSurface.SetDraftCut(
                     _draftCutPoints,
                     _draftCutPreviewPoint);
+
+                UpdateLiveCutPreview();
             }
 
             return;
@@ -261,12 +336,15 @@ public partial class LineEditorWindow : Window
             return;
         }
 
-        var tolerance = EditorSurface.WorldToleranceFromPixels(4d);
+        var tolerance =
+            EditorSurface.WorldToleranceFromPixels(4d);
+
         var feature = _geometry.FindNearestFeature(
             e.WorldPoint,
             tolerance);
 
-        EditorSurface.SetHovered(feature?.LineStringElement);
+        EditorSurface.SetHovered(
+            feature?.LineStringElement);
     }
 
     private void OnPointerExited(
@@ -277,19 +355,36 @@ public partial class LineEditorWindow : Window
             return;
 
         _draftCutPreviewPoint = null;
+
         EditorSurface.SetDraftCut(
             _draftCutPoints,
             _draftCutPreviewPoint);
+
+        UpdateLiveCutPreview();
     }
 
     private void OnContextRequested(
         object? sender,
         LineEditorContextEventArgs e)
     {
-        _draftCutPreviewPoint = null;
-        EditorSurface.SetDraftCut(
-            _draftCutPoints,
-            _draftCutPreviewPoint);
+        if (EditorSurface.Tool == LineEditorTool.Cut)
+        {
+            if (_draftCutPoints.Count == 0)
+            {
+                _draftCutDrawing = true;
+                AddDraftCutPoint(e.WorldPoint);
+                UpdateLiveCutPreview();
+                UpdateStatus(
+                    "Cut line started. Add another point, then right-click again to finish.");
+                return;
+            }
+
+            if (_draftCutPoints.Count >= 2)
+            {
+                FinishAndApplyDrawnCut();
+                return;
+            }
+        }
 
         var menu = new System.Windows.Controls.ContextMenu
         {
@@ -298,75 +393,27 @@ public partial class LineEditorWindow : Window
                 System.Windows.Controls.Primitives.PlacementMode.MousePoint
         };
 
-        if (_draftCutPoints.Count == 0)
-        {
-            AddContextMenuItem(
-                menu,
-                "Start Cut Line Here",
-                () => BeginDraftCutLineAt(e.WorldPoint));
-        }
-        else if (_draftCutDrawing)
-        {
-            AddContextMenuItem(
-                menu,
-                "Add Cut Point Here",
-                () => AddDraftCutPoint(e.WorldPoint));
+        AddContextMenuItem(
+            menu,
+            "Start Cut Line Here",
+            () =>
+            {
+                CancelDraftCutLine(switchToSelect: false);
+                SetTool(LineEditorTool.Cut);
+                _draftCutDrawing = true;
+                AddDraftCutPoint(e.WorldPoint);
+                UpdateLiveCutPreview();
+            });
 
-            AddContextMenuItem(
-                menu,
-                "Finish Cut Line Here",
-                () =>
-                {
-                    AddDraftCutPoint(e.WorldPoint);
-                    FinishDraftCutLine();
-                });
+        AddContextMenuItem(
+            menu,
+            "Select Tool",
+            () => SetTool(LineEditorTool.Select));
 
-            AddContextMenuItem(
-                menu,
-                "Finish Line",
-                FinishDraftCutLine);
-
-            AddContextMenuItem(
-                menu,
-                "Undo Last Point",
-                UndoLastDraftCutPoint);
-
-            AddContextMenuItem(
-                menu,
-                "Cancel Line",
-                CancelDraftCutLine);
-        }
-        else
-        {
-            AddContextMenuItem(
-                menu,
-                "Continue Cut Line Here",
-                () =>
-                {
-                    SetTool(LineEditorTool.Cut);
-                    _draftCutDrawing = true;
-                    AddDraftCutPoint(e.WorldPoint);
-                });
-
-            AddContextMenuItem(
-                menu,
-                "Apply Cut",
-                ApplyPendingCuts);
-
-            AddContextMenuItem(
-                menu,
-                "Cancel Line",
-                CancelDraftCutLine);
-
-            AddContextMenuItem(
-                menu,
-                "Start New Cut Line Here",
-                () =>
-                {
-                    _draftCutPoints.Clear();
-                    BeginDraftCutLineAt(e.WorldPoint);
-                });
-        }
+        AddContextMenuItem(
+            menu,
+            "Hand Tool",
+            () => SetTool(LineEditorTool.Pan));
 
         menu.IsOpen = true;
     }
@@ -385,28 +432,6 @@ public partial class LineEditorWindow : Window
         menu.Items.Add(item);
     }
 
-    private void BeginDraftCutLineAt(Point point)
-    {
-        _draftCutPoints.Clear();
-        _draftCutPreviewPoint = null;
-        _draftCutDrawing = true;
-        SetTool(LineEditorTool.Cut);
-        AddDraftCutPoint(point);
-    }
-
-    private void AddDraftCutPoint(Point point)
-    {
-        _draftCutPoints.Add(point);
-        _draftCutPreviewPoint = null;
-
-        EditorSurface.SetDraftCut(
-            _draftCutPoints,
-            _draftCutPreviewPoint);
-
-        UpdateStatus(
-            $"Cut line has {_draftCutPoints.Count:N0} point(s).");
-    }
-
     private void OnImportCutLinesClick(
         object sender,
         RoutedEventArgs e)
@@ -414,7 +439,10 @@ public partial class LineEditorWindow : Window
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
             Title = "Import Cut Lines",
-            Filter = "Google Earth files (*.kml;*.kmz)|*.kml;*.kmz|KML files (*.kml)|*.kml|KMZ files (*.kmz)|*.kmz",
+            Filter =
+                "Google Earth files (*.kml;*.kmz)|*.kml;*.kmz|" +
+                "KML files (*.kml)|*.kml|" +
+                "KMZ files (*.kmz)|*.kmz",
             Multiselect = true,
             CheckFileExists = true
         };
@@ -428,13 +456,15 @@ public partial class LineEditorWindow : Window
         {
             foreach (var fileName in dialog.FileNames)
             {
-                var guides = _cutGuideLoader.Load(fileName);
+                var guides =
+                    _cutGuideLoader.Load(fileName);
 
                 foreach (var guide in guides)
                 {
-                    _guides.Add(new CutGuideState(
-                        guide,
-                        removeMatchingSourceAfterCut: false));
+                    _guides.Add(
+                        new CutGuideState(
+                            guide,
+                            removeMatchingSourceBeforeCut: false));
 
                     imported++;
                 }
@@ -454,14 +484,16 @@ public partial class LineEditorWindow : Window
 
         if (imported == 0)
         {
-            UpdateStatus("No LineString paths were found in the selected cutline file.");
+            UpdateStatus(
+                "No LineString paths were found in the selected cutline file.");
             return;
         }
 
         RefreshSurface(fitView: true);
+        UpdatePendingGuidePreview();
 
         UpdateStatus(
-            $"Imported {imported:N0} cut guide(s). Review the purple guide line(s), then click Apply Cut.");
+            $"Imported {imported:N0} cut guide(s). Review the intersection markers, then click Apply Imported Guide.");
     }
 
     private void OnUseSelectedAsCutlineClick(
@@ -471,18 +503,22 @@ public partial class LineEditorWindow : Window
         if (_selected.Count != 1)
         {
             UpdateStatus(
-                "Select exactly one line with a single click, then choose Use Selected as Cutline.");
+                "Select exactly one editable line, then choose Use Selected as Cutline.");
             return;
         }
 
         var selectedElement = _selected.Single();
 
-        var feature = _geometry.Features.FirstOrDefault(item =>
-            ReferenceEquals(item.LineStringElement, selectedElement));
+        var feature =
+            _geometry.Features.FirstOrDefault(item =>
+                ReferenceEquals(
+                    item.LineStringElement,
+                    selectedElement));
 
         if (feature is null)
         {
-            UpdateStatus("The selected line is no longer available.");
+            UpdateStatus(
+                "The selected line is no longer available.");
             return;
         }
 
@@ -490,58 +526,33 @@ public partial class LineEditorWindow : Window
             feature.Name,
             feature.Coordinates.ToList());
 
-        _guides.Add(new CutGuideState(
-            guide,
-            removeMatchingSourceAfterCut: true));
+        _guides.Add(
+            new CutGuideState(
+                guide,
+                removeMatchingSourceBeforeCut: true));
 
+        // This selection identified the helper line. Clearing it prevents the
+        // helper from also becoming the cut target scope.
         _selected.Clear();
         EditorSurface.SetSelection(_selected);
+
         RefreshSurface();
+        UpdatePendingGuidePreview();
+        UpdateCutScopeDisplay();
 
         UpdateStatus(
-            "Selected line added as a cut guide. Apply Cut will use it and remove the matching helper line from the working document.");
+            "Selected line converted to a pending cut guide. It will be removed before the cut is calculated, so it cannot cut itself.");
     }
 
     private void OnApplyCutLinesClick(
         object sender,
         RoutedEventArgs e)
     {
-        ApplyPendingCuts();
+        ApplyPendingGuides();
     }
 
-    private void ApplyPendingCuts()
+    private void ApplyPendingGuides()
     {
-        if (_draftCutDrawing)
-            StopDraftPreview();
-
-        if (_draftCutPoints.Count == 1)
-        {
-            UpdateStatus(
-                "The drawn cut line has only one point. Add at least one more point before applying it.");
-            return;
-        }
-
-        if (_draftCutPoints.Count >= 2)
-        {
-            var drawnGuide = new KmlCutGuide(
-                "Drawn cut line",
-                _draftCutPoints
-                    .Select(_geometry.Unproject)
-                    .ToList());
-
-            _guides.Add(new CutGuideState(
-                drawnGuide,
-                removeMatchingSourceAfterCut: false));
-
-            _draftCutPoints.Clear();
-            _draftCutPreviewPoint = null;
-            EditorSurface.SetDraftCut(
-                _draftCutPoints,
-                _draftCutPreviewPoint);
-        }
-
-        SetTool(LineEditorTool.Select);
-
         var pending = _guides
             .Where(guide => !guide.Applied)
             .ToList();
@@ -550,12 +561,76 @@ public partial class LineEditorWindow : Window
         {
             UpdateStatus(
                 _guides.Count == 0
-                    ? "No cut guides are loaded."
+                    ? "No imported or existing cut guides are loaded."
                     : "All loaded cut guides have already been applied.");
             return;
         }
 
+        ApplyGuideStates(
+            pending,
+            "Applied imported/existing cut guide(s).");
+    }
+
+    private void FinishAndApplyDrawnCut()
+    {
+        if (_draftCutPoints.Count < 2)
+        {
+            UpdateStatus(
+                "The cut line needs at least two points.");
+            return;
+        }
+
+        _draftCutDrawing = false;
+        _draftCutPreviewPoint = null;
+
+        var guide = new KmlCutGuide(
+            "Drawn cut line",
+            _draftCutPoints
+                .Select(_geometry.Unproject)
+                .ToList());
+
+        var state = new CutGuideState(
+            guide,
+            removeMatchingSourceBeforeCut: false);
+
+        _guides.Add(state);
+
+        _draftCutPoints.Clear();
+
+        EditorSurface.SetDraftCut(
+            _draftCutPoints,
+            _draftCutPreviewPoint);
+
+        ApplyGuideStates(
+            new[] { state },
+            "Drawn cut applied.");
+
+        SetTool(LineEditorTool.Select);
+    }
+
+    private void ApplyGuideStates(
+        IReadOnlyList<CutGuideState> guideStates,
+        string successPrefix)
+    {
+        if (guideStates.Count == 0)
+            return;
+
         var snapshot = CaptureUndoState();
+        var selectedTargets = GetValidSelectedLines();
+        var useSelectedTargets = selectedTargets.Count > 0;
+
+        ClearCutTargetMarkers();
+
+        if (useSelectedTargets)
+        {
+            foreach (var line in selectedTargets)
+            {
+                line.SetAttributeValue(
+                    CutTargetMarkerAttribute,
+                    "true");
+            }
+        }
+
         var totalLines = 0;
         var totalIntersections = 0;
         var totalPieces = 0;
@@ -563,35 +638,56 @@ public partial class LineEditorWindow : Window
         var allCutPoints = new List<Point>();
         var changed = false;
 
-        foreach (var guideState in pending)
+        try
         {
-            var worldPoints = ProjectGuide(guideState.Guide);
-            var result = _geometry.CutWithStroke(worldPoints);
-
-            totalLines += result.LinesSplit;
-            totalIntersections += result.IntersectionCount;
-            totalPieces += result.OutputSegments;
-            allCutPoints.AddRange(result.CutPoints);
-
-            if (result.LinesSplit > 0)
-                changed = true;
-
-            if (guideState.RemoveMatchingSourceAfterCut)
+            foreach (var guideState in guideStates)
             {
-                var sourceFeature = FindMatchingFeature(
-                    guideState.Guide.Coordinates);
-
-                if (sourceFeature is not null)
+                if (guideState.RemoveMatchingSourceBeforeCut)
                 {
-                    helperLinesRemoved += _geometry.DeleteLines(
-                        new[] { sourceFeature.LineStringElement });
+                    var helper = FindMatchingFeature(
+                        guideState.Guide.Coordinates);
 
-                    if (helperLinesRemoved > 0)
+                    if (helper is not null)
+                    {
+                        helperLinesRemoved +=
+                            _geometry.DeleteLines(
+                                new[]
+                                {
+                                    helper.LineStringElement
+                                });
+
+                        _contextGeometry.Reload();
                         changed = true;
+                    }
                 }
-            }
 
-            guideState.Applied = true;
+                var worldPoints =
+                    ProjectGuide(guideState.Guide);
+
+                var result = _geometry.CutWithStroke(
+                    worldPoints,
+                    useSelectedTargets
+                        ? CutTargetMarkerAttribute
+                        : null);
+
+                totalLines += result.LinesSplit;
+                totalIntersections +=
+                    result.IntersectionCount;
+                totalPieces += result.OutputSegments;
+                allCutPoints.AddRange(
+                    result.CutPoints);
+
+                if (result.LinesSplit > 0)
+                    changed = true;
+
+                guideState.Applied = true;
+            }
+        }
+        finally
+        {
+            ClearCutTargetMarkers();
+            _geometry.Reload();
+            _contextGeometry.Reload();
         }
 
         _selected.Clear();
@@ -602,74 +698,26 @@ public partial class LineEditorWindow : Window
             _hasPerformedCut = true;
 
         if (changed)
-        {
             _undo.Push(snapshot);
-            _contextGeometry.Reload();
-        }
 
         RefreshSurface();
+        UpdateCutScopeDisplay();
 
-        if (totalLines == 0)
+        if (!changed)
         {
             UpdateStatus(
-                helperLinesRemoved > 0
-                    ? $"No contours were split; removed {helperLinesRemoved:N0} helper cutline(s)."
-                    : "The cut guide did not split any contours.");
+                "The guide did not split any lines in the current cut scope.");
             return;
         }
 
         UpdateStatus(
-            $"Applied {pending.Count:N0} cut guide(s): " +
+            $"{successPrefix} " +
             $"{totalLines:N0} line(s) cut at " +
             $"{totalIntersections:N0} intersection(s), producing " +
             $"{totalPieces:N0} piece(s)." +
             (helperLinesRemoved > 0
-                ? $" Removed {helperLinesRemoved:N0} helper line(s)."
+                ? $" Removed {helperLinesRemoved:N0} helper line(s) before cutting."
                 : string.Empty));
-    }
-
-    private void OnFinishCutLineClick(
-        object sender,
-        RoutedEventArgs e)
-    {
-        FinishDraftCutLine();
-    }
-
-    private void OnCancelCutLineClick(
-        object sender,
-        RoutedEventArgs e)
-    {
-        CancelDraftCutLine();
-    }
-
-    private void OnUndoCutPointClick(
-        object sender,
-        RoutedEventArgs e)
-    {
-        UndoLastDraftCutPoint();
-    }
-
-    private void UndoLastDraftCutPoint()
-    {
-        if (_draftCutPoints.Count == 0)
-        {
-            UpdateStatus("There are no drawn cut points to undo.");
-            return;
-        }
-
-        _draftCutPoints.RemoveAt(_draftCutPoints.Count - 1);
-
-        if (_draftCutPoints.Count == 0)
-            _draftCutPreviewPoint = null;
-
-        EditorSurface.SetDraftCut(
-            _draftCutPoints,
-            _draftCutPreviewPoint);
-
-        UpdateStatus(
-            _draftCutPoints.Count == 0
-                ? "Drawn cut line cleared."
-                : $"Removed the last cut point. {_draftCutPoints.Count:N0} point(s) remain.");
     }
 
     private void OnClearGuidesClick(
@@ -678,16 +726,14 @@ public partial class LineEditorWindow : Window
     {
         _guides.Clear();
         _cutPoints.Clear();
-        _draftCutPoints.Clear();
-        _draftCutPreviewPoint = null;
-        _draftCutDrawing = false;
-        EditorSurface.SetDraftCut(
-            _draftCutPoints,
-            _draftCutPreviewPoint);
+        CancelDraftCutLine(
+            switchToSelect: false);
+
         RefreshSurface();
+        UpdateCutScopeDisplay();
 
         UpdateStatus(
-            "Cut guide overlays and the current drawn cut line were cleared. Existing cuts in the working document were not changed.");
+            "Cut guides cleared. Existing cuts were not changed.");
     }
 
     private void OnDeleteSelectedClick(
@@ -696,23 +742,29 @@ public partial class LineEditorWindow : Window
     {
         if (_selected.Count == 0)
         {
-            UpdateStatus("Nothing is selected for deletion.");
+            UpdateStatus(
+                "Nothing is selected for deletion.");
             return;
         }
 
         var snapshot = CaptureUndoState();
-        var deleted = _geometry.DeleteLines(_selected);
+
+        var deleted =
+            _geometry.DeleteLines(_selected);
 
         if (deleted == 0)
         {
-            UpdateStatus("The selected lines could not be deleted.");
+            UpdateStatus(
+                "The selected lines could not be deleted.");
             return;
         }
 
         _undo.Push(snapshot);
         _selected.Clear();
         _contextGeometry.Reload();
+
         RefreshSurface();
+        UpdateCutScopeDisplay();
 
         UpdateStatus(
             $"Deleted {deleted:N0} selected {CurrentLineNoun}.");
@@ -724,6 +776,9 @@ public partial class LineEditorWindow : Window
     {
         _selected.Clear();
         EditorSurface.SetSelection(_selected);
+
+        UpdatePendingGuidePreview();
+        UpdateCutScopeDisplay();
         UpdateStatus("Selection cleared.");
     }
 
@@ -732,8 +787,11 @@ public partial class LineEditorWindow : Window
         RoutedEventArgs e)
     {
         var inverted = _geometry.Features
-            .Where(feature => !_selected.Contains(feature.LineStringElement))
-            .Select(feature => feature.LineStringElement)
+            .Where(feature =>
+                !_selected.Contains(
+                    feature.LineStringElement))
+            .Select(feature =>
+                feature.LineStringElement)
             .ToList();
 
         _selected.Clear();
@@ -742,6 +800,9 @@ public partial class LineEditorWindow : Window
             _selected.Add(line);
 
         EditorSurface.SetSelection(_selected);
+
+        UpdatePendingGuidePreview();
+        UpdateCutScopeDisplay();
         UpdateStatus("Selection inverted.");
     }
 
@@ -751,7 +812,8 @@ public partial class LineEditorWindow : Window
     {
         if (_undo.Count == 0)
         {
-            UpdateStatus("There is no cut or deletion to undo.");
+            UpdateStatus(
+                "There is no cut or deletion to undo.");
             return;
         }
 
@@ -759,16 +821,21 @@ public partial class LineEditorWindow : Window
 
         _workingDocument = state.Document;
 
-        _contextGeometry = new KmlLineGeometryService(
-            _workingDocument,
-            _projectionScale);
+        _contextGeometry =
+            new KmlLineGeometryService(
+                _workingDocument,
+                _projectionScale);
 
-        _geometry = new KmlLineGeometryService(
-            _workingDocument,
-            _projectionScale,
-            _isScoped ? ScopeMarkerAttribute : null);
+        _geometry =
+            new KmlLineGeometryService(
+                _workingDocument,
+                _projectionScale,
+                _isScoped
+                    ? ScopeMarkerAttribute
+                    : null);
 
-        _hasPerformedCut = state.HasPerformedCut;
+        _hasPerformedCut =
+            state.HasPerformedCut;
 
         foreach (var guide in _guides)
         {
@@ -780,33 +847,17 @@ public partial class LineEditorWindow : Window
         }
 
         _cutPoints.Clear();
-        _cutPoints.AddRange(state.CutPoints);
+        _cutPoints.AddRange(
+            state.CutPoints);
+
         _selected.Clear();
 
         RefreshSurface();
+        UpdatePendingGuidePreview();
+        UpdateCutScopeDisplay();
 
         UpdateStatus(
-            "Last cut/deletion undone. Cut guide overlays remain available.");
-    }
-
-    private void OnPreviewKeyDown(
-        object sender,
-        KeyEventArgs e)
-    {
-        if (e.Key == Key.Enter &&
-            (_draftCutDrawing || _draftCutPoints.Count > 0))
-        {
-            FinishDraftCutLine();
-            e.Handled = true;
-            return;
-        }
-
-        if (e.Key == Key.Escape &&
-            (_draftCutDrawing || _draftCutPoints.Count > 0))
-        {
-            CancelDraftCutLine();
-            e.Handled = true;
-        }
+            "Last cut/deletion undone. Guide overlays remain available.");
     }
 
     private void OnFitViewClick(
@@ -816,11 +867,138 @@ public partial class LineEditorWindow : Window
         EditorSurface.FitView();
     }
 
+    private void OnZoomSelectionClick(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (!EditorSurface.ZoomToSelection())
+        {
+            UpdateStatus(
+                "Select one or more lines before using Zoom Selection.");
+        }
+    }
+
+    private void OnZoomInClick(
+        object sender,
+        RoutedEventArgs e)
+    {
+        EditorSurface.ZoomBy(1.25d);
+    }
+
+    private void OnZoomOutClick(
+        object sender,
+        RoutedEventArgs e)
+    {
+        EditorSurface.ZoomBy(0.8d);
+    }
+
+    private void OnPreviewKeyDown(
+        object sender,
+        KeyEventArgs e)
+    {
+        var control =
+            (Keyboard.Modifiers & ModifierKeys.Control) ==
+            ModifierKeys.Control;
+
+        if (control && e.Key == Key.Z)
+        {
+            OnUndoClick(this, new RoutedEventArgs());
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Delete)
+        {
+            OnDeleteSelectedClick(
+                this,
+                new RoutedEventArgs());
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Back &&
+            _draftCutPoints.Count > 0)
+        {
+            UndoLastDraftCutPoint();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Enter &&
+            _draftCutPoints.Count >= 2)
+        {
+            FinishAndApplyDrawnCut();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Escape)
+        {
+            if (_draftCutPoints.Count > 0 ||
+                _draftCutDrawing)
+            {
+                CancelDraftCutLine(
+                    switchToSelect: false);
+            }
+            else if (EditorSurface.Tool ==
+                     LineEditorTool.Cut)
+            {
+                SetTool(LineEditorTool.Select);
+            }
+
+            e.Handled = true;
+            return;
+        }
+
+        if (control)
+            return;
+
+        switch (e.Key)
+        {
+            case Key.V:
+                PauseDraftCut();
+                SetTool(LineEditorTool.Select);
+                e.Handled = true;
+                break;
+
+            case Key.C:
+                OnCutToolClick(
+                    this,
+                    new RoutedEventArgs());
+                e.Handled = true;
+                break;
+
+            case Key.H:
+                PauseDraftCut();
+                SetTool(LineEditorTool.Pan);
+                e.Handled = true;
+                break;
+
+            case Key.F:
+                EditorSurface.FitView();
+                e.Handled = true;
+                break;
+
+            case Key.OemPlus:
+            case Key.Add:
+                EditorSurface.ZoomBy(1.25d);
+                e.Handled = true;
+                break;
+
+            case Key.OemMinus:
+            case Key.Subtract:
+                EditorSurface.ZoomBy(0.8d);
+                e.Handled = true;
+                break;
+        }
+    }
+
     private void OnApplyClick(
         object sender,
         RoutedEventArgs e)
     {
-        var outputDocument = CreateOutputDocument();
+        var outputDocument =
+            CreateOutputDocument();
 
         if (XNode.DeepEquals(
                 _originalDocument.Root,
@@ -843,102 +1021,294 @@ public partial class LineEditorWindow : Window
         Close();
     }
 
-    private void FinishDraftCutLine()
+    private void AddDraftCutPoint(
+        Point point)
     {
-        if (_draftCutPoints.Count < 2)
+        var tolerance =
+            EditorSurface.WorldToleranceFromPixels(1.5d);
+
+        if (_draftCutPoints.Count > 0 &&
+            (_draftCutPoints[^1] - point).Length <= tolerance)
         {
-            UpdateStatus(
-                _draftCutPoints.Count == 0
-                    ? "No cut line is being drawn."
-                    : "The cut line needs at least two points before it can be finished.");
             return;
         }
 
-        StopDraftPreview();
-        SetTool(LineEditorTool.Select);
+        _draftCutPoints.Add(point);
+        _draftCutPreviewPoint = null;
 
-        UpdateStatus(
-            $"Cut line finished with {_draftCutPoints.Count:N0} point(s). Review the orange path, then click Apply Cut.");
+        EditorSurface.SetDraftCut(
+            _draftCutPoints,
+            _draftCutPreviewPoint);
     }
 
-    private void CancelDraftCutLine()
+    private void AppendDraftPoints(
+        IReadOnlyList<Point> points)
+    {
+        foreach (var point in points)
+            AddDraftCutPoint(point);
+    }
+
+    private void UndoLastDraftCutPoint()
+    {
+        if (_draftCutPoints.Count == 0)
+        {
+            UpdateStatus(
+                "There are no cut points to undo.");
+            return;
+        }
+
+        _draftCutPoints.RemoveAt(
+            _draftCutPoints.Count - 1);
+
+        _draftCutPreviewPoint = null;
+
+        EditorSurface.SetDraftCut(
+            _draftCutPoints,
+            _draftCutPreviewPoint);
+
+        UpdateLiveCutPreview();
+
+        UpdateStatus(
+            _draftCutPoints.Count == 0
+                ? "Drawn cut line cleared."
+                : $"Removed the last cut point. {_draftCutPoints.Count:N0} point(s) remain.");
+    }
+
+    private void PauseDraftCut()
+    {
+        _draftCutDrawing = false;
+        _draftCutPreviewPoint = null;
+
+        EditorSurface.SetDraftCut(
+            _draftCutPoints,
+            _draftCutPreviewPoint);
+    }
+
+    private void CancelDraftCutLine(
+        bool switchToSelect)
     {
         _draftCutPoints.Clear();
         _draftCutPreviewPoint = null;
         _draftCutDrawing = false;
+        _cutPoints.Clear();
 
         EditorSurface.SetDraftCut(
             _draftCutPoints,
             _draftCutPreviewPoint);
 
-        SetTool(LineEditorTool.Select);
-        UpdateStatus("Current drawn cut line cancelled.");
+        if (switchToSelect)
+            SetTool(LineEditorTool.Select);
+        else
+            UpdateCutScopeDisplay();
     }
 
-    private void StopDraftPreview()
+    private void UpdateLiveCutPreview()
     {
-        _draftCutDrawing = false;
-        _draftCutPreviewPoint = null;
+        if (_draftCutPoints.Count == 0)
+        {
+            UpdatePendingGuidePreview();
+            return;
+        }
 
-        EditorSurface.SetDraftCut(
-            _draftCutPoints,
-            _draftCutPreviewPoint);
+        var stroke =
+            _draftCutPoints.ToList();
+
+        if (_draftCutPreviewPoint.HasValue)
+            stroke.Add(
+                _draftCutPreviewPoint.Value);
+
+        if (stroke.Count < 2)
+        {
+            _cutPoints.Clear();
+            RefreshSurface();
+            UpdateCutScopeDisplay();
+            return;
+        }
+
+        var preview = _geometry.PreviewCutWithStroke(
+            stroke,
+            GetSelectedTargetSet());
+
+        _cutPoints.Clear();
+        _cutPoints.AddRange(
+            preview.CutPoints);
+
+        RefreshSurface();
+        UpdateCutScopeDisplay(preview);
     }
 
-    private static readonly XNamespace KmlNs =
-        "http://www.opengis.net/kml/2.2";
-
-    private static void ApplyScopeMarkers(
-        XDocument document,
-        IReadOnlyCollection<int> placemarkIndexes)
+    private void UpdatePendingGuidePreview()
     {
-        var placemarks = document
-            .Descendants(KmlNs + "Placemark")
+        if (_draftCutPoints.Count > 0)
+        {
+            UpdateLiveCutPreview();
+            return;
+        }
+
+        var pending = _guides
+            .Where(guide => !guide.Applied)
             .ToList();
 
-        foreach (var index in placemarkIndexes)
+        if (pending.Count == 0)
         {
-            if (index < 0 || index >= placemarks.Count)
-                continue;
+            UpdateCutScopeDisplay();
+            return;
+        }
 
-            placemarks[index].SetAttributeValue(
-                ScopeMarkerAttribute,
-                "true");
+        var selectedTargets =
+            GetSelectedTargetSet();
+
+        var allPoints =
+            new List<Point>();
+
+        var lines = new HashSet<XElement>();
+        var intersections = 0;
+
+        foreach (var guideState in pending)
+        {
+            var targetSet = selectedTargets is null
+                ? _geometry.Features
+                    .Select(feature =>
+                        feature.LineStringElement)
+                    .ToHashSet()
+                : new HashSet<XElement>(
+                    selectedTargets);
+
+            if (guideState.RemoveMatchingSourceBeforeCut)
+            {
+                var helper = FindMatchingFeature(
+                    guideState.Guide.Coordinates);
+
+                if (helper is not null)
+                    targetSet.Remove(
+                        helper.LineStringElement);
+            }
+
+            var preview =
+                _geometry.PreviewCutWithStroke(
+                    ProjectGuide(
+                        guideState.Guide),
+                    targetSet);
+
+            intersections +=
+                preview.IntersectionCount;
+
+            allPoints.AddRange(
+                preview.CutPoints);
+
+            foreach (var feature in
+                     _geometry.FindIntersectingFeatures(
+                         ProjectGuide(
+                             guideState.Guide)))
+            {
+                if (targetSet.Contains(
+                        feature.LineStringElement))
+                {
+                    lines.Add(
+                        feature.LineStringElement);
+                }
+            }
+        }
+
+        _cutPoints.Clear();
+        _cutPoints.AddRange(allPoints);
+
+        RefreshSurface();
+
+        var previewSummary =
+            new LineCutPreview(
+                lines.Count,
+                intersections,
+                allPoints);
+
+        UpdateCutScopeDisplay(
+            previewSummary);
+    }
+
+    private IReadOnlySet<XElement>?
+        GetSelectedTargetSet()
+    {
+        var valid = GetValidSelectedLines();
+
+        return valid.Count == 0
+            ? null
+            : valid.ToHashSet();
+    }
+
+    private List<XElement>
+        GetValidSelectedLines()
+    {
+        return _selected
+            .Where(line =>
+                line.Document == _workingDocument &&
+                _geometry.Features.Any(
+                    feature =>
+                        ReferenceEquals(
+                            feature.LineStringElement,
+                            line)))
+            .ToList();
+    }
+
+    private void UpdateCutScopeDisplay(
+        LineCutPreview? preview = null)
+    {
+        var validSelected =
+            GetValidSelectedLines();
+
+        MapScopeText.Text =
+            validSelected.Count > 0
+                ? $"Cut affects: {validSelected.Count:N0} selected editable line(s)"
+                : $"Cut affects: all {_geometry.Features.Count:N0} editable line(s) in {_scopeDisplayName}";
+
+        if (preview.HasValue)
+        {
+            ToolHintText.Text =
+                $"{ToolHintForCurrentTool()} · Will cut {preview.Value.LinesAffected:N0} line(s) at {preview.Value.IntersectionCount:N0} point(s)";
+        }
+        else
+        {
+            ToolHintText.Text =
+                ToolHintForCurrentTool();
         }
     }
 
-    private XDocument CreateOutputDocument()
+    private string ToolHintForCurrentTool()
     {
-        var output = new XDocument(_workingDocument);
-
-        foreach (var attribute in output
-                     .Descendants()
-                     .Attributes(ScopeMarkerAttribute)
-                     .ToList())
+        return EditorSurface.Tool switch
         {
-            attribute.Remove();
-        }
-
-        return output;
+            LineEditorTool.Pan =>
+                "H Hand · Space+drag or middle-drag pan · +/- zoom · F fit",
+            LineEditorTool.Select =>
+                "V Select · drag across lines · Alt+drag deselect · Delete remove · Space+drag pan",
+            _ =>
+                "C Cut · click points or drag freehand · double-click/right-click/Enter finish · Backspace undo point · Esc cancel"
+        };
     }
 
     private void UpdateScopeText()
     {
-        var currentPlacemarkCount = _isScoped
-            ? _workingDocument
-                .Descendants(KmlNs + "Placemark")
-                .Count(placemark =>
-                    string.Equals(
-                        placemark.Attribute(ScopeMarkerAttribute)?.Value,
-                        "true",
-                        StringComparison.Ordinal))
-            : _workingDocument
-                .Descendants(KmlNs + "Placemark")
-                .Count();
+        var currentPlacemarkCount =
+            _isScoped
+                ? _workingDocument
+                    .Descendants(
+                        KmlNs + "Placemark")
+                    .Count(placemark =>
+                        string.Equals(
+                            placemark
+                                .Attribute(
+                                    ScopeMarkerAttribute)
+                                ?.Value,
+                            "true",
+                            StringComparison.Ordinal))
+                : _workingDocument
+                    .Descendants(
+                        KmlNs + "Placemark")
+                    .Count();
 
-        ScopeText.Text = _isScoped
-            ? $"Editing scope: {_scopeDisplayName} — {currentPlacemarkCount:N0} placemark(s), {_geometry.Features.Count:N0} editable line(s). Lines outside this scope are shown light grey and will not be changed."
-            : $"Editing scope: Entire document — {currentPlacemarkCount:N0} placemark(s), {_geometry.Features.Count:N0} editable line(s).";
+        ScopeText.Text =
+            _isScoped
+                ? $"Editing scope: {_scopeDisplayName} — {currentPlacemarkCount:N0} placemark(s), {_geometry.Features.Count:N0} editable line(s). Lines outside this scope are light grey and locked."
+                : $"Editing scope: Entire document — {currentPlacemarkCount:N0} placemark(s), {_geometry.Features.Count:N0} editable line(s).";
     }
 
     private UndoState CaptureUndoState()
@@ -952,7 +1322,8 @@ public partial class LineEditorWindow : Window
             _cutPoints.ToList());
     }
 
-    private IReadOnlyList<Point> ProjectGuide(KmlCutGuide guide)
+    private IReadOnlyList<Point> ProjectGuide(
+        KmlCutGuide guide)
     {
         return guide.Coordinates
             .Select(_geometry.Project)
@@ -962,8 +1333,11 @@ public partial class LineEditorWindow : Window
     private KmlLineFeature? FindMatchingFeature(
         IReadOnlyList<KmlCoordinate> coordinates)
     {
-        return _geometry.Features.FirstOrDefault(feature =>
-            CoordinatesMatch(feature.Coordinates, coordinates));
+        return _geometry.Features
+            .FirstOrDefault(feature =>
+                CoordinatesMatch(
+                    feature.Coordinates,
+                    coordinates));
     }
 
     private static bool CoordinatesMatch(
@@ -973,14 +1347,18 @@ public partial class LineEditorWindow : Window
         if (left.Count != right.Count)
             return false;
 
-        for (var index = 0; index < left.Count; index++)
+        for (var index = 0;
+             index < left.Count;
+             index++)
         {
             if (Math.Abs(
                     left[index].Longitude -
-                    right[index].Longitude) > 0.0000000001d ||
+                    right[index].Longitude) >
+                0.0000000001d ||
                 Math.Abs(
                     left[index].Latitude -
-                    right[index].Latitude) > 0.0000000001d)
+                    right[index].Latitude) >
+                0.0000000001d)
             {
                 return false;
             }
@@ -989,31 +1367,38 @@ public partial class LineEditorWindow : Window
         return true;
     }
 
-    private void RefreshSurface(bool fitView = false)
+    private void RefreshSurface(
+        bool fitView = false)
     {
         UpdateScopeText();
 
         var guideVisuals = _guides
             .Select(guide =>
                 new LineEditorGuideVisual(
-                    ProjectGuide(guide.Guide),
+                    ProjectGuide(
+                        guide.Guide),
                     guide.Applied))
             .ToList();
 
-        var editableElements = _geometry.Features
-            .Select(feature => feature.LineStringElement)
-            .ToHashSet();
+        var editableElements =
+            _geometry.Features
+                .Select(feature =>
+                    feature.LineStringElement)
+                .ToHashSet();
 
-        var contextOnly = _contextGeometry.Features
-            .Where(feature =>
-                !editableElements.Contains(feature.LineStringElement))
-            .ToList();
+        var contextOnly =
+            _contextGeometry.Features
+                .Where(feature =>
+                    !editableElements.Contains(
+                        feature.LineStringElement))
+                .ToList();
 
         EditorSurface.SetDocument(
             _geometry.Features,
             contextOnly,
             _selected,
-            GetDisplayBounds(guideVisuals),
+            GetDisplayBounds(
+                guideVisuals),
             guideVisuals,
             _cutPoints,
             fitView);
@@ -1026,14 +1411,17 @@ public partial class LineEditorWindow : Window
     private Rect GetDisplayBounds(
         IReadOnlyList<LineEditorGuideVisual> guides)
     {
-        var bounds = _contextGeometry.WorldBounds;
+        var bounds =
+            _contextGeometry.WorldBounds;
 
         foreach (var guide in guides)
         {
-            foreach (var point in guide.WorldPoints)
+            foreach (var point in
+                     guide.WorldPoints)
             {
                 if (bounds.IsEmpty)
-                    bounds = new Rect(point, point);
+                    bounds =
+                        new Rect(point, point);
                 else
                     bounds.Union(point);
             }
@@ -1043,9 +1431,12 @@ public partial class LineEditorWindow : Window
     }
 
     private string CurrentLineNoun =>
-        _hasPerformedCut ? "line fragment(s)" : "contour(s)";
+        _hasPerformedCut
+            ? "line fragment(s)"
+            : "contour(s)";
 
-    private void UpdateStatus(string message)
+    private void UpdateStatus(
+        string message)
     {
         StatusText.Text =
             $"{message}  " +
@@ -1055,20 +1446,87 @@ public partial class LineEditorWindow : Window
             $"{_undo.Count:N0} undo step(s).";
     }
 
+    private static void ApplyScopeMarkers(
+        XDocument document,
+        IReadOnlyCollection<int> placemarkIndexes)
+    {
+        var placemarks = document
+            .Descendants(
+                KmlNs + "Placemark")
+            .ToList();
+
+        foreach (var index in
+                 placemarkIndexes)
+        {
+            if (index < 0 ||
+                index >= placemarks.Count)
+            {
+                continue;
+            }
+
+            placemarks[index].SetAttributeValue(
+                ScopeMarkerAttribute,
+                "true");
+        }
+    }
+
+    private void ClearCutTargetMarkers()
+    {
+        foreach (var attribute in
+                 _workingDocument
+                     .Descendants()
+                     .Attributes(
+                         CutTargetMarkerAttribute)
+                     .ToList())
+        {
+            attribute.Remove();
+        }
+    }
+
+    private XDocument CreateOutputDocument()
+    {
+        var output =
+            new XDocument(_workingDocument);
+
+        foreach (var attribute in
+                 output
+                     .Descendants()
+                     .Attributes()
+                     .Where(attribute =>
+                         attribute.Name ==
+                             ScopeMarkerAttribute ||
+                         attribute.Name ==
+                             CutTargetMarkerAttribute)
+                     .ToList())
+        {
+            attribute.Remove();
+        }
+
+        return output;
+    }
+
     private sealed class CutGuideState
     {
         public CutGuideState(
             KmlCutGuide guide,
-            bool removeMatchingSourceAfterCut)
+            bool removeMatchingSourceBeforeCut)
         {
             Guide = guide;
-            RemoveMatchingSourceAfterCut =
-                removeMatchingSourceAfterCut;
+            RemoveMatchingSourceBeforeCut =
+                removeMatchingSourceBeforeCut;
         }
 
-        public Guid Id { get; } = Guid.NewGuid();
+        public Guid Id { get; } =
+            Guid.NewGuid();
+
         public KmlCutGuide Guide { get; }
-        public bool RemoveMatchingSourceAfterCut { get; }
+
+        public bool
+            RemoveMatchingSourceBeforeCut
+        {
+            get;
+        }
+
         public bool Applied { get; set; }
     }
 
