@@ -588,9 +588,9 @@ public sealed class LineEditorSurface : FrameworkElement
             if (_strokeWorld.Count >= 2)
             {
                 var deselectStroke =
-                    _strokeIsLasso &&
-                    LassoMode
-                        ? LassoRemove
+                    _strokeIsLasso
+                        ? LassoMode &&
+                          LassoRemove
                         : alt;
 
                 StrokeCompleted?.Invoke(
