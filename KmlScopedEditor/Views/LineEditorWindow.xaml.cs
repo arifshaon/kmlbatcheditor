@@ -1900,6 +1900,7 @@ public partial class LineEditorWindow : Window
         var guideVisuals =
             _workflowStep == 2
                 ? _guides
+                    .Where(guide => !guide.Applied)
                     .Select(guide =>
                         new LineEditorGuideVisual(
                             ProjectGuide(
