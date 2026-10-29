@@ -4,5 +4,5 @@ public enum LineEditorTool
 {
     Pan,
     Select,
-    Cut
+    Split
 }
