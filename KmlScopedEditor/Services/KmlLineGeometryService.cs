@@ -618,6 +618,14 @@ public sealed class KmlLineGeometryService
             coordinate.Latitude);
     }
 
+    public KmlCoordinate Unproject(Point point)
+    {
+        return new KmlCoordinate(
+            point.X / _longitudeScale,
+            point.Y,
+            null);
+    }
+
     private Point ToWorld(KmlCoordinate coordinate)
     {
         return Project(coordinate);
