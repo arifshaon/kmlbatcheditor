@@ -524,6 +524,7 @@ public sealed class LineEditorSurface : FrameworkElement
                     Tool,
                     ScreenToWorld(screen),
                     alt,
+                    shift,
                     e.ClickCount >= 2));
         }
         else
