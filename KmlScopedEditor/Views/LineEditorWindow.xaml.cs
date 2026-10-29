@@ -30,8 +30,6 @@ public partial class LineEditorWindow : Window
     private KmlLineGeometryService _geometry;
     private KmlLineGeometryService _contextGeometry;
     private readonly double _projectionScale;
-    private readonly string _initialSelectionDisplayName;
-    private readonly int _initialSelectedLineCount;
 
     private readonly KmlCutGuideService _cutGuideLoader = new();
     private readonly List<CutGuideState> _guides = new();
@@ -47,9 +45,7 @@ public partial class LineEditorWindow : Window
 
     public LineEditorWindow(
         XDocument sourceDocument,
-        string? sourceName = null,
-        IReadOnlyCollection<int>? initialSelectedPlacemarkIndexes = null,
-        string? initialSelectionDisplayName = null)
+        string? sourceName = null)
     {
         InitializeComponent();
 
@@ -57,11 +53,6 @@ public partial class LineEditorWindow : Window
 
         _originalDocument = new XDocument(sourceDocument);
         _workingDocument = new XDocument(sourceDocument);
-
-        _initialSelectionDisplayName =
-            string.IsNullOrWhiteSpace(initialSelectionDisplayName)
-                ? "No initial tree selection"
-                : initialSelectionDisplayName;
 
         var projectionGeometry = new KmlLineGeometryService(
             _workingDocument);
@@ -76,13 +67,11 @@ public partial class LineEditorWindow : Window
             _workingDocument,
             _projectionScale);
 
-        _initialSelectedLineCount = 0;
-
         if (!string.IsNullOrWhiteSpace(sourceName))
             Title = $"Line Editor - {sourceName}";
 
         EditorSurface.StrokeCompleted += OnStrokeCompleted;
-        EditorSurface.CutStrokePreviewChanged += OnCutStrokePreviewChanged;
+        EditorSurface.SplitStrokePreviewChanged += OnSplitStrokePreviewChanged;
         EditorSurface.LineClicked += OnLineClicked;
         EditorSurface.PointerMoved += OnPointerMoved;
         EditorSurface.PointerExited += OnPointerExited;
@@ -115,32 +104,32 @@ public partial class LineEditorWindow : Window
         SetTool(LineEditorTool.Select);
     }
 
-    private void OnCutToolClick(
+    private void OnSplitToolClick(
         object sender,
         RoutedEventArgs e)
     {
-        BeginCutMode();
+        BeginSplitMode();
     }
 
-    private void OnCutSelectedClick(
+    private void OnSplitSelectedClick(
         object sender,
         RoutedEventArgs e)
     {
         if (GetValidSelectedLines().Count == 0)
         {
             UpdateStatus(
-                "Select one or more lines first, then choose Cut Selected.");
+                "Select one or more lines first, then choose Split Selected Lines.");
             return;
         }
 
-        BeginCutMode();
+        BeginSplitMode();
 
         UpdateStatus(
-            $"Cut Selected is active for {GetValidSelectedLines().Count:N0} selected line(s). " +
-            "Now draw the cut line across them; right-click for options, or double-click/Enter to finish.");
+            $"Split Selected Lines is active for {GetValidSelectedLines().Count:N0} selected line(s). " +
+            "Now draw the split line across them; right-click for options, or double-click/Enter to finish.");
     }
 
-    private void BeginCutMode()
+    private void BeginSplitMode()
     {
         SetTool(LineEditorTool.Split);
         _draftCutDrawing = true;
@@ -155,9 +144,9 @@ public partial class LineEditorWindow : Window
         UpdateStatus(
             _draftCutPoints.Count == 0
                 ? (GetValidSelectedLines().Count > 0
-                    ? $"Cut Selected is active for {GetValidSelectedLines().Count:N0} selected line(s). Draw the cut line across them."
-                    : "Cut tool ready. No lines are selected, so the cut will affect any document line it crosses.")
-                : $"Continuing cut line from {_draftCutPoints.Count:N0} existing point(s).");
+                    ? $"Split Selected Lines is active for {GetValidSelectedLines().Count:N0} selected line(s). Draw the split line across them."
+                    : "Split tool ready. No lines are selected, so the split will affect any document line it crosses.")
+                : $"Continuing split line from {_draftCutPoints.Count:N0} existing point(s).");
     }
 
     private void SetTool(LineEditorTool tool)
@@ -166,14 +155,14 @@ public partial class LineEditorWindow : Window
 
         PanToolButton.IsChecked = tool == LineEditorTool.Pan;
         SelectToolButton.IsChecked = tool == LineEditorTool.Select;
-        CutToolButton.IsChecked = tool == LineEditorTool.Split;
+        SplitToolButton.IsChecked = tool == LineEditorTool.Split;
 
         SelectActionsPanel.Visibility =
             tool == LineEditorTool.Select
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
-        CutActionsPanel.Visibility =
+        SplitActionsPanel.Visibility =
             tool == LineEditorTool.Split
                 ? Visibility.Visible
                 : Visibility.Collapsed;
@@ -193,9 +182,9 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Pan =>
                 "HAND: left-drag to pan. Mouse wheel zooms. Space+drag and middle-drag also pan.",
             LineEditorTool.Select =>
-                "SELECT: drag across lines to select real crossings. After selecting, choose Cut Selected... to split only those lines, or Delete Selected to remove them. Alt+drag deselects.",
+                "SELECT: drag across lines to select real crossings. After selecting, choose Split Selected Lines... to split only those lines, or Delete Selected to remove them. Alt+drag deselects.",
             _ =>
-                "CUT: click points or drag freehand. Right-click opens cut-line options at the pointer. Double-click or Enter finishes and applies. Backspace removes the last point; Esc cancels."
+                "SPLIT: click points or drag freehand. Right-click opens split-line options at the pointer. Double-click or Enter finishes and applies. Backspace removes the last point; Esc cancels."
         };
 
         ToolHintText.Text = tool switch
@@ -203,9 +192,9 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Pan =>
                 "H Hand · Space+drag or middle-drag pan · +/- zoom · F fit",
             LineEditorTool.Select =>
-                "V Select · drag across lines · Cut Selected... splits the current selection · Delete removes it · Alt+drag deselect",
+                "V Select · drag across lines · Split Selected Lines... splits the current selection · Delete removes it · Alt+drag deselect",
             _ =>
-                "C Cut · click points or drag freehand · right-click options · double-click/Enter finish · Backspace undo point · Esc cancel"
+                "S Split · click points or drag freehand · right-click options · double-click/Enter finish · Backspace undo point · Esc cancel"
         };
 
         UpdateCutScopeDisplay();
@@ -235,7 +224,7 @@ public partial class LineEditorWindow : Window
             UpdateCutScopeDisplay();
             UpdatePendingGuidePreview();
 
-            var noun = CurrentLineNoun;
+            var noun = CurrentLineLabel;
 
             UpdateStatus(
                 matches.Count == 0
@@ -262,10 +251,10 @@ public partial class LineEditorWindow : Window
 
         UpdateStatus(
             $"Added a freehand section. Cut line now has {_draftCutPoints.Count:N0} sampled point(s). " +
-            "Continue drawing, or right-click for cut-line options.");
+            "Continue drawing, or right-click for split-line options.");
     }
 
-    private void OnCutStrokePreviewChanged(
+    private void OnSplitStrokePreviewChanged(
         object? sender,
         LineEditorStrokeEventArgs e)
     {
@@ -312,7 +301,7 @@ public partial class LineEditorWindow : Window
             if (e.IsDoubleClick &&
                 _draftCutPoints.Count >= 2)
             {
-                FinishAndApplyDrawnCut();
+                FinishAndApplyDrawnSplit();
                 return;
             }
 
@@ -344,14 +333,14 @@ public partial class LineEditorWindow : Window
         {
             _selected.Remove(feature.LineStringElement);
             UpdateStatus(
-                $"Removed one {CurrentLineNoun} from the selection.");
+                $"Removed one {CurrentLineLabel} from the selection.");
         }
         else
         {
             _selected.Clear();
             _selected.Add(feature.LineStringElement);
             UpdateStatus(
-                $"Selected one {CurrentLineNoun}.");
+                $"Selected one {CurrentLineLabel}.");
         }
 
         EditorSurface.SetSelection(_selected);
@@ -467,7 +456,7 @@ public partial class LineEditorWindow : Window
                         AddDraftCutPoint(e.WorldPoint);
 
                         if (_draftCutPoints.Count >= 2)
-                            FinishAndApplyDrawnCut();
+                            FinishAndApplyDrawnSplit();
                     });
 
                 if (_draftCutPoints.Count >= 2)
@@ -475,7 +464,7 @@ public partial class LineEditorWindow : Window
                     AddContextMenuItem(
                         menu,
                         "Finish and Apply",
-                        FinishAndApplyDrawnCut);
+                        FinishAndApplyDrawnSplit);
                 }
 
                 AddContextMenuItem(
@@ -541,7 +530,7 @@ public partial class LineEditorWindow : Window
         menu.Items.Add(item);
     }
 
-    private void OnImportCutLinesClick(
+    private void OnImportSplitLineClick(
         object sender,
         RoutedEventArgs e)
     {
@@ -583,7 +572,7 @@ public partial class LineEditorWindow : Window
         {
             System.Windows.MessageBox.Show(
                 this,
-                $"The cut line could not be imported.\n\n{exception.Message}",
+                $"The split line could not be imported.\n\n{exception.Message}",
                 "Import Cut Lines",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
@@ -602,10 +591,10 @@ public partial class LineEditorWindow : Window
         UpdatePendingGuidePreview();
 
         UpdateStatus(
-            $"Imported {imported:N0} cut line(s). Review the intersection markers, then click Cut with Imported Line.");
+            $"Imported {imported:N0} split line(s). Review the intersection markers, then click Split with Imported Line.");
     }
 
-    private void OnUseSelectedAsCutlineClick(
+    private void OnUseSelectedAsSplitLineClick(
         object sender,
         RoutedEventArgs e)
     {
@@ -641,7 +630,7 @@ public partial class LineEditorWindow : Window
                 removeMatchingSourceBeforeCut: true));
 
         // This selection identified the helper line. Clearing it prevents the
-        // helper from also becoming the cut target scope.
+        // helper from also becoming the split target scope.
         _selected.Clear();
         EditorSurface.SetSelection(_selected);
 
@@ -650,10 +639,10 @@ public partial class LineEditorWindow : Window
         UpdateCutScopeDisplay();
 
         UpdateStatus(
-            "Selected line is now the cut line. It will be removed before the cut is calculated, so it cannot cut itself.");
+            "Selected line is now the split line. It will be removed before the cut is calculated, so it cannot cut itself.");
     }
 
-    private void OnApplyCutLinesClick(
+    private void OnApplyImportedSplitLineClick(
         object sender,
         RoutedEventArgs e)
     {
@@ -670,22 +659,22 @@ public partial class LineEditorWindow : Window
         {
             UpdateStatus(
                 _guides.Count == 0
-                    ? "No imported or existing cut lines are loaded."
-                    : "All loaded cut lines have already been used.");
+                    ? "No imported or existing split lines are loaded."
+                    : "All loaded split lines have already been used.");
             return;
         }
 
         ApplyGuideStates(
             pending,
-            "Cut using imported/existing line(s).");
+            "Split using imported/existing line(s).");
     }
 
-    private void FinishAndApplyDrawnCut()
+    private void FinishAndApplyDrawnSplit()
     {
         if (_draftCutPoints.Count < 2)
         {
             UpdateStatus(
-                "The cut line needs at least two points.");
+                "The split line needs at least two points.");
             return;
         }
 
@@ -693,7 +682,7 @@ public partial class LineEditorWindow : Window
         _draftCutPreviewPoint = null;
 
         var guide = new KmlCutGuide(
-            "Drawn cut line",
+            "Drawn split line",
             _draftCutPoints
                 .Select(_geometry.Unproject)
                 .ToList());
@@ -712,7 +701,7 @@ public partial class LineEditorWindow : Window
 
         ApplyGuideStates(
             new[] { state },
-            "Drawn cut applied.");
+            "Drawn split applied.");
 
         SetTool(LineEditorTool.Select);
     }
@@ -815,13 +804,13 @@ public partial class LineEditorWindow : Window
         if (!changed)
         {
             UpdateStatus(
-                "The cut line did not split any lines in the current cut target.");
+                "The split line did not split any lines in the current split target.");
             return;
         }
 
         UpdateStatus(
             $"{successPrefix} " +
-            $"{totalLines:N0} line(s) cut at " +
+            $"{totalLines:N0} line(s) split at " +
             $"{totalIntersections:N0} intersection(s), producing " +
             $"{totalPieces:N0} piece(s)." +
             (helperLinesRemoved > 0
@@ -829,7 +818,7 @@ public partial class LineEditorWindow : Window
                 : string.Empty));
     }
 
-    private void OnClearGuidesClick(
+    private void OnClearSplitLinesClick(
         object sender,
         RoutedEventArgs e)
     {
@@ -876,7 +865,7 @@ public partial class LineEditorWindow : Window
         UpdateCutScopeDisplay();
 
         UpdateStatus(
-            $"Deleted {deleted:N0} selected {CurrentLineNoun}.");
+            $"Deleted {deleted:N0} selected {CurrentLineLabel}.");
     }
 
     private void OnClearSelectionClick(
@@ -963,7 +952,7 @@ public partial class LineEditorWindow : Window
         UpdateCutScopeDisplay();
 
         UpdateStatus(
-            "Last cut/deletion undone. Imported cut-line overlays remain available.");
+            "Last cut/deletion undone. Imported split-line overlays remain available.");
     }
 
     private void OnFitViewClick(
@@ -1040,7 +1029,7 @@ public partial class LineEditorWindow : Window
         if (e.Key == Key.Enter &&
             _draftCutPoints.Count >= 2)
         {
-            FinishAndApplyDrawnCut();
+            FinishAndApplyDrawnSplit();
             e.Handled = true;
             return;
         }
@@ -1075,7 +1064,7 @@ public partial class LineEditorWindow : Window
                 break;
 
             case Key.S:
-                OnCutToolClick(
+                OnSplitToolClick(
                     this,
                     new RoutedEventArgs());
                 e.Handled = true;
@@ -1114,8 +1103,8 @@ public partial class LineEditorWindow : Window
         {
             var result = System.Windows.MessageBox.Show(
                 this,
-                "A drawn cut line has not been applied yet. Apply this cut before closing?",
-                "Unapplied cut line",
+                "A drawn split line has not been applied yet. Apply this split before closing?",
+                "Unapplied split line",
                 MessageBoxButton.YesNoCancel,
                 MessageBoxImage.Question);
 
@@ -1123,7 +1112,7 @@ public partial class LineEditorWindow : Window
                 return;
 
             if (result == MessageBoxResult.Yes)
-                FinishAndApplyDrawnCut();
+                FinishAndApplyDrawnSplit();
             else
                 CancelDraftCutLine(switchToSelect: false);
         }
@@ -1132,8 +1121,8 @@ public partial class LineEditorWindow : Window
         {
             var result = System.Windows.MessageBox.Show(
                 this,
-                "One or more imported/existing cut lines have not been used yet. Cut with them before closing?",
-                "Unused cut line",
+                "One or more imported/existing split lines have not been used yet. Cut with them before closing?",
+                "Unused split line",
                 MessageBoxButton.YesNoCancel,
                 MessageBoxImage.Question);
 
@@ -1153,7 +1142,7 @@ public partial class LineEditorWindow : Window
         {
             System.Windows.MessageBox.Show(
                 this,
-                "No line geometry has been changed. Selection by itself is temporary and is not saved in KML/KMZ. Use Cut Selected... or Delete Selected first, or click Cancel to close without changes.",
+                "No line geometry has been changed. Selection by itself is temporary and is not saved in KML/KMZ. Use Split Selected Lines... or Delete Selected first, or click Cancel to close without changes.",
                 "No line edits to apply",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
@@ -1222,7 +1211,7 @@ public partial class LineEditorWindow : Window
 
         UpdateStatus(
             _draftCutPoints.Count == 0
-                ? "Drawn cut line cleared."
+                ? "Drawn split line cleared."
                 : $"Removed the last cut point. {_draftCutPoints.Count:N0} point(s) remain.");
     }
 
@@ -1401,13 +1390,13 @@ public partial class LineEditorWindow : Window
 
         MapScopeText.Text =
             validSelected.Count > 0
-                ? $"Cut affects: {validSelected.Count:N0} selected line(s)"
-                : $"Cut affects: all {_geometry.Features.Count:N0} line(s) in the document";
+                ? $"Split affects: {validSelected.Count:N0} selected line(s)"
+                : $"Split affects: all {_geometry.Features.Count:N0} line(s) in the document";
 
         if (preview.HasValue)
         {
             ToolHintText.Text =
-                $"{ToolHintForCurrentTool()} · Will cut {preview.Value.LinesAffected:N0} line(s) at {preview.Value.IntersectionCount:N0} point(s)";
+                $"{ToolHintForCurrentTool()} · Will split {preview.Value.LinesAffected:N0} line(s) at {preview.Value.IntersectionCount:N0} point(s)";
         }
         else
         {
@@ -1425,7 +1414,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Select =>
                 "V Select · drag across lines · Alt+drag deselect · Delete remove · Space+drag pan",
             _ =>
-                "C Cut · click points or drag freehand · right-click options · double-click/Enter finish · Backspace undo point · Esc cancel"
+                "S Split · click points or drag freehand · right-click options · double-click/Enter finish · Backspace undo point · Esc cancel"
         };
     }
 
@@ -1438,10 +1427,7 @@ public partial class LineEditorWindow : Window
                 .Count();
 
         ScopeText.Text =
-            $"All {_geometry.Features.Count:N0} line(s) in {currentPlacemarkCount:N0} placemark(s) are editable. " +
-            (_initialSelectedLineCount > 0
-                ? $"Started with {_initialSelectedLineCount:N0} line(s) selected from {_initialSelectionDisplayName}."
-                : "No lines were preselected from the main tree.");
+            $"All {_geometry.Features.Count:N0} line(s) in {currentPlacemarkCount:N0} placemark(s) are editable. Nothing is preselected when the Line Editor opens.";
     }
 
     private UndoState CaptureUndoState()
@@ -1550,49 +1536,17 @@ public partial class LineEditorWindow : Window
         return bounds;
     }
 
-    private string CurrentLineNoun =>
-        _hasPerformedCut
-            ? "line fragment(s)"
-            : "contour(s)";
+    private string CurrentLineLabel => "line(s)";
 
     private void UpdateStatus(
         string message)
     {
         StatusText.Text =
             $"{message}  " +
-            $"{_geometry.Features.Count:N0} editable {CurrentLineNoun}; " +
+            $"{_geometry.Features.Count:N0} editable {CurrentLineLabel}; " +
             $"{_selected.Count:N0} selected; " +
-            $"{_guides.Count:N0} cut line(s); " +
+            $"{_guides.Count:N0} split line(s); " +
             $"{_undo.Count:N0} undo step(s).";
-    }
-
-    private void InitialiseSelectionFromTree(
-        IReadOnlyCollection<int>? placemarkIndexes)
-    {
-        if (placemarkIndexes is null ||
-            placemarkIndexes.Count == 0)
-        {
-            return;
-        }
-
-        var placemarks = _workingDocument
-            .Descendants(KmlNs + "Placemark")
-            .ToList();
-
-        foreach (var index in placemarkIndexes)
-        {
-            if (index < 0 ||
-                index >= placemarks.Count)
-            {
-                continue;
-            }
-
-            foreach (var line in placemarks[index]
-                         .Descendants(KmlNs + "LineString"))
-            {
-                _selected.Add(line);
-            }
-        }
     }
 
     private void ClearCutTargetMarkers()
