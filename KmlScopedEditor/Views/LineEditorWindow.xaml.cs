@@ -605,7 +605,7 @@ public partial class LineEditorWindow : Window
         UpdatePendingGuidePreview();
 
         UpdateStatus(
-            $"Imported {imported:N0} cut guide(s). Review the intersection markers, then click Apply Imported Guide.");
+            $"Imported {imported:N0} cut line(s). Review the intersection markers, then click Cut with Imported Line.");
     }
 
     private void OnUseSelectedAsCutlineClick(
@@ -653,7 +653,7 @@ public partial class LineEditorWindow : Window
         UpdateCutScopeDisplay();
 
         UpdateStatus(
-            "Selected line converted to a pending cut guide. It will be removed before the cut is calculated, so it cannot cut itself.");
+            "Selected line is now the cut line. It will be removed before the cut is calculated, so it cannot cut itself.");
     }
 
     private void OnApplyCutLinesClick(
@@ -673,14 +673,14 @@ public partial class LineEditorWindow : Window
         {
             UpdateStatus(
                 _guides.Count == 0
-                    ? "No imported or existing cut guides are loaded."
-                    : "All loaded cut guides have already been applied.");
+                    ? "No imported or existing cut lines are loaded."
+                    : "All loaded cut lines have already been used.");
             return;
         }
 
         ApplyGuideStates(
             pending,
-            "Applied imported/existing cut guide(s).");
+            "Cut using imported/existing line(s).");
     }
 
     private void FinishAndApplyDrawnCut()
@@ -818,7 +818,7 @@ public partial class LineEditorWindow : Window
         if (!changed)
         {
             UpdateStatus(
-                "The guide did not split any lines in the current cut scope.");
+                "The cut line did not split any lines in the current cut target.");
             return;
         }
 
@@ -845,7 +845,7 @@ public partial class LineEditorWindow : Window
         UpdateCutScopeDisplay();
 
         UpdateStatus(
-            "Cut guides cleared. Existing cuts were not changed.");
+            "Cut-line overlays cleared. Existing cuts were not changed.");
     }
 
     private void OnDeleteSelectedClick(
@@ -1128,8 +1128,8 @@ public partial class LineEditorWindow : Window
         {
             var result = System.Windows.MessageBox.Show(
                 this,
-                "One or more imported/existing cut guides have not been applied. Apply them before closing?",
-                "Unapplied cut guide",
+                "One or more imported/existing cut lines have not been used yet. Cut with them before closing?",
+                "Unused cut line",
                 MessageBoxButton.YesNoCancel,
                 MessageBoxImage.Question);
 
@@ -1558,7 +1558,7 @@ public partial class LineEditorWindow : Window
             $"{message}  " +
             $"{_geometry.Features.Count:N0} editable {CurrentLineNoun}; " +
             $"{_selected.Count:N0} selected; " +
-            $"{_guides.Count:N0} guide(s); " +
+            $"{_guides.Count:N0} cut line(s); " +
             $"{_undo.Count:N0} undo step(s).";
     }
 
