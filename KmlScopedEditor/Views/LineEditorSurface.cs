@@ -37,6 +37,8 @@ public sealed class LineEditorSurface : FrameworkElement
     private IReadOnlyList<Point> _cutPoints = Array.Empty<Point>();
     private IReadOnlyList<Point> _draftCutPoints = Array.Empty<Point>();
     private Point? _draftCutPreviewPoint;
+    private List<Point> _editableGuidePoints = new();
+    private int _dragGuideVertexIndex = -1;
     private readonly Dictionary<XElement, StreamGeometry> _featureGeometry = new();
     private readonly List<(LineEditorGuideVisual Guide, StreamGeometry Geometry)> _guideGeometry = new();
 
@@ -66,6 +68,9 @@ public sealed class LineEditorSurface : FrameworkElement
     private bool _drawingStroke;
     private bool _cutClickPending;
     private bool _leftPan;
+    private bool _rightPanPending;
+    private bool _rightPanMoved;
+    private Point _rightPanStartScreen;
     private readonly List<Point> _strokeWorld = new();
     private Point _strokeStartScreen;
     private Point _lastStrokeScreen;
@@ -105,6 +110,7 @@ public sealed class LineEditorSurface : FrameworkElement
     public event EventHandler<LineEditorPointerEventArgs>? PointerMoved;
     public event EventHandler? PointerExited;
     public event EventHandler<LineEditorContextEventArgs>? ContextRequested;
+    public event EventHandler<LineEditorGuideEditEventArgs>? EditableGuideChanged;
 
     public void SetDocument(
         IReadOnlyList<KmlLineFeature> features,
@@ -174,6 +180,14 @@ public sealed class LineEditorSurface : FrameworkElement
     {
         _draftCutPoints = points ?? Array.Empty<Point>();
         _draftCutPreviewPoint = previewPoint;
+        InvalidateVisual();
+    }
+
+    public void SetEditableGuide(
+        IReadOnlyList<Point>? points)
+    {
+        _editableGuidePoints = points?.ToList() ?? new List<Point>();
+        _dragGuideVertexIndex = -1;
         InvalidateVisual();
     }
 
@@ -353,6 +367,26 @@ public sealed class LineEditorSurface : FrameworkElement
             }
         }
 
+        if (_editableGuidePoints.Count >= 2)
+        {
+            drawingContext.DrawGeometry(
+                null,
+                _draftSplitPen,
+                BuildGeometry(_editableGuidePoints));
+
+            var handleRadius = 5.0d / safeScale;
+
+            foreach (var point in _editableGuidePoints)
+            {
+                drawingContext.DrawEllipse(
+                    _splitVertexBrush,
+                    _hoverPen,
+                    point,
+                    handleRadius,
+                    handleRadius);
+            }
+        }
+
         if (_draftCutPoints.Count > 0)
         {
             var draftPoints = _draftCutPoints.ToList();
@@ -427,6 +461,25 @@ public sealed class LineEditorSurface : FrameworkElement
             return;
         }
 
+        if (Tool == LineEditorTool.Split &&
+            _editableGuidePoints.Count > 0)
+        {
+            var tolerance = WorldToleranceFromPixels(9d);
+            var world = ScreenToWorld(screen);
+            var nearest = FindNearestEditableGuideVertex(
+                world,
+                tolerance);
+
+            if (nearest >= 0)
+            {
+                CaptureMouse();
+                _dragGuideVertexIndex = nearest;
+                Cursor = Cursors.SizeAll;
+                e.Handled = true;
+                return;
+            }
+        }
+
         if (Tool == LineEditorTool.Split)
         {
             CaptureMouse();
@@ -464,6 +517,24 @@ public sealed class LineEditorSurface : FrameworkElement
         {
             _leftPan = false;
             EndPan();
+            e.Handled = true;
+            return;
+        }
+
+        if (_dragGuideVertexIndex >= 0)
+        {
+            var index = _dragGuideVertexIndex;
+            _dragGuideVertexIndex = -1;
+            ReleaseMouseCapture();
+
+            EditableGuideChanged?.Invoke(
+                this,
+                new LineEditorGuideEditEventArgs(
+                    _editableGuidePoints.ToList(),
+                    index,
+                    isComplete: true));
+
+            Cursor = Cursors.Cross;
             e.Handled = true;
             return;
         }
@@ -551,7 +622,14 @@ public sealed class LineEditorSurface : FrameworkElement
     protected override void OnMouseRightButtonDown(MouseButtonEventArgs e)
     {
         base.OnMouseRightButtonDown(e);
+
         Focus();
+        CaptureMouse();
+
+        _rightPanPending = true;
+        _rightPanMoved = false;
+        _rightPanStartScreen = e.GetPosition(this);
+
         e.Handled = true;
     }
 
@@ -559,10 +637,29 @@ public sealed class LineEditorSurface : FrameworkElement
     {
         base.OnMouseRightButtonUp(e);
 
+        var screen = e.GetPosition(this);
+
+        if (_rightPanMoved)
+        {
+            _rightPanPending = false;
+            _rightPanMoved = false;
+            EndPan();
+            e.Handled = true;
+            return;
+        }
+
+        _rightPanPending = false;
+
+        if (!_drawingStroke &&
+            _dragGuideVertexIndex < 0)
+        {
+            ReleaseMouseCapture();
+        }
+
         ContextRequested?.Invoke(
             this,
             new LineEditorContextEventArgs(
-                ScreenToWorld(e.GetPosition(this))));
+                ScreenToWorld(screen)));
 
         e.Handled = true;
     }
@@ -594,6 +691,33 @@ public sealed class LineEditorSurface : FrameworkElement
         base.OnMouseMove(e);
 
         var screen = e.GetPosition(this);
+
+        if (_dragGuideVertexIndex >= 0 &&
+            e.LeftButton == MouseButtonState.Pressed)
+        {
+            var world = ScreenToWorld(screen);
+            _editableGuidePoints[_dragGuideVertexIndex] = world;
+
+            EditableGuideChanged?.Invoke(
+                this,
+                new LineEditorGuideEditEventArgs(
+                    _editableGuidePoints.ToList(),
+                    _dragGuideVertexIndex,
+                    isComplete: false));
+
+            InvalidateVisual();
+            e.Handled = true;
+            return;
+        }
+
+        if (_rightPanPending &&
+            e.RightButton == MouseButtonState.Pressed &&
+            !_rightPanMoved &&
+            (screen - _rightPanStartScreen).Length >= 4d)
+        {
+            _rightPanMoved = true;
+            BeginPan(_rightPanStartScreen);
+        }
 
         if (_panning)
         {
@@ -1049,6 +1173,30 @@ public sealed class LineEditorSurface : FrameworkElement
         };
     }
 
+    private int FindNearestEditableGuideVertex(
+        Point worldPoint,
+        double tolerance)
+    {
+        var bestIndex = -1;
+        var bestDistance = tolerance;
+
+        for (var index = 0;
+             index < _editableGuidePoints.Count;
+             index++)
+        {
+            var distance =
+                (_editableGuidePoints[index] - worldPoint).Length;
+
+            if (distance <= bestDistance)
+            {
+                bestDistance = distance;
+                bestIndex = index;
+            }
+        }
+
+        return bestIndex;
+    }
+
     private Point ScreenToWorld(Point screen)
     {
         if (_scale <= 0d)
@@ -1114,6 +1262,23 @@ public sealed class LineEditorPointerEventArgs : EventArgs
     }
 
     public Point WorldPoint { get; }
+}
+
+public sealed class LineEditorGuideEditEventArgs : EventArgs
+{
+    public LineEditorGuideEditEventArgs(
+        IReadOnlyList<Point> worldPoints,
+        int vertexIndex,
+        bool isComplete)
+    {
+        WorldPoints = worldPoints;
+        VertexIndex = vertexIndex;
+        IsComplete = isComplete;
+    }
+
+    public IReadOnlyList<Point> WorldPoints { get; }
+    public int VertexIndex { get; }
+    public bool IsComplete { get; }
 }
 
 public sealed class LineEditorContextEventArgs : EventArgs
