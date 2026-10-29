@@ -1444,10 +1444,6 @@ public partial class LineEditorWindow : Window
                 ? null
                 : ProjectGuide(editingGuide.Guide));
 
-        EditImportedLineButton.Content =
-            editingGuide is null
-                ? "Edit Imported Line"
-                : "Done Editing Line";
     }
 
     private void AppendDraftPoints(
@@ -1972,16 +1968,12 @@ public partial class LineEditorWindow : Window
         EditorSurface.SetEditableGuide(
             ProjectGuide(guide.Guide));
 
-        EditImportedLineButton.Content =
-            "Done Editing Line";
     }
 
     private void StopEditingGuide()
     {
         _editingGuideId = null;
         EditorSurface.SetEditableGuide(null);
-        EditImportedLineButton.Content =
-            "Edit Imported Line";
     }
 
     private void UpdateGuideFromWorldPoints(
