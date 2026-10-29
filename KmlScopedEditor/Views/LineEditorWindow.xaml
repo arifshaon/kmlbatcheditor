@@ -136,6 +136,39 @@
                     <StackPanel Grid.Column="1"
                                 Orientation="Horizontal"
                                 VerticalAlignment="Center">
+                        <TextBlock Text="Split history:"
+                                   Foreground="#697586"
+                                   FontSize="11"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,6,0" />
+                        <Button x:Name="AppliedHistoryColorButton"
+                                Focusable="False"
+                                Content="Color…"
+                                Width="72"
+                                Height="30"
+                                Margin="0,0,6,0"
+                                ToolTip="Choose the color used for applied split-history lines"
+                                Click="OnAppliedHistoryColorClick" />
+                        <TextBlock Text="Width"
+                                   Foreground="#697586"
+                                   FontSize="11"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,4,0" />
+                        <ComboBox x:Name="AppliedHistoryWidthComboBox"
+                                  Width="58"
+                                  Height="30"
+                                  Margin="0,0,12,0"
+                                  VerticalContentAlignment="Center"
+                                  SelectionChanged="OnAppliedHistoryWidthChanged"
+                                  ToolTip="Thickness of applied split-history lines">
+                            <ComboBoxItem Content="1 px" Tag="1" />
+                            <ComboBoxItem Content="2 px" Tag="2" />
+                            <ComboBoxItem Content="3 px" Tag="3" />
+                            <ComboBoxItem Content="4 px" Tag="4" />
+                            <ComboBoxItem Content="5 px" Tag="5" />
+                            <ComboBoxItem Content="6 px" Tag="6" />
+                        </ComboBox>
+
                         <Button Focusable="False"
                                 Content="↶ Undo"
                                 Width="90"
