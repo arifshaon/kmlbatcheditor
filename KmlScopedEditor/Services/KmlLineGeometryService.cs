@@ -180,11 +180,12 @@ public sealed class KmlLineGeometryService
     public LineCutResult CutWithStroke(IReadOnlyList<Point> stroke)
     {
         if (stroke.Count < 2 || Features.Count == 0)
-            return new LineCutResult(0, 0, 0);
+            return new LineCutResult(0, 0, 0, Array.Empty<Point>());
 
         var linesSplit = 0;
         var intersectionCount = 0;
         var outputSegments = 0;
+        var cutPoints = new List<Point>();
 
         // Work from the current feature snapshot. Replacements do not disturb
         // references to other LineStrings in the same XDocument.
@@ -195,7 +196,7 @@ public sealed class KmlLineGeometryService
                 continue;
 
             var parts = BuildSplitParts(feature.Coordinates, events);
-            if (parts.Count < 2)
+            if (parts.Count == 0)
                 continue;
 
             ReplaceLineStringWithParts(feature.LineStringElement, parts);
@@ -203,6 +204,7 @@ public sealed class KmlLineGeometryService
             linesSplit++;
             intersectionCount += events.Count;
             outputSegments += parts.Count;
+            cutPoints.AddRange(events.Select(item => item.Intersection));
         }
 
         if (linesSplit > 0)
@@ -211,7 +213,8 @@ public sealed class KmlLineGeometryService
         return new LineCutResult(
             linesSplit,
             intersectionCount,
-            outputSegments);
+            outputSegments,
+            cutPoints);
     }
 
     public int DeleteLines(IEnumerable<XElement> lineStrings)
@@ -314,7 +317,7 @@ public sealed class KmlLineGeometryService
                         d,
                         out var targetT,
                         out _,
-                        out _))
+                        out var intersection))
                 {
                     continue;
                 }
@@ -328,7 +331,7 @@ public sealed class KmlLineGeometryService
                     continue;
                 }
 
-                events.Add(new CutEvent(pathPosition));
+                events.Add(new CutEvent(pathPosition, intersection));
             }
         }
 
@@ -400,9 +403,34 @@ public sealed class KmlLineGeometryService
         closedCuts = DeduplicatePositions(
             closedCuts.OrderBy(position => position).ToList());
 
-        // A single point does not meaningfully divide a closed contour into
-        // independently removable pieces. Normal cross-cuts produce two or
-        // more intersections.
+        // A single crossing opens the ring at the cut point. We leave a
+        // microscopic gap centred on that crossing so the resulting line is
+        // genuinely open and a later cut can split it normally. The gap is
+        // intentionally far below visible illustration scale.
+        if (closedCuts.Count == 1)
+        {
+            const double gapInSegmentUnits = 0.000001d;
+            var cut = closedCuts[0];
+            var start = cut + gapInSegmentUnits;
+            var end = cut - gapInSegmentUnits;
+
+            while (start >= segmentCount)
+                start -= segmentCount;
+
+            while (end < 0d)
+                end += segmentCount;
+
+            var opened = ExtractClosedArc(
+                coordinates,
+                start,
+                end,
+                segmentCount);
+
+            return HasLength(opened)
+                ? new List<List<KmlCoordinate>> { opened }
+                : new List<List<KmlCoordinate>>();
+        }
+
         if (closedCuts.Count < 2)
             return new List<List<KmlCoordinate>>();
 
@@ -468,6 +496,24 @@ public sealed class KmlLineGeometryService
 
         points.Add(CoordinateAt(coordinates, end));
         return RemoveConsecutiveDuplicates(points);
+    }
+
+    private static List<KmlCoordinate> ExtractClosedArc(
+        IReadOnlyList<KmlCoordinate> coordinates,
+        double start,
+        double end,
+        int segmentCount)
+    {
+        if (start <= end)
+            return ExtractRange(coordinates, start, end);
+
+        var tail = ExtractRange(coordinates, start, segmentCount);
+        var head = ExtractRange(coordinates, 0d, end);
+
+        foreach (var point in head.Skip(1))
+            tail.Add(point);
+
+        return RemoveConsecutiveDuplicates(tail);
     }
 
     private static KmlCoordinate CoordinateAt(
@@ -536,8 +582,17 @@ public sealed class KmlLineGeometryService
             clones.Add(clone);
         }
 
-        if (clones.Count < 2)
+        if (clones.Count == 0)
             return;
+
+        if (clones.Count == 1)
+        {
+            var coordinateElement = original.Element(KmlNs + "coordinates");
+            if (coordinateElement is not null)
+                coordinateElement.Value = FormatCoordinates(parts[0]);
+
+            return;
+        }
 
         if (original.Parent?.Name == KmlNs + "MultiGeometry")
         {
@@ -824,7 +879,9 @@ public sealed class KmlLineGeometryService
         return (a.X * b.Y) - (a.Y * b.X);
     }
 
-    private sealed record CutEvent(double PathPosition);
+    private sealed record CutEvent(
+        double PathPosition,
+        Point Intersection);
 }
 
 public sealed class KmlLineFeature
@@ -858,4 +915,5 @@ public readonly record struct KmlCoordinate(
 public readonly record struct LineCutResult(
     int LinesSplit,
     int IntersectionCount,
-    int OutputSegments);
+    int OutputSegments,
+    IReadOnlyList<Point> CutPoints);
