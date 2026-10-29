@@ -289,6 +289,7 @@ public sealed class KmlLineGeometryService
         var intersectionCount = 0;
         var outputSegments = 0;
         var splitPoints = new List<Point>();
+        var updatedFeatures = Features.ToList();
 
         foreach (var feature in Features.ToList())
         {
@@ -306,9 +307,37 @@ public sealed class KmlLineGeometryService
             if (parts.Count == 0)
                 continue;
 
-            ReplaceLineStringWithParts(
-                feature.LineStringElement,
-                parts);
+            var replacementElements =
+                ReplaceLineStringWithParts(
+                    feature.LineStringElement,
+                    parts);
+
+            var featureIndex =
+                updatedFeatures.FindIndex(item =>
+                    ReferenceEquals(item, feature));
+
+            if (featureIndex >= 0)
+            {
+                updatedFeatures.RemoveAt(featureIndex);
+
+                var replacements = new List<KmlLineFeature>();
+
+                for (var index = 0;
+                     index < replacementElements.Count &&
+                     index < parts.Count;
+                     index++)
+                {
+                    replacements.Add(
+                        CreateFeature(
+                            replacementElements[index],
+                            feature.Name,
+                            parts[index]));
+                }
+
+                updatedFeatures.InsertRange(
+                    featureIndex,
+                    replacements);
+            }
 
             linesSplit++;
             intersectionCount += events.Count;
@@ -318,7 +347,11 @@ public sealed class KmlLineGeometryService
         }
 
         if (linesSplit > 0)
-            Reload();
+        {
+            Features = updatedFeatures;
+            RecalculateWorldBounds();
+            BuildSpatialIndex();
+        }
 
         return new LineSplitResult(
             linesSplit,
@@ -370,7 +403,15 @@ public sealed class KmlLineGeometryService
         }
 
         if (deleted > 0)
-            Reload();
+        {
+            Features = Features
+                .Where(feature =>
+                    feature.LineStringElement.Document == _document)
+                .ToList();
+
+            RecalculateWorldBounds();
+            BuildSpatialIndex();
+        }
 
         return deleted;
     }
@@ -759,7 +800,7 @@ public sealed class KmlLineGeometryService
             altitude);
     }
 
-    private static void ReplaceLineStringWithParts(
+    private static IReadOnlyList<XElement> ReplaceLineStringWithParts(
         XElement original,
         IReadOnlyList<List<KmlCoordinate>> parts)
     {
@@ -789,7 +830,7 @@ public sealed class KmlLineGeometryService
         }
 
         if (clones.Count == 0)
-            return;
+            return Array.Empty<XElement>();
 
         if (clones.Count == 1)
         {
@@ -797,19 +838,57 @@ public sealed class KmlLineGeometryService
             if (coordinateElement is not null)
                 coordinateElement.Value = FormatCoordinates(parts[0]);
 
-            return;
+            return new[] { original };
         }
 
         if (original.Parent?.Name == KmlNs + "MultiGeometry")
         {
             original.ReplaceWith(clones.Cast<object>().ToArray());
-            return;
+            return clones;
         }
 
         original.ReplaceWith(
             new XElement(
                 KmlNs + "MultiGeometry",
                 clones));
+
+        return clones;
+    }
+
+    private KmlLineFeature CreateFeature(
+        XElement lineString,
+        string name,
+        IReadOnlyList<KmlCoordinate> coordinates)
+    {
+        var coordinateList = coordinates.ToList();
+        var worldPoints = coordinateList
+            .Select(ToWorld)
+            .ToList();
+
+        return new KmlLineFeature(
+            lineString,
+            name,
+            coordinateList,
+            worldPoints,
+            BuildBounds(worldPoints));
+    }
+
+    private void RecalculateWorldBounds()
+    {
+        var bounds = Rect.Empty;
+
+        foreach (var feature in Features)
+        {
+            if (feature.WorldBounds.IsEmpty)
+                continue;
+
+            if (bounds.IsEmpty)
+                bounds = feature.WorldBounds;
+            else
+                bounds.Union(feature.WorldBounds);
+        }
+
+        WorldBounds = bounds;
     }
 
     public Point Project(KmlCoordinate coordinate)
