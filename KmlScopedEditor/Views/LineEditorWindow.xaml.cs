@@ -49,15 +49,19 @@ public partial class LineEditorWindow : Window
 
     private readonly HashSet<XElement> _selected = new();
     private readonly Stack<UndoState> _undo = new();
+    private readonly Stack<PendingGuideEditState> _pendingEditUndo = new();
+    private PendingGuideEditState? _pendingGuideDragUndoState;
+    private Point? _lastPointerWorldPoint;
 
     private bool _hasPerformedCut;
     private int _workflowStep = 1;
     private int _nextAppliedSequence;
     private bool _hideAppliedSplitHistory;
+    private bool _draftWillReplacePending;
     private string? _step3InstructionOverride;
     private MediaColor _appliedHistoryColor =
-        MediaColor.FromRgb(76, 45, 103);
-    private double _appliedHistoryThickness = 3d;
+        MediaColor.FromRgb(142, 132, 168);
+    private double _appliedHistoryThickness = 2d;
     private bool _historyAppearanceInitializing;
 
     public LineEditorWindow(
@@ -129,9 +133,9 @@ public partial class LineEditorWindow : Window
             {
                 _appliedHistoryColor =
                     MediaColor.FromRgb(
-                        76,
-                        45,
-                        103);
+                        142,
+                        132,
+                        168);
             }
         }
 
@@ -142,7 +146,7 @@ public partial class LineEditorWindow : Window
                     sessionState.AppliedHistoryThickness,
                     1d,
                     8d)
-                : 3d;
+                : 2d;
 
         foreach (var item in sessionState.AppliedGuides)
         {
