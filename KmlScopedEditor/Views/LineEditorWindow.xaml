@@ -28,7 +28,7 @@
                                   Width="72"
                                   Height="32"
                                   Margin="0,0,6,6"
-                                  ToolTip="Draw a split line (S)"
+                                  ToolTip="Split lines (S). If lines are selected, only those lines are affected; otherwise any crossed line can be split."
                                   Click="OnSplitToolClick" />
                     <ToggleButton Focusable="False" x:Name="PanToolButton"
                                   Content="Hand"
@@ -85,12 +85,6 @@
                             Height="30"
                             Margin="0,0,6,6"
                             Click="OnInvertSelectionClick" />
-                    <Button Focusable="False" Content="Split Selected Lines..."
-                            Width="115"
-                            Height="30"
-                            Margin="0,0,6,6"
-                            ToolTip="Keep the current selection as the split target, then draw a split line across it"
-                            Click="OnSplitSelectedClick" />
                     <Button Focusable="False" Content="Delete Selected"
                             Width="115"
                             Height="30"
@@ -172,7 +166,7 @@
                     <TextBlock x:Name="StatusText"
                                FontWeight="SemiBold"
                                TextWrapping="Wrap" />
-                    <TextBlock Text="Selection is temporary targeting and is not saved in KML/KMZ. To change geometry, use Split Selected Lines... or Delete Selected. Applied splits/deletions are undoable."
+                    <TextBlock Text="Selection is temporary targeting and is not saved in KML/KMZ. Select the lines you want, then click Split and draw the split line. Delete Selected removes highlighted lines."
                                Foreground="#6B7280"
                                FontSize="11"
                                Margin="0,3,12,0"
