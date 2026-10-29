@@ -1301,6 +1301,28 @@ public partial class LineEditorWindow : Window
                 : "Deletion undone.");
     }
 
+    private void OnHideMapInstructionsClick(
+        object sender,
+        RoutedEventArgs e)
+    {
+        MapInstructionPanel.Visibility =
+            Visibility.Collapsed;
+        MapInstructionShowButton.Visibility =
+            Visibility.Visible;
+        EditorSurface.Focus();
+    }
+
+    private void OnShowMapInstructionsClick(
+        object sender,
+        RoutedEventArgs e)
+    {
+        MapInstructionPanel.Visibility =
+            Visibility.Visible;
+        MapInstructionShowButton.Visibility =
+            Visibility.Collapsed;
+        EditorSurface.Focus();
+    }
+
     private void OnFitViewClick(
         object sender,
         RoutedEventArgs e)
