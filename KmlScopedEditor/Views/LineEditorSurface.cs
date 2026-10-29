@@ -88,6 +88,7 @@ public sealed class LineEditorSurface : FrameworkElement
     public LineEditorTool Tool { get; set; } = LineEditorTool.Select;
 
     public event EventHandler<LineEditorStrokeEventArgs>? StrokeCompleted;
+    public event EventHandler<LineEditorStrokeEventArgs>? CutStrokePreviewChanged;
     public event EventHandler<LineEditorClickEventArgs>? LineClicked;
     public event EventHandler<LineEditorPointerEventArgs>? PointerMoved;
     public event EventHandler? PointerExited;
@@ -601,6 +602,14 @@ public sealed class LineEditorSurface : FrameworkElement
 
             _lastStrokeScreen = screen;
             _strokeWorld.Add(ScreenToWorld(screen));
+
+            CutStrokePreviewChanged?.Invoke(
+                this,
+                new LineEditorStrokeEventArgs(
+                    Tool,
+                    _strokeWorld.ToList(),
+                    isDeselect: false));
+
             InvalidateVisual();
             e.Handled = true;
             return;
