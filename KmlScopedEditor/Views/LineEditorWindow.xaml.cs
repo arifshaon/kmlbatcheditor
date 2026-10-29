@@ -4,6 +4,8 @@ using KmlScopedEditor.Models;
 using KmlScopedEditor.Services;
 using Point = System.Windows.Point;
 using Rect = System.Windows.Rect;
+using KeyEventArgs = System.Windows.Input.KeyEventArgs;
+using Key = System.Windows.Input.Key;
 
 namespace KmlScopedEditor.Views;
 
@@ -19,6 +21,7 @@ public partial class LineEditorWindow : Window
     private readonly List<Point> _cutPoints = new();
     private readonly List<Point> _draftCutPoints = new();
     private Point? _draftCutPreviewPoint;
+    private bool _draftCutDrawing;
 
     private readonly HashSet<XElement> _selected = new();
     private readonly Stack<UndoState> _undo = new();
@@ -44,6 +47,7 @@ public partial class LineEditorWindow : Window
         EditorSurface.StrokeCompleted += OnStrokeCompleted;
         EditorSurface.LineClicked += OnLineClicked;
         EditorSurface.PointerMoved += OnPointerMoved;
+        PreviewKeyDown += OnPreviewKeyDown;
 
         Loaded += (_, _) =>
         {
@@ -57,12 +61,23 @@ public partial class LineEditorWindow : Window
 
     private void OnSelectToolClick(object sender, RoutedEventArgs e)
     {
+        StopDraftPreview();
         SetTool(LineEditorTool.Select);
     }
 
     private void OnCutToolClick(object sender, RoutedEventArgs e)
     {
         SetTool(LineEditorTool.Cut);
+        _draftCutDrawing = true;
+        _draftCutPreviewPoint = null;
+        EditorSurface.SetDraftCut(
+            _draftCutPoints,
+            _draftCutPreviewPoint);
+
+        UpdateStatus(
+            _draftCutPoints.Count == 0
+                ? "Draw Cut Line started. Click to place the first point."
+                : $"Continuing the cut line from {_draftCutPoints.Count:N0} existing point(s). Click to add another point.");
     }
 
     private void SetTool(LineEditorTool tool)
@@ -73,7 +88,7 @@ public partial class LineEditorWindow : Window
 
         InstructionText.Text = tool == LineEditorTool.Select
             ? "SELECT: drag across lines to select only lines that are actually crossed. Alt + drag removes crossed lines from the selection. A single click selects the nearest line only. Mouse wheel zooms; right- or middle-drag pans."
-            : "DRAW CUT LINE: click to place the first point, then keep clicking to add connected points like a Google Earth path. The orange line is only a guide until you click Apply Cut. Use Undo Point to remove the last point.";
+            : "DRAW CUT LINE: click to add connected points. Click Finish Line (or press Enter) when the path is complete. Cancel Line (or Esc) discards the current path. Apply Cut also finishes the line automatically before cutting.";
     }
 
     private void OnStrokeCompleted(
@@ -114,6 +129,9 @@ public partial class LineEditorWindow : Window
     {
         if (e.Tool == LineEditorTool.Cut)
         {
+            if (!_draftCutDrawing)
+                return;
+
             _draftCutPoints.Add(e.WorldPoint);
             _draftCutPreviewPoint = null;
             EditorSurface.SetDraftCut(
@@ -123,8 +141,8 @@ public partial class LineEditorWindow : Window
             UpdateStatus(
                 $"Cut line has {_draftCutPoints.Count:N0} point(s). " +
                 (_draftCutPoints.Count < 2
-                    ? "Add at least one more point before applying the cut."
-                    : "Keep adding points, or click Apply Cut when the path is ready."));
+                    ? "Add at least one more point."
+                    : "Keep adding points, or click Finish Line / Apply Cut when ready."));
 
             return;
         }
@@ -164,11 +182,16 @@ public partial class LineEditorWindow : Window
     {
         if (EditorSurface.Tool == LineEditorTool.Cut)
         {
-            _draftCutPreviewPoint = e.WorldPoint;
             EditorSurface.SetHovered(null);
-            EditorSurface.SetDraftCut(
-                _draftCutPoints,
-                _draftCutPreviewPoint);
+
+            if (_draftCutDrawing && _draftCutPoints.Count > 0)
+            {
+                _draftCutPreviewPoint = e.WorldPoint;
+                EditorSurface.SetDraftCut(
+                    _draftCutPoints,
+                    _draftCutPreviewPoint);
+            }
+
             return;
         }
 
@@ -279,6 +302,9 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        if (_draftCutDrawing)
+            StopDraftPreview();
+
         if (_draftCutPoints.Count == 1)
         {
             UpdateStatus(
@@ -304,6 +330,8 @@ public partial class LineEditorWindow : Window
                 _draftCutPoints,
                 _draftCutPreviewPoint);
         }
+
+        SetTool(LineEditorTool.Select);
 
         var pending = _guides
             .Where(guide => !guide.Applied)
@@ -388,6 +416,20 @@ public partial class LineEditorWindow : Window
                 : string.Empty));
     }
 
+    private void OnFinishCutLineClick(
+        object sender,
+        RoutedEventArgs e)
+    {
+        FinishDraftCutLine();
+    }
+
+    private void OnCancelCutLineClick(
+        object sender,
+        RoutedEventArgs e)
+    {
+        CancelDraftCutLine();
+    }
+
     private void OnUndoCutPointClick(
         object sender,
         RoutedEventArgs e)
@@ -399,6 +441,10 @@ public partial class LineEditorWindow : Window
         }
 
         _draftCutPoints.RemoveAt(_draftCutPoints.Count - 1);
+
+        if (_draftCutPoints.Count == 0)
+            _draftCutPreviewPoint = null;
+
         EditorSurface.SetDraftCut(
             _draftCutPoints,
             _draftCutPreviewPoint);
@@ -417,6 +463,7 @@ public partial class LineEditorWindow : Window
         _cutPoints.Clear();
         _draftCutPoints.Clear();
         _draftCutPreviewPoint = null;
+        _draftCutDrawing = false;
         EditorSurface.SetDraftCut(
             _draftCutPoints,
             _draftCutPreviewPoint);
@@ -518,6 +565,26 @@ public partial class LineEditorWindow : Window
             "Last cut/deletion undone. Cut guide overlays remain available.");
     }
 
+    private void OnPreviewKeyDown(
+        object sender,
+        KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter &&
+            (_draftCutDrawing || _draftCutPoints.Count > 0))
+        {
+            FinishDraftCutLine();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Escape &&
+            (_draftCutDrawing || _draftCutPoints.Count > 0))
+        {
+            CancelDraftCutLine();
+            e.Handled = true;
+        }
+    }
+
     private void OnFitViewClick(
         object sender,
         RoutedEventArgs e)
@@ -548,6 +615,48 @@ public partial class LineEditorWindow : Window
     {
         DialogResult = false;
         Close();
+    }
+
+    private void FinishDraftCutLine()
+    {
+        if (_draftCutPoints.Count < 2)
+        {
+            UpdateStatus(
+                _draftCutPoints.Count == 0
+                    ? "No cut line is being drawn."
+                    : "The cut line needs at least two points before it can be finished.");
+            return;
+        }
+
+        StopDraftPreview();
+        SetTool(LineEditorTool.Select);
+
+        UpdateStatus(
+            $"Cut line finished with {_draftCutPoints.Count:N0} point(s). Review the orange path, then click Apply Cut.");
+    }
+
+    private void CancelDraftCutLine()
+    {
+        _draftCutPoints.Clear();
+        _draftCutPreviewPoint = null;
+        _draftCutDrawing = false;
+
+        EditorSurface.SetDraftCut(
+            _draftCutPoints,
+            _draftCutPreviewPoint);
+
+        SetTool(LineEditorTool.Select);
+        UpdateStatus("Current drawn cut line cancelled.");
+    }
+
+    private void StopDraftPreview()
+    {
+        _draftCutDrawing = false;
+        _draftCutPreviewPoint = null;
+
+        EditorSurface.SetDraftCut(
+            _draftCutPoints,
+            _draftCutPreviewPoint);
     }
 
     private UndoState CaptureUndoState()
