@@ -2,13 +2,27 @@
 
 ## Unreleased
 
+### Workflow redesign
+
+- Rebuilt the main window around four explicit steps: **Which placemarks → What to change → Preview → Apply**.
+- Removed non-functional tree checkboxes; a tree row click is the tree-item selection.
+- Replaced **Calculate Selection** with a live matched-placemark count.
+- Added tree-item, placemark-name, icon-image, and icon-variant mode buttons.
+- Grouped style properties under **Lines**, **Icons**, and **Labels**, and added real **line opacity** editing.
+- Style preview now refreshes automatically and includes a line colour/width/opacity sample.
+- Moved Style Diagnostics into a collapsed **Inspect selected item** section.
+- Rebuilt Line Editor around **Remove unwanted lines → Split → Remove pieces**.
+- Added one **Apply split** action for imported and drawn split paths; Enter uses the same action.
+- Split selection scope is now explicit: existing selections are ignored unless **Only split the selected lines** is ticked.
+- Added on-map zoom controls, a legend, clearer **Cancel — discard** / **Done — keep changes** actions, and automatic advance to cleanup after a successful split.
+
+
 ### Line Editor
 
 - Removed the redundant geometry parse on Line Editor open and the full geometry `Reload()` after applying split lines.
 - Split rendering into retained base, selection/hover, and split/edit visual layers; hover/drawing no longer repaint the base geometry, and pan/zoom update layer transforms directly between zoom buckets.
 - Replaced distance-thinning display simplification with iterative Douglas–Peucker, preserving closed display rings and leaving source KML coordinates untouched.
 - Live split preview now checks effective split positions without constructing output pieces.
-- Clarified that **Split with Imported Line** is only for pending imported/existing split lines; hand-drawn splits apply when drawing is finished.
 
 - Added universal **right-drag pan** from Select, Split, or Hand modes; a simple right-click still opens the context menu.
 - Imported split lines are now editable before applying: drag vertex handles, or right-click to add/delete vertices.
@@ -16,7 +30,7 @@
 - Renamed the geometry operation from **Cut** to **Split** throughout the Line Editor; the shortcut is now **S**.
 - The Line Editor now always opens with nothing selected.
 - Added **Shift+click** to add one line to the current selection; Alt+click/drag removes from it.
-- Added **Split Selected Lines...**, **Import Split Line...**, **Use Selected as Split Line**, and **Split with Imported Line**.
+- Added imported/drawn split-line workflows and **Use selected line** support.
 - Live split preview uses the same spatial grid as selection, hover and the final split, and updates incrementally while drawing.
 - Added a segment-grid spatial index and incremental index updates after geometry edits.
 - Added three rendering layers: cached base geometry, selection/hover overlays, and split overlays; display geometry is simplified by zoom level and drawing resources are frozen/cached.
