@@ -2,6 +2,8 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Xml.Linq;
+using KmlScopedEditor.Models;
+using KmlScopedEditor.Services;
 using Point = System.Windows.Point;
 using Rect = System.Windows.Rect;
 using MouseEventArgs = System.Windows.Input.MouseEventArgs;
@@ -9,27 +11,34 @@ using MouseButtonEventArgs = System.Windows.Input.MouseButtonEventArgs;
 using MouseWheelEventArgs = System.Windows.Input.MouseWheelEventArgs;
 using MouseButton = System.Windows.Input.MouseButton;
 using MouseButtonState = System.Windows.Input.MouseButtonState;
+using ModifierKeys = System.Windows.Input.ModifierKeys;
+using Keyboard = System.Windows.Input.Keyboard;
 using Cursors = System.Windows.Input.Cursors;
 using Pen = System.Windows.Media.Pen;
-using Brush = System.Windows.Media.Brush;
 using Brushes = System.Windows.Media.Brushes;
 using Color = System.Windows.Media.Color;
-using KmlScopedEditor.Models;
-using KmlScopedEditor.Services;
 
 namespace KmlScopedEditor.Views;
 
 /// <summary>
-/// Lightweight drawing surface for interactive LineString editing. Left-drag
-/// draws the active Select/Cut stroke, the mouse wheel zooms, and right- or
-/// middle-drag pans.
+/// Lightweight drawing surface for interactive LineString editing. Geometry is
+/// cached in world coordinates so mouse movement redraws only cached paths plus
+/// the active stroke rather than rebuilding every contour vertex.
 /// </summary>
 public sealed class LineEditorSurface : FrameworkElement
 {
     private IReadOnlyList<KmlLineFeature> _features =
         Array.Empty<KmlLineFeature>();
 
+    private IReadOnlyList<LineEditorGuideVisual> _guides =
+        Array.Empty<LineEditorGuideVisual>();
+
+    private IReadOnlyList<Point> _cutPoints = Array.Empty<Point>();
+    private readonly Dictionary<XElement, StreamGeometry> _featureGeometry = new();
+    private readonly List<(LineEditorGuideVisual Guide, StreamGeometry Geometry)> _guideGeometry = new();
+
     private HashSet<XElement> _selected = new();
+    private XElement? _hovered;
     private Rect _worldBounds = Rect.Empty;
 
     private Point _worldCenter;
@@ -38,10 +47,13 @@ public sealed class LineEditorSurface : FrameworkElement
 
     private bool _drawingStroke;
     private readonly List<Point> _strokeWorld = new();
+    private Point _strokeStartScreen;
     private Point _lastStrokeScreen;
 
     private bool _panning;
     private Point _lastPanScreen;
+    private Point _lastHoverScreen;
+    private bool _hasHoverScreen;
 
     public LineEditorSurface()
     {
@@ -67,16 +79,30 @@ public sealed class LineEditorSurface : FrameworkElement
     public LineEditorTool Tool { get; set; } = LineEditorTool.Select;
 
     public event EventHandler<LineEditorStrokeEventArgs>? StrokeCompleted;
+    public event EventHandler<LineEditorClickEventArgs>? LineClicked;
+    public event EventHandler<LineEditorPointerEventArgs>? PointerMoved;
 
     public void SetDocument(
         IReadOnlyList<KmlLineFeature> features,
         IEnumerable<XElement> selected,
         Rect worldBounds,
+        IReadOnlyList<LineEditorGuideVisual>? guides = null,
+        IReadOnlyList<Point>? cutPoints = null,
         bool fitView = false)
     {
         _features = features ?? Array.Empty<KmlLineFeature>();
         _selected = selected?.ToHashSet() ?? new HashSet<XElement>();
         _worldBounds = worldBounds;
+        _guides = guides ?? Array.Empty<LineEditorGuideVisual>();
+        _cutPoints = cutPoints ?? Array.Empty<Point>();
+
+        RebuildGeometryCache();
+
+        if (_hovered is not null &&
+            !_featureGeometry.ContainsKey(_hovered))
+        {
+            _hovered = null;
+        }
 
         if (fitView)
         {
@@ -94,6 +120,15 @@ public sealed class LineEditorSurface : FrameworkElement
     public void SetSelection(IEnumerable<XElement> selected)
     {
         _selected = selected?.ToHashSet() ?? new HashSet<XElement>();
+        InvalidateVisual();
+    }
+
+    public void SetHovered(XElement? hovered)
+    {
+        if (ReferenceEquals(_hovered, hovered))
+            return;
+
+        _hovered = hovered;
         InvalidateVisual();
     }
 
@@ -144,7 +179,7 @@ public sealed class LineEditorSurface : FrameworkElement
             null,
             new Rect(0d, 0d, ActualWidth, ActualHeight));
 
-        if (_features.Count == 0)
+        if (_features.Count == 0 && _guides.Count == 0)
         {
             var text = new FormattedText(
                 "No KML LineStrings were found.",
@@ -164,74 +199,77 @@ public sealed class LineEditorSurface : FrameworkElement
             return;
         }
 
-        var normalPen = new Pen(
-            new SolidColorBrush(Color.FromRgb(84, 92, 102)),
-            1.1d);
+        var safeScale = Math.Max(_scale, 0.000001d);
+        drawingContext.PushTransform(CreateWorldTransform());
 
-        var selectedPen = new Pen(
-            new SolidColorBrush(Color.FromRgb(190, 45, 45)),
-            2.6d);
-
-        normalPen.Freeze();
-        selectedPen.Freeze();
+        var normalPen = CreatePen(Color.FromRgb(84, 92, 102), 1.1d / safeScale);
+        var selectedPen = CreatePen(Color.FromRgb(190, 45, 45), 2.6d / safeScale);
+        var hoverPen = CreatePen(Color.FromRgb(0, 120, 190), 2.2d / safeScale);
 
         foreach (var feature in _features)
         {
-            var points = feature.WorldPoints;
-            if (points.Count < 2)
-                continue;
-
-            var geometry = new StreamGeometry();
-
-            using (var context = geometry.Open())
+            if (!_featureGeometry.TryGetValue(
+                    feature.LineStringElement,
+                    out var geometry))
             {
-                context.BeginFigure(
-                    WorldToScreen(points[0]),
-                    isFilled: false,
-                    isClosed: false);
-
-                for (var index = 1; index < points.Count; index++)
-                    context.LineTo(WorldToScreen(points[index]), true, false);
+                continue;
             }
-
-            geometry.Freeze();
 
             var pen = _selected.Contains(feature.LineStringElement)
                 ? selectedPen
-                : normalPen;
+                : ReferenceEquals(_hovered, feature.LineStringElement)
+                    ? hoverPen
+                    : normalPen;
 
             drawingContext.DrawGeometry(null, pen, geometry);
         }
 
+        foreach (var item in _guideGeometry)
+        {
+            var alpha = item.Guide.Applied ? (byte)110 : (byte)230;
+            var guidePen = CreatePen(
+                Color.FromArgb(alpha, 116, 61, 170),
+                (item.Guide.Applied ? 2.0d : 2.8d) / safeScale,
+                DashStyles.Dash);
+
+            drawingContext.DrawGeometry(null, guidePen, item.Geometry);
+        }
+
+        if (_cutPoints.Count > 0)
+        {
+            var markerBrush = new SolidColorBrush(
+                Color.FromRgb(224, 91, 32));
+            markerBrush.Freeze();
+
+            var radius = 3.5d / safeScale;
+
+            foreach (var point in _cutPoints)
+            {
+                drawingContext.DrawEllipse(
+                    markerBrush,
+                    null,
+                    point,
+                    radius,
+                    radius);
+            }
+        }
+
         if (_strokeWorld.Count >= 2)
         {
-            var brush = Tool == LineEditorTool.Cut
-                ? new SolidColorBrush(Color.FromRgb(213, 112, 23))
-                : new SolidColorBrush(Color.FromRgb(24, 119, 205));
+            var strokeColor = Tool == LineEditorTool.Cut
+                ? Color.FromRgb(213, 112, 23)
+                : Color.FromRgb(24, 119, 205);
 
-            var strokePen = new Pen(brush, 2.5d)
-            {
-                DashStyle = DashStyles.Dash
-            };
+            var strokePen = CreatePen(
+                strokeColor,
+                2.5d / safeScale,
+                DashStyles.Dash);
 
-            strokePen.Freeze();
-
-            var geometry = new StreamGeometry();
-
-            using (var context = geometry.Open())
-            {
-                context.BeginFigure(
-                    WorldToScreen(_strokeWorld[0]),
-                    isFilled: false,
-                    isClosed: false);
-
-                for (var index = 1; index < _strokeWorld.Count; index++)
-                    context.LineTo(WorldToScreen(_strokeWorld[index]), true, false);
-            }
-
-            geometry.Freeze();
-            drawingContext.DrawGeometry(null, strokePen, geometry);
+            var strokeGeometry = BuildGeometry(_strokeWorld);
+            drawingContext.DrawGeometry(null, strokePen, strokeGeometry);
         }
+
+        drawingContext.Pop();
     }
 
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
@@ -245,6 +283,7 @@ public sealed class LineEditorSurface : FrameworkElement
         _strokeWorld.Clear();
 
         var screen = e.GetPosition(this);
+        _strokeStartScreen = screen;
         _lastStrokeScreen = screen;
         _strokeWorld.Add(ScreenToWorld(screen));
 
@@ -260,20 +299,35 @@ public sealed class LineEditorSurface : FrameworkElement
             return;
 
         var screen = e.GetPosition(this);
-
-        if ((screen - _lastStrokeScreen).Length >= 1d)
-            _strokeWorld.Add(ScreenToWorld(screen));
+        var clickDistance = (screen - _strokeStartScreen).Length;
+        var alt = (Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt;
 
         _drawingStroke = false;
         ReleaseMouseCapture();
 
-        if (_strokeWorld.Count >= 2)
+        if (clickDistance < 4d)
         {
-            StrokeCompleted?.Invoke(
+            LineClicked?.Invoke(
                 this,
-                new LineEditorStrokeEventArgs(
+                new LineEditorClickEventArgs(
                     Tool,
-                    _strokeWorld.ToList()));
+                    ScreenToWorld(screen),
+                    alt));
+        }
+        else
+        {
+            if ((screen - _lastStrokeScreen).Length >= 1d)
+                _strokeWorld.Add(ScreenToWorld(screen));
+
+            if (_strokeWorld.Count >= 2)
+            {
+                StrokeCompleted?.Invoke(
+                    this,
+                    new LineEditorStrokeEventArgs(
+                        Tool,
+                        _strokeWorld.ToList(),
+                        alt));
+            }
         }
 
         _strokeWorld.Clear();
@@ -341,23 +395,42 @@ public sealed class LineEditorSurface : FrameworkElement
             return;
         }
 
-        if (!_drawingStroke || e.LeftButton != MouseButtonState.Pressed)
-            return;
+        if (_drawingStroke && e.LeftButton == MouseButtonState.Pressed)
+        {
+            if ((screen - _lastStrokeScreen).Length < 3d)
+                return;
 
-        if ((screen - _lastStrokeScreen).Length < 3d)
+            _lastStrokeScreen = screen;
+            _strokeWorld.Add(ScreenToWorld(screen));
+            InvalidateVisual();
+            e.Handled = true;
             return;
+        }
 
-        _lastStrokeScreen = screen;
-        _strokeWorld.Add(ScreenToWorld(screen));
-        InvalidateVisual();
-        e.Handled = true;
+        if (!_hasHoverScreen ||
+            (screen - _lastHoverScreen).Length >= 4d)
+        {
+            _lastHoverScreen = screen;
+            _hasHoverScreen = true;
+
+            PointerMoved?.Invoke(
+                this,
+                new LineEditorPointerEventArgs(ScreenToWorld(screen)));
+        }
+    }
+
+    protected override void OnMouseLeave(MouseEventArgs e)
+    {
+        base.OnMouseLeave(e);
+        _hasHoverScreen = false;
+        SetHovered(null);
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
         base.OnMouseWheel(e);
 
-        if (_features.Count == 0)
+        if (_features.Count == 0 && _guides.Count == 0)
             return;
 
         var screen = e.GetPosition(this);
@@ -375,6 +448,79 @@ public sealed class LineEditorSurface : FrameworkElement
         _fitPending = false;
         InvalidateVisual();
         e.Handled = true;
+    }
+
+    private void RebuildGeometryCache()
+    {
+        _featureGeometry.Clear();
+
+        foreach (var feature in _features)
+        {
+            if (feature.WorldPoints.Count >= 2)
+            {
+                _featureGeometry[feature.LineStringElement] =
+                    BuildGeometry(feature.WorldPoints);
+            }
+        }
+
+        _guideGeometry.Clear();
+
+        foreach (var guide in _guides)
+        {
+            if (guide.WorldPoints.Count >= 2)
+                _guideGeometry.Add((guide, BuildGeometry(guide.WorldPoints)));
+        }
+    }
+
+    private static StreamGeometry BuildGeometry(IReadOnlyList<Point> points)
+    {
+        var geometry = new StreamGeometry();
+
+        using (var context = geometry.Open())
+        {
+            context.BeginFigure(
+                points[0],
+                isFilled: false,
+                isClosed: false);
+
+            for (var index = 1; index < points.Count; index++)
+                context.LineTo(points[index], true, false);
+        }
+
+        geometry.Freeze();
+        return geometry;
+    }
+
+    private static Pen CreatePen(
+        Color color,
+        double thickness,
+        DashStyle? dashStyle = null)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+
+        var pen = new Pen(brush, thickness);
+
+        if (dashStyle is not null)
+            pen.DashStyle = dashStyle;
+
+        pen.Freeze();
+        return pen;
+    }
+
+    private MatrixTransform CreateWorldTransform()
+    {
+        var matrix = new Matrix(
+            _scale,
+            0d,
+            0d,
+            -_scale,
+            (ActualWidth / 2d) - (_worldCenter.X * _scale),
+            (ActualHeight / 2d) + (_worldCenter.Y * _scale));
+
+        var transform = new MatrixTransform(matrix);
+        transform.Freeze();
+        return transform;
     }
 
     private void BeginPan(Point screen)
@@ -399,13 +545,6 @@ public sealed class LineEditorSurface : FrameworkElement
         Cursor = Cursors.Arrow;
     }
 
-    private Point WorldToScreen(Point world)
-    {
-        return new Point(
-            ((world.X - _worldCenter.X) * _scale) + (ActualWidth / 2d),
-            ((_worldCenter.Y - world.Y) * _scale) + (ActualHeight / 2d));
-    }
-
     private Point ScreenToWorld(Point screen)
     {
         if (_scale <= 0d)
@@ -419,16 +558,50 @@ public sealed class LineEditorSurface : FrameworkElement
     }
 }
 
+public sealed record LineEditorGuideVisual(
+    IReadOnlyList<Point> WorldPoints,
+    bool Applied);
+
 public sealed class LineEditorStrokeEventArgs : EventArgs
 {
     public LineEditorStrokeEventArgs(
         LineEditorTool tool,
-        IReadOnlyList<Point> worldPoints)
+        IReadOnlyList<Point> worldPoints,
+        bool isDeselect)
     {
         Tool = tool;
         WorldPoints = worldPoints;
+        IsDeselect = isDeselect;
     }
 
     public LineEditorTool Tool { get; }
     public IReadOnlyList<Point> WorldPoints { get; }
+    public bool IsDeselect { get; }
+}
+
+public sealed class LineEditorClickEventArgs : EventArgs
+{
+    public LineEditorClickEventArgs(
+        LineEditorTool tool,
+        Point worldPoint,
+        bool isDeselect)
+    {
+        Tool = tool;
+        WorldPoint = worldPoint;
+        IsDeselect = isDeselect;
+    }
+
+    public LineEditorTool Tool { get; }
+    public Point WorldPoint { get; }
+    public bool IsDeselect { get; }
+}
+
+public sealed class LineEditorPointerEventArgs : EventArgs
+{
+    public LineEditorPointerEventArgs(Point worldPoint)
+    {
+        WorldPoint = worldPoint;
+    }
+
+    public Point WorldPoint { get; }
 }
