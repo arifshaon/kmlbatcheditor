@@ -1632,7 +1632,11 @@ public partial class LineEditorWindow : Window
             _hasPerformedCut = true;
 
         if (changed)
+        {
             _undo.Push(snapshot);
+            _pendingEditUndo.Clear();
+            _pendingGuideDragUndoState = null;
+        }
 
         RefreshSurface();
         UpdateCutScopeDisplay();
@@ -2213,6 +2217,8 @@ public partial class LineEditorWindow : Window
             return;
         }
 
+        _pendingEditUndo.Clear();
+        _pendingGuideDragUndoState = null;
         DialogResult = true;
         Close();
     }
@@ -2221,6 +2227,8 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        _pendingEditUndo.Clear();
+        _pendingGuideDragUndoState = null;
         DialogResult = false;
         Close();
     }
@@ -3078,6 +3086,43 @@ public partial class LineEditorWindow : Window
             $"{_selected.Count:N0} selected; " +
             $"{_guides.Count:N0} split line(s); " +
             $"{_pendingEditUndo.Count + _undo.Count:N0} undo step(s).";
+
+        UpdateUndoPresentation();
+    }
+
+    private void UpdateUndoPresentation()
+    {
+        string tooltip;
+        var enabled = true;
+
+        if (_workflowStep == 2 &&
+            _draftCutPoints.Count > 0)
+        {
+            tooltip =
+                "Undo the last point in the current split-line drawing (Ctrl+Z)";
+        }
+        else if (_pendingEditUndo.Count > 0)
+        {
+            tooltip =
+                "Undo the last split-line edit (Ctrl+Z)";
+        }
+        else if (_undo.Count > 0)
+        {
+            tooltip =
+                _undo.Peek().Kind ==
+                    UndoActionKind.Split
+                    ? "Undo the last applied split (Ctrl+Z)"
+                    : "Undo the last line deletion (Ctrl+Z)";
+        }
+        else
+        {
+            tooltip =
+                "Nothing to undo";
+            enabled = false;
+        }
+
+        UndoButton.ToolTip = tooltip;
+        UndoButton.IsEnabled = enabled;
     }
 
     private void ClearCutTargetMarkers()
