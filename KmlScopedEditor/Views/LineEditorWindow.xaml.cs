@@ -299,8 +299,8 @@ public partial class LineEditorWindow : Window
         UpdateLiveSplitPreview();
 
         UpdateStatus(
-            $"Added a freehand section. Split line now has {_draftCutPoints.Count:N0} sampled point(s). " +
-            "Continue drawing, or right-click for split-line options.");
+            $"Drawn split line has {_draftCutPoints.Count:N0} sampled point(s). " +
+            "Continue drawing, or press Apply split / Enter when it is ready.");
     }
 
     private void OnSplitStrokePreviewChanged(
@@ -359,14 +359,21 @@ public partial class LineEditorWindow : Window
             if (e.IsDoubleClick &&
                 _draftCutPoints.Count >= 2)
             {
-                FinishAndApplyDrawnSplit();
+                _draftCutDrawing = false;
+                _draftCutPreviewPoint = null;
+                EditorSurface.SetDraftCut(
+                    _draftCutPoints,
+                    _draftCutPreviewPoint);
+
+                UpdateStatus(
+                    $"Split line ready with {_draftCutPoints.Count:N0} point(s). Press Apply split or Enter.");
                 return;
             }
 
             UpdateStatus(
                 _draftCutPoints.Count < 2
                     ? "Split line started. Add at least one more point."
-                    : $"Split line has {_draftCutPoints.Count:N0} point(s). Right-click for options, or double-click/Enter to finish and apply.");
+                    : $"Split line has {_draftCutPoints.Count:N0} point(s). Press Apply split or Enter when it is ready.");
 
             return;
         }
@@ -517,8 +524,8 @@ public partial class LineEditorWindow : Window
 
             AddContextMenuItem(
                 menu,
-                "Split with Imported Line",
-                ApplyPendingGuides);
+                "Apply split",
+                ApplyCurrentSplit);
 
             menu.IsOpen = true;
             return;
@@ -552,21 +559,26 @@ public partial class LineEditorWindow : Window
 
                 AddContextMenuItem(
                     menu,
-                    "Finish and Apply Here",
+                    "Finish Drawing Here",
                     () =>
                     {
                         AddDraftCutPoint(e.WorldPoint);
-
-                        if (_draftCutPoints.Count >= 2)
-                            FinishAndApplyDrawnSplit();
+                        _draftCutDrawing = false;
+                        _draftCutPreviewPoint = null;
+                        EditorSurface.SetDraftCut(
+                            _draftCutPoints,
+                            _draftCutPreviewPoint);
+                        UpdateLiveSplitPreview();
+                        UpdateStatus(
+                            "Split line ready. Press Apply split or Enter.");
                     });
 
                 if (_draftCutPoints.Count >= 2)
                 {
                     AddContextMenuItem(
                         menu,
-                        "Finish and Apply",
-                        FinishAndApplyDrawnSplit);
+                        "Apply split",
+                        ApplyCurrentSplit);
                 }
 
                 AddContextMenuItem(
@@ -1194,10 +1206,9 @@ public partial class LineEditorWindow : Window
             return;
         }
 
-        if (e.Key == Key.Enter &&
-            _draftCutPoints.Count >= 2)
+        if (e.Key == Key.Enter)
         {
-            FinishAndApplyDrawnSplit();
+            ApplyCurrentSplit();
             e.Handled = true;
             return;
         }
@@ -1232,7 +1243,7 @@ public partial class LineEditorWindow : Window
                 break;
 
             case Key.S:
-                OnSplitToolClick(
+                OnDrawSplitLineClick(
                     this,
                     new RoutedEventArgs());
                 e.Handled = true;
