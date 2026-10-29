@@ -842,6 +842,9 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        if (!IsLoaded)
+            return;
+
         if (_draftCutPoints.Count > 0)
             RebuildCommittedSplitPreview();
 
