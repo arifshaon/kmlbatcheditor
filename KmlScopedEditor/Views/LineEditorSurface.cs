@@ -403,7 +403,7 @@ public sealed class LineEditorSurface : FrameworkElement
         _lastStrokeScreen = screen;
         _strokeWorld.Add(ScreenToWorld(screen));
 
-        InvalidateVisual();
+        RedrawOverlayLayer();
         e.Handled = true;
     }
 
@@ -476,7 +476,7 @@ public sealed class LineEditorSurface : FrameworkElement
             }
 
             _strokeWorld.Clear();
-            InvalidateVisual();
+            RedrawOverlayLayer();
             e.Handled = true;
             return;
         }
@@ -517,7 +517,7 @@ public sealed class LineEditorSurface : FrameworkElement
         }
 
         _strokeWorld.Clear();
-        InvalidateVisual();
+        RedrawOverlayLayer();
         e.Handled = true;
     }
 
@@ -607,7 +607,7 @@ public sealed class LineEditorSurface : FrameworkElement
                     _dragGuideVertexIndex,
                     isComplete: false));
 
-            InvalidateVisual();
+            RedrawOverlayLayer();
             e.Handled = true;
             return;
         }
@@ -632,7 +632,7 @@ public sealed class LineEditorSurface : FrameworkElement
                     _worldCenter.X - (delta.X / _scale),
                     _worldCenter.Y + (delta.Y / _scale));
 
-                InvalidateVisual();
+                UpdateLayerTransforms();
             }
 
             e.Handled = true;
@@ -656,7 +656,7 @@ public sealed class LineEditorSurface : FrameworkElement
                     _strokeWorld.ToList(),
                     isDeselect: false));
 
-            InvalidateVisual();
+            RedrawOverlayLayer();
             e.Handled = true;
             return;
         }
@@ -668,7 +668,7 @@ public sealed class LineEditorSurface : FrameworkElement
 
             _lastStrokeScreen = screen;
             _strokeWorld.Add(ScreenToWorld(screen));
-            InvalidateVisual();
+            RedrawOverlayLayer();
             e.Handled = true;
             return;
         }
