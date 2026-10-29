@@ -16,21 +16,21 @@
                 Padding="10">
             <StackPanel>
                 <WrapPanel>
-                    <ToggleButton x:Name="SelectToolButton"
+                    <ToggleButton Focusable="False" x:Name="SelectToolButton"
                                   Content="Select"
                                   Width="82"
                                   Height="32"
                                   Margin="0,0,6,6"
                                   ToolTip="Select lines (V)"
                                   Click="OnSelectToolClick" />
-                    <ToggleButton x:Name="CutToolButton"
-                                  Content="Cut"
+                    <ToggleButton Focusable="False" x:Name="SplitToolButton"
+                                  Content="Split"
                                   Width="72"
                                   Height="32"
                                   Margin="0,0,6,6"
-                                  ToolTip="Draw a cut line (C)"
+                                  ToolTip="Draw a split line (S)"
                                   Click="OnCutToolClick" />
-                    <ToggleButton x:Name="PanToolButton"
+                    <ToggleButton Focusable="False" x:Name="PanToolButton"
                                   Content="Hand"
                                   Width="72"
                                   Height="32"
@@ -38,31 +38,31 @@
                                   ToolTip="Pan the view (H). Space+drag and middle-drag also pan."
                                   Click="OnPanToolClick" />
 
-                    <Button Content="Undo"
+                    <Button Focusable="False" Content="Undo"
                             Width="72"
                             Height="32"
                             Margin="0,0,6,6"
                             ToolTip="Undo last cut or deletion (Ctrl+Z)"
                             Click="OnUndoClick" />
-                    <Button Content="Fit"
+                    <Button Focusable="False" Content="Fit"
                             Width="62"
                             Height="32"
                             Margin="0,0,6,6"
-                            ToolTip="Fit all lines and cut lines to the view (F)"
+                            ToolTip="Fit all lines and split lines to the view (F)"
                             Click="OnFitViewClick" />
-                    <Button Content="Zoom Selection"
+                    <Button Focusable="False" Content="Zoom Selection"
                             Width="112"
                             Height="32"
                             Margin="0,0,6,6"
                             ToolTip="Zoom to currently selected lines"
                             Click="OnZoomSelectionClick" />
-                    <Button Content="+"
+                    <Button Focusable="False" Content="+"
                             Width="34"
                             Height="32"
                             Margin="0,0,4,6"
                             ToolTip="Zoom in (+)"
                             Click="OnZoomInClick" />
-                    <Button Content="-"
+                    <Button Focusable="False" Content="-"
                             Width="34"
                             Height="32"
                             Margin="0,0,12,6"
@@ -75,23 +75,23 @@
                                VerticalAlignment="Center"
                                FontWeight="SemiBold"
                                Margin="0,0,8,6" />
-                    <Button Content="Clear"
+                    <Button Focusable="False" Content="Clear"
                             Width="70"
                             Height="30"
                             Margin="0,0,6,6"
                             Click="OnClearSelectionClick" />
-                    <Button Content="Invert"
+                    <Button Focusable="False" Content="Invert"
                             Width="70"
                             Height="30"
                             Margin="0,0,6,6"
                             Click="OnInvertSelectionClick" />
-                    <Button Content="Cut Selected..."
+                    <Button Focusable="False" Content="Split Selected Lines..."
                             Width="115"
                             Height="30"
                             Margin="0,0,6,6"
-                            ToolTip="Keep the current selection as the cut target, then draw a cut line across it"
+                            ToolTip="Keep the current selection as the split target, then draw a split line across it"
                             Click="OnCutSelectedClick" />
-                    <Button Content="Delete Selected"
+                    <Button Focusable="False" Content="Delete Selected"
                             Width="115"
                             Height="30"
                             Margin="0,0,0,6"
@@ -99,29 +99,29 @@
                             Click="OnDeleteSelectedClick" />
                 </WrapPanel>
 
-                <WrapPanel x:Name="CutActionsPanel"
+                <WrapPanel x:Name="SplitActionsPanel"
                            Visibility="Collapsed">
-                    <TextBlock Text="Cut lines:"
+                    <TextBlock Text="Split lines:"
                                VerticalAlignment="Center"
                                FontWeight="SemiBold"
                                Margin="0,0,8,6" />
-                    <Button Content="Import Cut Line..."
+                    <Button Focusable="False" Content="Import Split Line..."
                             Width="125"
                             Height="30"
                             Margin="0,0,6,6"
                             Click="OnImportCutLinesClick" />
-                    <Button Content="Use Selected as Cut Line"
+                    <Button Focusable="False" Content="Use Selected as Split Line"
                             Width="165"
                             Height="30"
                             Margin="0,0,6,6"
                             Click="OnUseSelectedAsCutlineClick" />
-                    <Button Content="Cut with Imported Line"
+                    <Button Focusable="False" Content="Split with Imported Line"
                             Width="145"
                             Height="30"
                             Margin="0,0,6,6"
-                            ToolTip="Use the imported/existing cut line to split the current cut target. Hand-drawn cuts apply when you finish drawing."
+                            ToolTip="Use the imported/existing split line to split the current target. Hand-drawn split lines apply when you finish drawing."
                             Click="OnApplyCutLinesClick" />
-                    <Button Content="Clear Cut Lines"
+                    <Button Focusable="False" Content="Clear Split Lines"
                             Width="100"
                             Height="30"
                             Margin="0,0,0,6"
@@ -149,12 +149,12 @@
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right"
                             Orientation="Horizontal">
-                    <Button Content="Cancel"
+                    <Button Focusable="False" Content="Cancel"
                             Width="90"
                             Height="32"
                             Margin="0,0,8,0"
                             Click="OnCancelClick" />
-                    <Button Content="Apply &amp; Close"
+                    <Button Focusable="False" Content="Apply &amp; Close"
                             Width="120"
                             Height="32"
                             ToolTip="Keeps the line edits in the currently loaded document. Use Save As in the main window whenever you want to write them to disk."
@@ -165,7 +165,7 @@
                     <TextBlock x:Name="StatusText"
                                FontWeight="SemiBold"
                                TextWrapping="Wrap" />
-                    <TextBlock Text="Selection is temporary targeting and is not saved in KML/KMZ. To change geometry, use Cut Selected... or Delete Selected. Applied cuts/deletions are undoable."
+                    <TextBlock Text="Selection is temporary targeting and is not saved in KML/KMZ. To change geometry, use Split Selected Lines... or Delete Selected. Applied splits/deletions are undoable."
                                Foreground="#6B7280"
                                FontSize="11"
                                Margin="0,3,12,0"
