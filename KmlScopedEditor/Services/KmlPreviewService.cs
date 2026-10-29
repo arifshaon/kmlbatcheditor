@@ -60,6 +60,8 @@ public sealed class KmlPreviewService
         var currentLabelScale = NormalizeScale(resolved.LabelScale, 1d);
         var currentIconColor = KmlColorUtility.NormalizeKmlColor(resolved.IconColor);
         var currentLabelColor = KmlColorUtility.NormalizeKmlColor(resolved.LabelColor);
+        var currentLineColor = KmlColorUtility.NormalizeKmlColor(resolved.LineColor);
+        var currentLineWidth = NormalizeScale(resolved.LineWidth, 1d);
 
         var proposedIconScale = settings.ChangeIconScale
             ? NormalizeScale(settings.IconScaleText, currentIconScale)
@@ -73,6 +75,8 @@ public sealed class KmlPreviewService
         string? iconAlpha = null;
         string? labelBgr = null;
         string? labelAlpha = null;
+        string? lineBgr = null;
+        string? lineAlpha = null;
 
         if (settings.ChangeIconColor &&
             !KmlColorUtility.TryParseDisplayRgb(
@@ -118,6 +122,32 @@ public sealed class KmlPreviewService
             throw new InvalidOperationException(labelOpacityError);
         }
 
+        if (settings.ChangeLineColor &&
+            !KmlColorUtility.TryParseDisplayRgb(
+                settings.LineColorText,
+                "Line colour",
+                out lineBgr,
+                out _,
+                out var lineColorError))
+        {
+            throw new InvalidOperationException(lineColorError);
+        }
+
+        if (settings.ChangeLineOpacity &&
+            !KmlColorUtility.TryParseOpacityPercent(
+                settings.LineOpacityText,
+                "Line opacity",
+                out lineAlpha,
+                out _,
+                out var lineOpacityError))
+        {
+            throw new InvalidOperationException(lineOpacityError);
+        }
+
+        var proposedLineWidth = settings.ChangeLineWidth
+            ? NormalizeScale(settings.LineWidthText, currentLineWidth)
+            : currentLineWidth;
+
         var proposedIconColor = KmlColorUtility.Combine(
             currentIconColor,
             iconBgr,
@@ -127,6 +157,11 @@ public sealed class KmlPreviewService
             currentLabelColor,
             labelBgr,
             labelAlpha);
+
+        var proposedLineColor = KmlColorUtility.Combine(
+            currentLineColor,
+            lineBgr,
+            lineAlpha);
 
         var name = placemark.Element(KmlNs + "name")?.Value?.Trim();
 
@@ -140,15 +175,19 @@ public sealed class KmlPreviewService
                 currentLocalPath,
                 currentIconScale,
                 currentLabelScale,
+                currentLineWidth,
                 currentIconColor,
-                currentLabelColor),
+                currentLabelColor,
+                currentLineColor),
             Proposed = BuildAppearance(
                 proposedHref,
                 proposedLocalPath,
                 proposedIconScale,
                 proposedLabelScale,
+                proposedLineWidth,
                 proposedIconColor,
-                proposedLabelColor)
+                proposedLabelColor,
+                proposedLineColor)
         };
     }
 
@@ -157,12 +196,15 @@ public sealed class KmlPreviewService
         string? localIconPath,
         double iconScale,
         double labelScale,
+        double lineWidth,
         string iconColor,
-        string labelColor)
+        string labelColor,
+        string lineColor)
     {
         var iconImage = LoadImage(localIconPath);
         var iconBrush = CreateBrush(iconColor);
         var labelBrush = CreateBrush(labelColor);
+        var lineBrush = CreateBrush(lineColor);
         var iconOpacity = KmlColorUtility.GetAlphaByte(iconColor) / 255d;
 
         var iconName = !string.IsNullOrWhiteSpace(localIconPath)
@@ -171,6 +213,7 @@ public sealed class KmlPreviewService
 
         var iconScaleText = iconScale.ToString("0.###", CultureInfo.InvariantCulture);
         var labelScaleText = labelScale.ToString("0.###", CultureInfo.InvariantCulture);
+        var lineWidthText = lineWidth.ToString("0.###", CultureInfo.InvariantCulture);
 
         var details = string.Join(
             Environment.NewLine,
@@ -180,7 +223,10 @@ public sealed class KmlPreviewService
             $"Icon opacity: {KmlColorUtility.ToOpacityDisplay(iconColor)}",
             $"Text size: {labelScaleText}",
             $"Text colour: {KmlColorUtility.ToDisplayRgb(labelColor)}",
-            $"Text opacity: {KmlColorUtility.ToOpacityDisplay(labelColor)}");
+            $"Text opacity: {KmlColorUtility.ToOpacityDisplay(labelColor)}",
+            $"Line width: {lineWidthText}",
+            $"Line colour: {KmlColorUtility.ToDisplayRgb(lineColor)}",
+            $"Line opacity: {KmlColorUtility.ToOpacityDisplay(lineColor)}");
 
         return new KmlPlacemarkAppearancePreview
         {
@@ -194,8 +240,12 @@ public sealed class KmlPreviewService
             IconImageOpacity = iconOpacity,
             IconFallbackOpacity = iconOpacity,
             LabelBrush = labelBrush,
+            LineBrush = lineBrush,
+            LineStrokeWidth = Math.Clamp(lineWidth, 0.5d, 12d),
             KmlIconColor = iconColor,
             KmlLabelColor = labelColor,
+            KmlLineColor = lineColor,
+            LineWidth = lineWidthText,
             IconScale = iconScaleText,
             LabelScale = labelScaleText,
             Details = details
