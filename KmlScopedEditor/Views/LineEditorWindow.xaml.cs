@@ -419,14 +419,6 @@ public partial class LineEditorWindow : Window
         SetTool(LineEditorTool.Select);
     }
 
-    private void OnSplitToolClick(
-        object sender,
-        RoutedEventArgs e)
-    {
-        SetWorkflowStep(2);
-        BeginSplitMode();
-    }
-
     private void OnStep1Click(
         object sender,
         RoutedEventArgs e)
@@ -1308,36 +1300,6 @@ public partial class LineEditorWindow : Window
             $"Imported {importedStates.Count:N0} split path(s) as the current split line set. Drag orange handles to reshape a path, or draw a new line to replace this set when the drawing is finished.");
     }
 
-    private void OnEditImportedLineClick(
-        object sender,
-        RoutedEventArgs e)
-    {
-        var current = GetEditingGuide();
-
-        if (current is not null)
-        {
-            StopEditingGuide();
-            UpdateStatus(
-                "Split-line editing finished.");
-            return;
-        }
-
-        var pending = _guides
-            .LastOrDefault(
-                guide => !guide.Applied);
-
-        if (pending is null)
-        {
-            UpdateStatus(
-                "There is no pending split line to edit.");
-            return;
-        }
-
-        StartEditingGuide(pending);
-        UpdateStatus(
-            "Editing split line. Drag orange handles to move vertices; right-click for add/delete vertex options.");
-    }
-
     private void OnEditableGuideChanged(
         object? sender,
         LineEditorGuideEditEventArgs e)
@@ -1434,13 +1396,6 @@ public partial class LineEditorWindow : Window
 
         UpdateStatus(
             "Selected line is now the split line and is editable. Drag its orange handles if needed, then press Apply split or Enter. The helper line will be removed before splitting so it cannot split itself.");
-    }
-
-    private void OnApplyImportedSplitLineClick(
-        object sender,
-        RoutedEventArgs e)
-    {
-        ApplyCurrentSplit();
     }
 
     private void OnApplySplitClick(
