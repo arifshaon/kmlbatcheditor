@@ -629,6 +629,99 @@ public sealed class KmlLineGeometryService
         return RemoveConsecutiveDuplicates(tail);
     }
 
+    private static List<KmlCoordinate> TrimPolylineEndsByDegrees(
+        IReadOnlyList<KmlCoordinate> points,
+        double trimDegrees)
+    {
+        var result = points.ToList();
+
+        if (result.Count < 3 || trimDegrees <= 0d)
+            return result;
+
+        TrimStartByDegrees(result, trimDegrees);
+        TrimEndByDegrees(result, trimDegrees);
+
+        return RemoveConsecutiveDuplicates(result);
+    }
+
+    private static void TrimStartByDegrees(
+        List<KmlCoordinate> points,
+        double distance)
+    {
+        var remaining = distance;
+
+        while (points.Count >= 2 && remaining > 0d)
+        {
+            var segmentLength = CoordinateDistanceDegrees(
+                points[0],
+                points[1]);
+
+            if (segmentLength <= CoordinateToleranceDegrees)
+            {
+                points.RemoveAt(0);
+                continue;
+            }
+
+            if (segmentLength <= remaining)
+            {
+                remaining -= segmentLength;
+                points.RemoveAt(0);
+                continue;
+            }
+
+            points[0] = Interpolate(
+                points[0],
+                points[1],
+                remaining / segmentLength);
+
+            break;
+        }
+    }
+
+    private static void TrimEndByDegrees(
+        List<KmlCoordinate> points,
+        double distance)
+    {
+        var remaining = distance;
+
+        while (points.Count >= 2 && remaining > 0d)
+        {
+            var last = points.Count - 1;
+            var segmentLength = CoordinateDistanceDegrees(
+                points[last],
+                points[last - 1]);
+
+            if (segmentLength <= CoordinateToleranceDegrees)
+            {
+                points.RemoveAt(last);
+                continue;
+            }
+
+            if (segmentLength <= remaining)
+            {
+                remaining -= segmentLength;
+                points.RemoveAt(last);
+                continue;
+            }
+
+            points[last] = Interpolate(
+                points[last],
+                points[last - 1],
+                remaining / segmentLength);
+
+            break;
+        }
+    }
+
+    private static double CoordinateDistanceDegrees(
+        KmlCoordinate a,
+        KmlCoordinate b)
+    {
+        var dx = b.Longitude - a.Longitude;
+        var dy = b.Latitude - a.Latitude;
+        return Math.Sqrt((dx * dx) + (dy * dy));
+    }
+
     private static KmlCoordinate CoordinateAt(
         IReadOnlyList<KmlCoordinate> coordinates,
         double position)
