@@ -276,7 +276,7 @@ public partial class LineEditorWindow : Window
         if (stroke.Count < 2)
             return;
 
-        var preview = _geometry.PreviewCutWithStroke(
+        var preview = _geometry.PreviewSplitWithStroke(
             stroke,
             GetSelectedTargetSet());
 
@@ -762,7 +762,7 @@ public partial class LineEditorWindow : Window
                 var worldPoints =
                     ProjectGuide(guideState.Guide);
 
-                var result = _geometry.CutWithStroke(
+                var result = _geometry.SplitWithStroke(
                     worldPoints,
                     useSelectedTargets
                         ? CutTargetMarkerAttribute
@@ -1267,7 +1267,7 @@ public partial class LineEditorWindow : Window
             return;
         }
 
-        var preview = _geometry.PreviewCutWithStroke(
+        var preview = _geometry.PreviewSplitWithStroke(
             stroke,
             GetSelectedTargetSet());
 
@@ -1327,7 +1327,7 @@ public partial class LineEditorWindow : Window
             }
 
             var preview =
-                _geometry.PreviewCutWithStroke(
+                _geometry.PreviewSplitWithStroke(
                     ProjectGuide(
                         guideState.Guide),
                     targetSet);
@@ -1348,7 +1348,7 @@ public partial class LineEditorWindow : Window
         EditorSurface.SetCutPoints(_cutPoints);
 
         var previewSummary =
-            new LineCutPreview(
+            new LineSplitPreview(
                 lines.Count,
                 intersections,
                 allPoints,
@@ -1383,7 +1383,7 @@ public partial class LineEditorWindow : Window
     }
 
     private void UpdateCutScopeDisplay(
-        LineCutPreview? preview = null)
+        LineSplitPreview? preview = null)
     {
         var validSelected =
             GetValidSelectedLines();
