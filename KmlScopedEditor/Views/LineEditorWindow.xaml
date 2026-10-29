@@ -42,7 +42,7 @@
                             Width="72"
                             Height="32"
                             Margin="0,0,6,6"
-                            ToolTip="Undo last cut or deletion (Ctrl+Z)"
+                            ToolTip="Undo last split or deletion (Ctrl+Z)"
                             Click="OnUndoClick" />
                     <Button Focusable="False" Content="Fit"
                             Width="62"
