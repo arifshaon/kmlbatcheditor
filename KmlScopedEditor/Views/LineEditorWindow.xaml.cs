@@ -302,6 +302,7 @@ public partial class LineEditorWindow : Window
                 : "Previous split lines shown.");
     }
 
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private void OnAppliedHistoryColorClick(
         object sender,
         RoutedEventArgs e)
