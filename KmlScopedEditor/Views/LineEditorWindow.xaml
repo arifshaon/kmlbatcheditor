@@ -512,7 +512,9 @@
                             <TextBlock x:Name="SimplifySummaryText"
                                        Text="Preview not calculated."
                                        FontWeight="SemiBold"
-                                       Foreground="#334155" />
+                                       Foreground="#334155"
+                                       MaxWidth="300"
+                                       TextWrapping="Wrap" />
                             <TextBlock x:Name="SimplifyWarningText"
                                        Text=""
                                        FontSize="10"
