@@ -13,13 +13,7 @@
     <AssemblyVersion>1.1.0.0</AssemblyVersion>
     <Product>Simple KML Editor</Product>
     <AssemblyTitle>Simple KML Editor</AssemblyTitle>
-    <ApplicationIcon>Assets\simple_kml_editor.ico</ApplicationIcon>
     <Authors>Arif Shaon</Authors>
     <Description>Windows desktop application for editing KML and KMZ placemark styles and line geometry, with preview, splitting, simplification, smoothing, and scoped batch editing.</Description>
   </PropertyGroup>
-
-  <ItemGroup>
-    <Resource Include="Assets\simple_kml_editor.ico" />
-  </ItemGroup>
-
 </Project>
