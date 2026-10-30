@@ -17,6 +17,12 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private static readonly XNamespace KmlNs =
         "http://www.opengis.net/kml/2.2";
 
+    private static readonly XNamespace EditorNs =
+        "urn:kml-scoped-editor:temporary";
+
+    private static readonly XName TreeTickMarkerAttribute =
+        EditorNs + "tree-ticked";
+
     private readonly KmlLoader _loader = new();
     private readonly KmlStyleInspector _styleInspector = new();
     private readonly KmlSelectionService _selectionService = new();
@@ -1384,6 +1390,75 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     }
 
 
+    public XDocument CreateLineEditorDocumentSnapshot()
+    {
+        if (_documentContext is null)
+        {
+            throw new InvalidOperationException(
+                "No KML document is currently loaded.");
+        }
+
+        var sourceDocument =
+            _documentContext.Document;
+
+        var snapshot =
+            new XDocument(
+                sourceDocument);
+
+        if (sourceDocument.Root is null ||
+            snapshot.Root is null)
+        {
+            return snapshot;
+        }
+
+        var checkedLeafElements =
+            EnumerateTreeNodes(
+                    RootNodes)
+                .Where(node =>
+                    node.Children.Count == 0 &&
+                    node.IsChecked == true &&
+                    node.SourceElement is not null)
+                .Select(node =>
+                    node.SourceElement!)
+                .ToHashSet();
+
+        if (checkedLeafElements.Count == 0)
+            return snapshot;
+
+        var sourceElements =
+            sourceDocument.Root
+                .DescendantsAndSelf()
+                .ToList();
+
+        var snapshotElements =
+            snapshot.Root
+                .DescendantsAndSelf()
+                .ToList();
+
+        var count =
+            Math.Min(
+                sourceElements.Count,
+                snapshotElements.Count);
+
+        for (var index = 0;
+             index < count;
+             index++)
+        {
+            if (!checkedLeafElements.Contains(
+                    sourceElements[index]))
+            {
+                continue;
+            }
+
+            snapshotElements[index]
+                .SetAttributeValue(
+                    TreeTickMarkerAttribute,
+                    "true");
+        }
+
+        return snapshot;
+    }
+
     public async Task ApplyLineEditorDocumentAsync(XDocument editedDocument)
     {
         ArgumentNullException.ThrowIfNull(editedDocument);
@@ -1482,6 +1557,13 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
         RootNodes.Clear();
         RootNodes.Add(_documentContext.RootNode);
+
+        RestoreTreeChecksFromMarkers(
+            _documentContext.RootNode);
+
+        ClearTreeTickMarkers(
+            _documentContext.Document);
+
         WireTreeCheckCallbacks();
 
         SelectedNode = _documentContext.RootNode;
@@ -1494,15 +1576,86 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         StatusText =
             $"Line edits applied to the loaded working document: " +
             $"{lineCount:N0} LineString segment(s) remain. " +
-            "Tree ticks were reset when the tree was rebuilt. " +
+            "Existing tree ticks were carried over for items that still exist. " +
             $"You can reopen Line Editor to continue editing, or use Save As whenever you are ready to write the edited KML/KMZ to disk. " +
             $"Completed in {FormatElapsed(stopwatch.Elapsed)}.";
 
         ShowNotification(
-            "Line edits are kept in the currently loaded document. Tree ticks were reset because the tree was rebuilt. Reopen Line Editor to continue, or use Save As whenever you want to save a file.",
+            "Line edits are kept in the currently loaded document. Existing tree ticks were preserved where possible.",
             NotificationKind.Success);
 
         RaiseCommandStates();
+    }
+
+    private static IEnumerable<KmlTreeNode>
+        EnumerateTreeNodes(
+            IEnumerable<KmlTreeNode> roots)
+    {
+        var stack =
+            new Stack<KmlTreeNode>(
+                roots.Reverse());
+
+        while (stack.Count > 0)
+        {
+            var node =
+                stack.Pop();
+
+            yield return node;
+
+            for (var index =
+                     node.Children.Count - 1;
+                 index >= 0;
+                 index--)
+            {
+                stack.Push(
+                    node.Children[index]);
+            }
+        }
+    }
+
+    private static void RestoreTreeChecksFromMarkers(
+        KmlTreeNode node)
+    {
+        foreach (var child in
+                 node.Children)
+        {
+            RestoreTreeChecksFromMarkers(
+                child);
+        }
+
+        if (node.Children.Count > 0 ||
+            node.SourceElement is null)
+        {
+            return;
+        }
+
+        if (string.Equals(
+                node.SourceElement
+                    .Attribute(
+                        TreeTickMarkerAttribute)
+                    ?.Value,
+                "true",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            node.IsChecked = true;
+        }
+    }
+
+    private static void ClearTreeTickMarkers(
+        XDocument document)
+    {
+        if (document.Root is null)
+            return;
+
+        foreach (var attribute in
+                 document.Root
+                     .DescendantsAndSelf()
+                     .Attributes(
+                         TreeTickMarkerAttribute)
+                     .ToList())
+        {
+            attribute.Remove();
+        }
     }
 
     private static void ReplaceDocumentContents(
