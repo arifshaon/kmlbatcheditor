@@ -28,6 +28,9 @@ public partial class LineEditorWindow : Window
     private static readonly XName CutTargetMarkerAttribute =
         EditorNs + "line-editor-cut-target";
 
+    private static readonly XName SourceGuideMarkerAttribute =
+        EditorNs + "split-guide-source-id";
+
     private readonly XDocument _originalDocument;
     private XDocument _workingDocument;
     private KmlLineGeometryService _geometry;
@@ -52,6 +55,7 @@ public partial class LineEditorWindow : Window
     private readonly Stack<PendingGuideEditState> _pendingEditUndo = new();
     private PendingGuideEditState? _pendingGuideDragUndoState;
     private Point? _lastPointerWorldPoint;
+    private long _nextUndoSequence;
 
     private bool _hasPerformedCut;
     private int _workflowStep = 1;
@@ -574,26 +578,42 @@ public partial class LineEditorWindow : Window
         CapturePendingGuideEditState()
     {
         return new PendingGuideEditState(
+            0,
             _guides
                 .Where(guide => !guide.Applied)
                 .Select(guide =>
                     new PendingGuideSnapshot(
                         guide.Guide.Name,
                         guide.Guide.Coordinates.ToList(),
-                        guide.RemoveMatchingSourceBeforeCut))
+                        guide.RemoveMatchingSourceBeforeCut,
+                        guide.SourceLineId))
                 .ToList());
     }
 
     private void PushPendingGuideEditUndo()
     {
-        _pendingEditUndo.Push(
+        PushPendingGuideEditUndo(
             CapturePendingGuideEditState());
     }
 
     private void PushPendingGuideEditUndo(
         PendingGuideEditState state)
     {
-        _pendingEditUndo.Push(state);
+        _pendingEditUndo.Push(
+            state with
+            {
+                Sequence = ++_nextUndoSequence
+            });
+    }
+
+    private void PushDocumentUndo(
+        UndoState state)
+    {
+        _undo.Push(
+            state with
+            {
+                Sequence = ++_nextUndoSequence
+            });
     }
 
     private void RestorePendingGuideEditState(
@@ -611,7 +631,8 @@ public partial class LineEditorWindow : Window
                     new KmlCutGuide(
                         snapshot.Name,
                         snapshot.Coordinates.ToList()),
-                    snapshot.RemoveMatchingSourceBeforeCut));
+                    snapshot.RemoveMatchingSourceBeforeCut,
+                    snapshot.SourceLineId));
         }
 
         CancelDraftCutLine(
@@ -1397,10 +1418,15 @@ public partial class LineEditorWindow : Window
             feature.Name,
             feature.Coordinates.ToList());
 
+        var sourceLineId =
+            EnsureSourceGuideId(
+                feature.LineStringElement);
+
         var createdGuide =
             new CutGuideState(
                 guide,
-                removeMatchingSourceBeforeCut: true);
+                removeMatchingSourceBeforeCut: true,
+                sourceLineId);
 
         CancelDraftCutLine(
             switchToSelect: false);
@@ -1636,8 +1662,9 @@ public partial class LineEditorWindow : Window
 
                 if (guideState.RemoveMatchingSourceBeforeCut)
                 {
-                    var helper = FindMatchingFeature(
-                        guideState.Guide.Coordinates);
+                    var helper =
+                        FindSourceGuideFeature(
+                            guideState);
 
                     if (helper is not null)
                     {
@@ -1713,7 +1740,7 @@ public partial class LineEditorWindow : Window
 
         if (changed)
         {
-            _undo.Push(snapshot);
+            PushDocumentUndo(snapshot);
             _pendingEditUndo.Clear();
             _pendingGuideDragUndoState = null;
         }
@@ -1791,7 +1818,7 @@ public partial class LineEditorWindow : Window
             return;
         }
 
-        _undo.Push(snapshot);
+        PushDocumentUndo(snapshot);
         _selected.Clear();
 
         RefreshSurface();
@@ -1854,7 +1881,23 @@ public partial class LineEditorWindow : Window
             return;
         }
 
-        if (_pendingEditUndo.Count > 0)
+        var hasGuideUndo =
+            _pendingEditUndo.Count > 0;
+        var hasDocumentUndo =
+            _undo.Count > 0;
+
+        if (!hasGuideUndo &&
+            !hasDocumentUndo)
+        {
+            UpdateStatus(
+                "There is no split-line edit, split, or deletion to undo.");
+            return;
+        }
+
+        if (hasGuideUndo &&
+            (!hasDocumentUndo ||
+             _pendingEditUndo.Peek().Sequence >
+             _undo.Peek().Sequence))
         {
             var editState =
                 _pendingEditUndo.Pop();
@@ -1864,13 +1907,6 @@ public partial class LineEditorWindow : Window
 
             UpdateStatus(
                 "Split-line edit undone.");
-            return;
-        }
-
-        if (_undo.Count == 0)
-        {
-            UpdateStatus(
-                "There is no split-line edit, split, or deletion to undo.");
             return;
         }
 
@@ -2593,8 +2629,8 @@ public partial class LineEditorWindow : Window
             if (guideState.RemoveMatchingSourceBeforeCut)
             {
                 var helper =
-                    FindMatchingFeature(
-                        guideState.Guide.Coordinates);
+                    FindSourceGuideFeature(
+                        guideState);
 
                 if (helper is not null)
                 {
@@ -2754,6 +2790,7 @@ public partial class LineEditorWindow : Window
         UndoActionKind kind)
     {
         return new UndoState(
+            0,
             kind,
             new XDocument(_workingDocument),
             _hasPerformedCut,
@@ -2772,6 +2809,51 @@ public partial class LineEditorWindow : Window
         return guide.Coordinates
             .Select(_geometry.Project)
             .ToList();
+    }
+
+    private static string EnsureSourceGuideId(
+        XElement lineString)
+    {
+        var existing =
+            lineString.Attribute(
+                SourceGuideMarkerAttribute)?.Value;
+
+        if (!string.IsNullOrWhiteSpace(existing))
+            return existing;
+
+        var created =
+            Guid.NewGuid().ToString("N");
+
+        lineString.SetAttributeValue(
+            SourceGuideMarkerAttribute,
+            created);
+
+        return created;
+    }
+
+    private KmlLineFeature? FindSourceGuideFeature(
+        CutGuideState guideState)
+    {
+        if (!string.IsNullOrWhiteSpace(
+                guideState.SourceLineId))
+        {
+            var byId =
+                _geometry.Features
+                    .FirstOrDefault(feature =>
+                        string.Equals(
+                            feature.LineStringElement
+                                .Attribute(
+                                    SourceGuideMarkerAttribute)
+                                ?.Value,
+                            guideState.SourceLineId,
+                            StringComparison.Ordinal));
+
+            if (byId is not null)
+                return byId;
+        }
+
+        return FindMatchingFeature(
+            guideState.Guide.Coordinates);
     }
 
     private KmlLineFeature? FindMatchingFeature(
@@ -3165,7 +3247,10 @@ public partial class LineEditorWindow : Window
             tooltip =
                 "Undo the last point in the current split-line drawing (Ctrl+Z)";
         }
-        else if (_pendingEditUndo.Count > 0)
+        else if (_pendingEditUndo.Count > 0 &&
+                 (_undo.Count == 0 ||
+                  _pendingEditUndo.Peek().Sequence >
+                  _undo.Peek().Sequence))
         {
             tooltip =
                 "Undo the last split-line edit (Ctrl+Z)";
@@ -3215,7 +3300,9 @@ public partial class LineEditorWindow : Window
                          attribute.Name ==
                              ScopeMarkerAttribute ||
                          attribute.Name ==
-                             CutTargetMarkerAttribute)
+                             CutTargetMarkerAttribute ||
+                         attribute.Name ==
+                             SourceGuideMarkerAttribute)
                      .ToList())
         {
             attribute.Remove();
@@ -3228,11 +3315,13 @@ public partial class LineEditorWindow : Window
     {
         public CutGuideState(
             KmlCutGuide guide,
-            bool removeMatchingSourceBeforeCut)
+            bool removeMatchingSourceBeforeCut,
+            string? sourceLineId = null)
         {
             Guide = guide;
             RemoveMatchingSourceBeforeCut =
                 removeMatchingSourceBeforeCut;
+            SourceLineId = sourceLineId;
         }
 
         public Guid Id { get; } =
@@ -3245,6 +3334,8 @@ public partial class LineEditorWindow : Window
         {
             get;
         }
+
+        public string? SourceLineId { get; }
 
         public bool Applied { get; set; }
 
@@ -3266,6 +3357,7 @@ public partial class LineEditorWindow : Window
         IReadOnlyList<Point> AppliedCutPoints);
 
     private sealed record UndoState(
+        long Sequence,
         UndoActionKind Kind,
         XDocument Document,
         bool HasPerformedCut,
@@ -3275,9 +3367,11 @@ public partial class LineEditorWindow : Window
     private sealed record PendingGuideSnapshot(
         string Name,
         IReadOnlyList<KmlCoordinate> Coordinates,
-        bool RemoveMatchingSourceBeforeCut);
+        bool RemoveMatchingSourceBeforeCut,
+        string? SourceLineId);
 
     private sealed record PendingGuideEditState(
+        long Sequence,
         IReadOnlyList<PendingGuideSnapshot> Guides);
 }
 
