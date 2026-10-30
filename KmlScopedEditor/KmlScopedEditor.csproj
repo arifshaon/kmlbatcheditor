@@ -11,9 +11,15 @@
     <Version>1.1.0</Version>
     <FileVersion>1.1.0.0</FileVersion>
     <AssemblyVersion>1.1.0.0</AssemblyVersion>
-    <Product>KML Scoped Editor</Product>
+    <Product>Simple KML Editor</Product>
+    <AssemblyTitle>Simple KML Editor</AssemblyTitle>
+    <ApplicationIcon>Assets\simple_kml_editor.ico</ApplicationIcon>
     <Authors>Arif Shaon</Authors>
-    <Description>Windows desktop application for safely previewing and batch-editing KML and KMZ placemark styles, including bundled custom icons.</Description>
+    <Description>Windows desktop application for editing KML and KMZ placemark styles and line geometry, with preview, splitting, simplification, smoothing, and scoped batch editing.</Description>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\simple_kml_editor.ico" />
+  </ItemGroup>
 
 </Project>
