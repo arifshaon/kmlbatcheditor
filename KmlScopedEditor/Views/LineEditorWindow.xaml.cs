@@ -2323,6 +2323,9 @@ public partial class LineEditorWindow : Window
                 switchToSelect: false);
         }
 
+        var confirmedCloseWithPending =
+            false;
+
         if (_guides.Any(
                 guide => !guide.Applied))
         {
@@ -2342,11 +2345,7 @@ public partial class LineEditorWindow : Window
                 return;
             }
 
-            StopEditingGuide();
-            _guides.RemoveAll(
-                guide => !guide.Applied);
-            _cutPoints.Clear();
-            RefreshSurface();
+            confirmedCloseWithPending = true;
         }
 
         var outputDocument =
@@ -2356,6 +2355,15 @@ public partial class LineEditorWindow : Window
                 _originalDocument.Root,
                 outputDocument.Root))
         {
+            if (confirmedCloseWithPending)
+            {
+                _pendingEditUndo.Clear();
+                _pendingGuideDragUndoState = null;
+                DialogResult = false;
+                Close();
+                return;
+            }
+
             System.Windows.MessageBox.Show(
                 this,
                 "No line geometry has been changed. Selection by itself is temporary and is not saved in KML/KMZ. Select lines and click Split, or use Delete Selected, or click Cancel to close without changes.",
