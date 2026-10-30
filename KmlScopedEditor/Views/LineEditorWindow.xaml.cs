@@ -1643,10 +1643,75 @@ public partial class LineEditorWindow : Window
 
         ClearCutTargetMarkers();
 
+        var helperElementsByGuide =
+            new Dictionary<
+                Guid,
+                IReadOnlyList<XElement>>();
+
+        var allHelperElements =
+            new HashSet<XElement>();
+
+        foreach (var guideState in guideStates)
+        {
+            if (!guideState.RemoveMatchingSourceBeforeCut)
+                continue;
+
+            var helperElements =
+                FindSourceGuideFeatures(
+                        guideState)
+                    .Select(feature =>
+                        feature.LineStringElement)
+                    .Distinct()
+                    .ToList();
+
+            if (helperElements.Count == 0)
+                continue;
+
+            helperElementsByGuide[
+                guideState.Id] =
+                helperElements;
+
+            allHelperElements.UnionWith(
+                helperElements);
+        }
+
+        var helperRemovalTargets =
+            allHelperElements
+                .GroupBy(element =>
+                    element.Parent?.Name ==
+                        KmlNs + "Placemark"
+                        ? element.Parent
+                        : element)
+                .Select(group =>
+                    group.First())
+                .ToList();
+
+        var helperLinesRemoved =
+            helperRemovalTargets.Count > 0
+                ? _geometry.DeleteLines(
+                    helperRemovalTargets)
+                : 0;
+
+        var helperConsumedGuideIds =
+            helperElementsByGuide
+                .Where(pair =>
+                    pair.Value.Any(element =>
+                        element.Document !=
+                        _workingDocument))
+                .Select(pair =>
+                    pair.Key)
+                .ToHashSet();
+
         if (useSelectedTargets)
         {
             foreach (var line in selectedTargets)
             {
+                if (line.Document !=
+                    _workingDocument)
+                {
+                    continue;
+                }
+
                 line.SetAttributeValue(
                     CutTargetMarkerAttribute,
                     "true");
@@ -1656,8 +1721,8 @@ public partial class LineEditorWindow : Window
         var totalLines = 0;
         var totalIntersections = 0;
         var totalPieces = 0;
-        var helperLinesRemoved = 0;
-        var changed = false;
+        var changed =
+            helperLinesRemoved > 0;
         var applySequence =
             _nextAppliedSequence + 1;
         var usedAnyGuide = false;
@@ -1666,31 +1731,6 @@ public partial class LineEditorWindow : Window
         {
             foreach (var guideState in guideStates)
             {
-                var helperRemovedForGuide = 0;
-
-                if (guideState.RemoveMatchingSourceBeforeCut)
-                {
-                    var helper =
-                        FindSourceGuideFeature(
-                            guideState);
-
-                    if (helper is not null)
-                    {
-                        helperRemovedForGuide =
-                            _geometry.DeleteLines(
-                                new[]
-                                {
-                                    helper.LineStringElement
-                                });
-
-                        helperLinesRemoved +=
-                            helperRemovedForGuide;
-
-                        if (helperRemovedForGuide > 0)
-                            changed = true;
-                    }
-                }
-
                 var worldPoints =
                     ProjectGuide(guideState.Guide);
 
@@ -1707,7 +1747,8 @@ public partial class LineEditorWindow : Window
 
                 var guideWasUsed =
                     result.LinesSplit > 0 ||
-                    helperRemovedForGuide > 0;
+                    helperConsumedGuideIds.Contains(
+                        guideState.Id);
 
                 if (result.LinesSplit > 0)
                     changed = true;
@@ -2657,6 +2698,16 @@ public partial class LineEditorWindow : Window
         var selectedTargets =
             GetSelectedTargetSet();
 
+        var helperElements =
+            pending
+                .Where(guide =>
+                    guide.RemoveMatchingSourceBeforeCut)
+                .SelectMany(
+                    FindSourceGuideFeatures)
+                .Select(feature =>
+                    feature.LineStringElement)
+                .ToHashSet();
+
         foreach (var guideState in pending)
         {
             var targetSet =
@@ -2668,18 +2719,8 @@ public partial class LineEditorWindow : Window
                     : new HashSet<XElement>(
                         selectedTargets);
 
-            if (guideState.RemoveMatchingSourceBeforeCut)
-            {
-                var helper =
-                    FindSourceGuideFeature(
-                        guideState);
-
-                if (helper is not null)
-                {
-                    targetSet.Remove(
-                        helper.LineStringElement);
-                }
-            }
+            targetSet.ExceptWith(
+                helperElements);
 
             var preview =
                 _geometry.PreviewSplitWithStroke(
@@ -2874,39 +2915,35 @@ public partial class LineEditorWindow : Window
         return created;
     }
 
-    private KmlLineFeature? FindSourceGuideFeature(
-        CutGuideState guideState)
+    private IReadOnlyList<KmlLineFeature>
+        FindSourceGuideFeatures(
+            CutGuideState guideState)
     {
         if (!string.IsNullOrWhiteSpace(
                 guideState.SourceLineId))
         {
             var byId =
                 _geometry.Features
-                    .FirstOrDefault(feature =>
+                    .Where(feature =>
                         string.Equals(
                             feature.LineStringElement
                                 .Attribute(
                                     SourceGuideMarkerAttribute)
                                 ?.Value,
                             guideState.SourceLineId,
-                            StringComparison.Ordinal));
+                            StringComparison.Ordinal))
+                    .ToList();
 
-            if (byId is not null)
+            if (byId.Count > 0)
                 return byId;
         }
 
-        return FindMatchingFeature(
-            guideState.Guide.Coordinates);
-    }
-
-    private KmlLineFeature? FindMatchingFeature(
-        IReadOnlyList<KmlCoordinate> coordinates)
-    {
         return _geometry.Features
-            .FirstOrDefault(feature =>
+            .Where(feature =>
                 CoordinatesMatch(
                     feature.Coordinates,
-                    coordinates));
+                    guideState.Guide.Coordinates))
+            .ToList();
     }
 
     private static bool CoordinatesMatch(
