@@ -1,10 +1,10 @@
-#define MyAppName "KML Scoped Editor"
+#define MyAppName "Simple KML Editor"
 #ifndef MyAppVersion
-  #define MyAppVersion "1.1.0"
+  #define MyAppVersion "1.2.0"
 #endif
 #define MyAppExeName "KmlScopedEditor.exe"
 #define MyAppPublisher "Arif Shaon"
-#define MyAppDescription "Batch-edit KML and KMZ placemark styles, preview proposed changes, and bundle custom icons into KMZ files."
+#define MyAppDescription "Edit KML and KMZ files with placemark style tools, line splitting, simplification, smoothing, preview, and scoped batch editing."
 
 [Setup]
 ; Do not change this AppId in future versions. Keeping it stable allows
@@ -15,12 +15,12 @@ AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppComments={#MyAppDescription}
-DefaultDirName={localappdata}\Programs\KML Scoped Editor
+DefaultDirName={localappdata}\Programs\Simple KML Editor
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=..\artifacts\installer
-OutputBaseFilename=KML-Scoped-Editor-Setup-{#MyAppVersion}
+OutputBaseFilename=Simple-KML-Editor-Setup-{#MyAppVersion}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -45,7 +45,7 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 
 [Files]
 ; Include the complete self-contained publish output for the current source.
-; This includes the placemark preview UI and custom icon/KMZ support.
+; This includes the current Simple KML Editor UI, line editor, simplify/smooth tools, preview, and KMZ support.
 Source: "..\artifacts\publish\win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
