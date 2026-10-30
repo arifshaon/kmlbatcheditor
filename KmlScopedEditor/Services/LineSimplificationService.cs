@@ -46,6 +46,7 @@ public sealed class LineSimplificationService
         {
             return new LineSimplificationPreview(
                 geometryRevision,
+                options,
                 0,
                 0,
                 0,
@@ -65,6 +66,7 @@ public sealed class LineSimplificationService
         {
             return new LineSimplificationPreview(
                 geometryRevision,
+                options,
                 0,
                 0,
                 0,
@@ -92,6 +94,7 @@ public sealed class LineSimplificationService
 
             return new LineSimplificationPreview(
                 geometryRevision,
+                options,
                 targetLines.Count,
                 0,
                 pointCount,
@@ -211,6 +214,7 @@ public sealed class LineSimplificationService
 
         return new LineSimplificationPreview(
             geometryRevision,
+            options,
             targetLineCount,
             changedLineCount,
             originalPointCount,
@@ -2336,6 +2340,7 @@ public sealed record LineTopologyIssue(
 
 public sealed record LineSimplificationPreview(
     long GeometryRevision,
+    LineSimplificationOptions Options,
     int TargetLineCount,
     int ChangedLineCount,
     int OriginalPointCount,
