@@ -518,8 +518,7 @@ public partial class LineEditorWindow
     {
         var text =
             SimplifyToleranceComboBox
-                .Text?
-                .Trim() ??
+                .Text?.Trim() ??
             string.Empty;
 
         if (string.Equals(
