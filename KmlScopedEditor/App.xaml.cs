@@ -5,7 +5,7 @@ using KmlScopedEditor.Views;
 
 namespace KmlScopedEditor;
 
-public partial class App : Application
+public partial class App : System.Windows.Application
 {
     protected override async void OnStartup(
         StartupEventArgs e)
