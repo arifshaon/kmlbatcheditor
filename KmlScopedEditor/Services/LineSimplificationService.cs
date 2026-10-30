@@ -1306,19 +1306,17 @@ public sealed class LineSimplificationService
                     location);
             }
 
-            var leftEndpoint =
-                NearEndpoint(
-                    location,
-                    a,
-                    b);
-            var rightEndpoint =
-                NearEndpoint(
-                    location,
-                    c,
-                    d);
+            var leftLineEndpoint =
+                IsWholeLineEndpoint(
+                    left,
+                    location);
+            var rightLineEndpoint =
+                IsWholeLineEndpoint(
+                    right,
+                    location);
 
-            if (leftEndpoint &&
-                rightEndpoint)
+            if (leftLineEndpoint &&
+                rightLineEndpoint)
             {
                 return null;
             }
@@ -1386,7 +1384,13 @@ public sealed class LineSimplificationService
             1d - parameterEpsilon;
 
         if (tEndpoint &&
-            uEndpoint)
+            uEndpoint &&
+            IsWholeLineEndpoint(
+                left,
+                point) &&
+            IsWholeLineEndpoint(
+                right,
+                point))
         {
             return null;
         }
@@ -1398,19 +1402,31 @@ public sealed class LineSimplificationService
             point);
     }
 
-    private static bool NearEndpoint(
-        MetricPoint point,
-        MetricPoint start,
-        MetricPoint end)
+    private static bool IsWholeLineEndpoint(
+        TopologySegment segment,
+        MetricPoint point)
     {
-        return Distance(
-                   point,
-                   start) <=
-               TopologyLocationToleranceMetres ||
-               Distance(
-                   point,
-                   end) <=
-               TopologyLocationToleranceMetres;
+        if (segment.Closed)
+            return false;
+
+        var atSegmentStart =
+            Distance(
+                point,
+                segment.A) <=
+            TopologyLocationToleranceMetres;
+
+        var atSegmentEnd =
+            Distance(
+                point,
+                segment.B) <=
+            TopologyLocationToleranceMetres;
+
+        return
+            (atSegmentStart &&
+             segment.SegmentIndex == 0) ||
+            (atSegmentEnd &&
+             segment.SegmentIndex ==
+             segment.SegmentCount - 1);
     }
 
     private static bool BoundsOverlap(
