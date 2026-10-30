@@ -73,6 +73,26 @@ public partial class MainWindow : System.Windows.Window
             sessionState;
     }
 
+    private void OnAboutClick(
+        object sender,
+        RoutedEventArgs e)
+    {
+        var about =
+            new AboutWindow
+            {
+                Owner = this
+            };
+
+        about.ShowDialog();
+    }
+
+    private void OnExitClick(
+        object sender,
+        RoutedEventArgs e)
+    {
+        Close();
+    }
+
     private void OnTreeViewItemSelected(
         object sender,
         RoutedEventArgs e)
