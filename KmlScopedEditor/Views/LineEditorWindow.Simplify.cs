@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Xml.Linq;
@@ -22,7 +23,6 @@ public partial class LineEditorWindow
 
     private long _geometryRevision;
     private int _simplifyPreviewRequest;
-    private int _lastSimplifySelectionCount = -1;
     private bool _simplifyPanelInitializing;
 
     private void OnSimplifyOpenClick(
@@ -592,16 +592,8 @@ public partial class LineEditorWindow
             .Content =
             $"Only selected lines ({count:N0})";
 
-        if (count ==
-            _lastSimplifySelectionCount)
-        {
-            return;
-        }
-
-        _lastSimplifySelectionCount =
-            count;
-
-        if (SimplifyPanel.Visibility ==
+        if (!_simplifyPanelInitializing &&
+            SimplifyPanel.Visibility ==
                 Visibility.Visible &&
             SimplifySelectedRadioButton
                 .IsChecked == true)
@@ -634,12 +626,19 @@ public partial class LineEditorWindow
         {
             CancelSimplifyPreviewInternal(
                 collapsePanel: true);
+            return;
         }
-        else
+
+        var hadRenderedPreview =
+            _currentSimplifyPreview is not null;
+
+        CancelSimplifyPreviewComputation();
+        _currentSimplifyPreview = null;
+
+        if (hadRenderedPreview)
         {
-            CancelSimplifyPreviewComputation();
-            _currentSimplifyPreview = null;
-            EditorSurface.ClearSimplifyPreview();
+            EditorSurface
+                .ClearSimplifyPreview();
         }
     }
 
