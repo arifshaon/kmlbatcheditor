@@ -182,7 +182,7 @@
                                 Content="↶ Undo"
                                 Width="90"
                                 Height="30"
-                                ToolTip="Undo the last split-line edit, split, or deletion (Ctrl+Z)"
+                                ToolTip="Undo the most recent split-line edit, split, deletion, or simplify operation (Ctrl+Z)"
                                 Click="OnUndoClick" />
                     </StackPanel>
                 </Grid>
