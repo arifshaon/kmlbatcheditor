@@ -385,6 +385,7 @@
                             Height="30"
                             MinWidth="105"
                             Margin="0,0,6,0"
+                            ToolTip="Clear the current line selection."
                             Click="OnClearSelectionClick" />
                     <Button Grid.Column="1"
                             Focusable="False"
@@ -392,6 +393,7 @@
                             Height="30"
                             MinWidth="76"
                             Margin="0,0,6,0"
+                            ToolTip="Select unselected pieces and clear the pieces that are currently selected."
                             Click="OnInvertSelectionClick" />
                     <Button Grid.Column="2"
                             x:Name="Step3DeleteButton"
@@ -401,6 +403,7 @@
                             MinWidth="160"
                             Margin="0,0,8,0"
                             IsEnabled="False"
+                            ToolTip="Delete the selected split pieces. This can be undone."
                             Click="OnDeleteSelectedClick" />
                     <ToggleButton Grid.Column="3"
                                   x:Name="Step3LassoButton"
@@ -409,6 +412,7 @@
                                   Height="30"
                                   MinWidth="70"
                                   Margin="0,0,4,0"
+                                  ToolTip="Turn lasso selection on or off. Drag around pieces to select them."
                                   Checked="OnLassoModeChanged"
                                   Unchecked="OnLassoModeChanged" />
                     <ComboBox Grid.Column="4"
