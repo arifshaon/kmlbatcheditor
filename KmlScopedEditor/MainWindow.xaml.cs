@@ -46,8 +46,11 @@ public partial class MainWindow : System.Windows.Window
             _lineEditorSessionState = null;
         }
 
+        var editorDocument =
+            viewModel.CreateLineEditorDocumentSnapshot();
+
         var editor = new LineEditorWindow(
-            currentDocument,
+            editorDocument,
             System.IO.Path.GetFileName(
                 viewModel.DocumentContext.SourcePath),
             _lineEditorSessionState)
