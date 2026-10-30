@@ -7,7 +7,8 @@
         xmlns:models="clr-namespace:KmlScopedEditor.Models"
         xmlns:views="clr-namespace:KmlScopedEditor.Views"
         mc:Ignorable="d"
-        Title="KML Scoped Editor"
+        Title="Simple KML Editor"
+        Icon="/KmlScopedEditor;component/Assets/simple_kml_editor.ico"
         Height="820"
         Width="1380"
         MinHeight="680"
@@ -129,7 +130,25 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <StackPanel Grid.Column="0"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                        <Image Source="/KmlScopedEditor;component/Assets/simple_kml_editor.ico"
+                               Width="36"
+                               Height="36"
+                               Stretch="Uniform"
+                               Margin="0,0,8,0" />
+                        <TextBlock Text="Simple KML Editor"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="#173B6D"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,12,0" />
+                        <Border Width="1"
+                                Height="28"
+                                Background="#D9DEE7"
+                                Margin="0,0,12,0"
+                                VerticalAlignment="Center" />
                         <Button Content="📂 Open..."
                                 Width="92"
                                 Height="32"
