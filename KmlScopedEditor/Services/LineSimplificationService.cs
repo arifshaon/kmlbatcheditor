@@ -1479,8 +1479,6 @@ public sealed class LineSimplificationService
         private readonly double _cellHeight;
         private readonly int _columns;
         private readonly int _rows;
-        private readonly int[] _visitStamp;
-        private int _queryStamp;
 
         public TopologySegmentGrid(
             IReadOnlyList<TopologySegment> segments,
@@ -1590,23 +1588,6 @@ public sealed class LineSimplificationService
             Buckets =>
             _buckets.Values;
 
-        private int NextQueryStamp()
-        {
-            if (_queryStamp ==
-                int.MaxValue)
-            {
-                Array.Clear(
-                    _visitStamp,
-                    0,
-                    _visitStamp.Length);
-
-                _queryStamp = 0;
-            }
-
-            _queryStamp++;
-            return _queryStamp;
-        }
-
         private int ColumnFor(
             double x)
         {
@@ -1659,6 +1640,8 @@ public sealed class LineSimplificationService
         private readonly double _cellHeight;
         private readonly int _columns;
         private readonly int _rows;
+        private readonly int[] _visitStamp;
+        private int _queryStamp;
 
         public MetricSegmentGrid(
             IReadOnlyList<MetricPoint> points)
@@ -1952,6 +1935,23 @@ public sealed class LineSimplificationService
                             segment.A,
                             segment.B));
             }
+        }
+
+        private int NextQueryStamp()
+        {
+            if (_queryStamp ==
+                int.MaxValue)
+            {
+                Array.Clear(
+                    _visitStamp,
+                    0,
+                    _visitStamp.Length);
+
+                _queryStamp = 0;
+            }
+
+            _queryStamp++;
+            return _queryStamp;
         }
 
         private int ColumnFor(
