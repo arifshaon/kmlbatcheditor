@@ -1,0 +1,71 @@
+<Window x:Class="KmlScopedEditor.Views.SplashWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="520"
+        Height="310"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterScreen"
+        Topmost="True">
+    <Border Background="White"
+            BorderBrush="#D6DEE8"
+            BorderThickness="1"
+            CornerRadius="14"
+            Padding="28">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="24"
+                              ShadowDepth="4"
+                              Opacity="0.22"
+                              Color="#243B64" />
+        </Border.Effect>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center">
+                <Border Width="128"
+                        Height="128"
+                        CornerRadius="24"
+                        Background="#F3F8FD"
+                        Padding="12">
+                    <Image Source="{StaticResource AppIcon}"
+                           Stretch="Uniform" />
+                </Border>
+
+                <TextBlock Text="Simple KML Editor"
+                           Margin="0,18,0,4"
+                           FontSize="28"
+                           FontWeight="SemiBold"
+                           Foreground="#173B6D"
+                           HorizontalAlignment="Center" />
+
+                <TextBlock Text="Edit · Split · Simplify · Style"
+                           FontSize="14"
+                           Foreground="#64748B"
+                           HorizontalAlignment="Center" />
+            </StackPanel>
+
+            <StackPanel Grid.Row="1"
+                        Margin="0,16,0,0">
+                <ProgressBar Height="3"
+                             IsIndeterminate="True"
+                             Foreground="#2F6FCC"
+                             Background="#E8EEF6" />
+
+                <TextBlock x:Name="VersionText"
+                           Margin="0,9,0,0"
+                           FontSize="11"
+                           Foreground="#94A3B8"
+                           HorizontalAlignment="Center" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>
