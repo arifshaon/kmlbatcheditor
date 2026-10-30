@@ -235,8 +235,15 @@ public partial class LineEditorWindow
         UpdatePendingGuidePreview();
         UpdateCutScopeDisplay();
 
+        var operationLabel =
+            preview.Options.ToleranceMetres > 0d
+                ? preview.Options.Smooth
+                    ? "Simplified/smoothed"
+                    : "Simplified"
+                : "Smoothed";
+
         UpdateStatus(
-            $"Simplified {changed:N0} line(s): " +
+            $"{operationLabel} {changed:N0} line(s): " +
             $"{preview.OriginalPointCount:N0} → " +
             $"{preview.ResultPointCount:N0} points; " +
             $"maximum measured deviation " +
