@@ -17,7 +17,8 @@ public partial class App : Application
 
         splash.Show();
 
-        await Dispatcher.Yield(
+        await Dispatcher.InvokeAsync(
+            () => { },
             DispatcherPriority.Render);
 
         var minimumDisplay =
@@ -37,6 +38,7 @@ public partial class App : Application
         splash.Close();
 
         ShutdownMode =
-            ShutdownMode.OnMainWindowClose;
+            System.Windows.ShutdownMode
+                .OnMainWindowClose;
     }
 }
