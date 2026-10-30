@@ -998,7 +998,7 @@ public sealed class KmlLineGeometryService
             OpenRingTrimDegrees;
 
         for (var attempt = 0;
-             attempt < 10 &&
+             attempt < 24 &&
              result.Count >= 3 &&
              HasLength(result) &&
              CoordinateDistanceMetres(
@@ -1013,6 +1013,16 @@ public sealed class KmlLineGeometryService
                     additionalTrim);
 
             additionalTrim *= 2d;
+        }
+
+        if (result.Count < 3 ||
+            !HasLength(result) ||
+            CoordinateDistanceMetres(
+                result[0],
+                result[^1]) <
+            minimumGapMetres)
+        {
+            return new List<KmlCoordinate>();
         }
 
         return result;
