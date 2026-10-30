@@ -11,6 +11,8 @@ on:
       - "Build-Release.ps1"
       - "Build-Installer.cmd"
       - "Build-Portable.cmd"
+      - "README.md"
+      - "PACKAGING.md"
       - ".github/workflows/windows-release.yml"
 
 jobs:
