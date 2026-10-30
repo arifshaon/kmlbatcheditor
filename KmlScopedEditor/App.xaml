@@ -34,11 +34,34 @@
                         </GeometryDrawing.Pen>
                     </GeometryDrawing>
 
-                    <GeometryDrawing Brush="#1E64B7"
-                                     Geometry="M 12,38 m -3,0 a 3,3 0 1,0 6,0 a 3,3 0 1,0 -6,0
-                                               M 22,28 m -3,0 a 3,3 0 1,0 6,0 a 3,3 0 1,0 -6,0
-                                               M 34,34 m -3,0 a 3,3 0 1,0 6,0 a 3,3 0 1,0 -6,0
-                                               M 55,30 m -3,0 a 3,3 0 1,0 6,0 a 3,3 0 1,0 -6,0" />
+                    <GeometryDrawing Brush="#1E64B7">
+                        <GeometryDrawing.Geometry>
+                            <EllipseGeometry Center="12,38"
+                                             RadiusX="3"
+                                             RadiusY="3" />
+                        </GeometryDrawing.Geometry>
+                    </GeometryDrawing>
+                    <GeometryDrawing Brush="#1E64B7">
+                        <GeometryDrawing.Geometry>
+                            <EllipseGeometry Center="22,28"
+                                             RadiusX="3"
+                                             RadiusY="3" />
+                        </GeometryDrawing.Geometry>
+                    </GeometryDrawing>
+                    <GeometryDrawing Brush="#1E64B7">
+                        <GeometryDrawing.Geometry>
+                            <EllipseGeometry Center="34,34"
+                                             RadiusX="3"
+                                             RadiusY="3" />
+                        </GeometryDrawing.Geometry>
+                    </GeometryDrawing>
+                    <GeometryDrawing Brush="#1E64B7">
+                        <GeometryDrawing.Geometry>
+                            <EllipseGeometry Center="55,30"
+                                             RadiusX="3"
+                                             RadiusY="3" />
+                        </GeometryDrawing.Geometry>
+                    </GeometryDrawing>
 
                     <GeometryDrawing Brush="{x:Null}"
                                      Geometry="M 45,15 L 40,44">
@@ -55,9 +78,13 @@
                         <GeometryDrawing.Pen>
                             <Pen Brush="#E52B2B"
                                  Thickness="4"
-                                 DashStyle="{DynamicResource {x:Static DashStyles.Dash}}"
                                  StartLineCap="Round"
-                                 EndLineCap="Round" />
+                                 EndLineCap="Round">
+                                <Pen.DashStyle>
+                                    <DashStyle Dashes="2,1"
+                                               Offset="0" />
+                                </Pen.DashStyle>
+                            </Pen>
                         </GeometryDrawing.Pen>
                     </GeometryDrawing>
                 </DrawingGroup>
