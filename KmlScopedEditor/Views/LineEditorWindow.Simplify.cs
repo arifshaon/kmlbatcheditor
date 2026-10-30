@@ -300,7 +300,17 @@ public partial class LineEditorWindow
             return;
         }
 
+        var hadRenderedPreview =
+            _currentSimplifyPreview is not null;
+
         CancelSimplifyPreviewComputation();
+        _currentSimplifyPreview = null;
+
+        if (hadRenderedPreview)
+        {
+            EditorSurface
+                .ClearSimplifyPreview();
+        }
 
         var cancellation =
             new CancellationTokenSource();
