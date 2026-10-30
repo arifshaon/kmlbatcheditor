@@ -1,0 +1,49 @@
+name: Build Windows release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "KmlScopedEditor/**"
+      - "Installer/**"
+      - "Build-Release.ps1"
+      - "Build-Installer.cmd"
+      - "Build-Portable.cmd"
+      - ".github/workflows/windows-release.yml"
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup -y --no-progress
+
+      - name: Build portable package and installer
+        shell: powershell
+        run: .\Build-Release.ps1 -Installer
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Simple-KML-Editor-Setup-1.2.0
+          path: artifacts/installer/Simple-KML-Editor-Setup-1.2.0.exe
+          if-no-files-found: error
+
+      - name: Upload portable Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Simple-KML-Editor-Portable-1.2.0-win-x64
+          path: artifacts/portable/Simple-KML-Editor-Portable-1.2.0-win-x64.zip
+          if-no-files-found: error
