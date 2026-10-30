@@ -20,12 +20,14 @@
                         <Button Content="Previous"
                                 Command="{Binding PreviousPreviewPlacemarkCommand}"
                                 MinWidth="78"
-                                Height="28" />
+                                Height="28"
+                                ToolTip="Show the previous placemark in the preview." />
                         <Button Content="Next"
                                 Command="{Binding NextPreviewPlacemarkCommand}"
                                 MinWidth="68"
                                 Height="28"
-                                Margin="6,0,0,0" />
+                                Margin="6,0,0,0"
+                                ToolTip="Show the next placemark in the preview." />
                     </StackPanel>
 
                     <StackPanel>
@@ -208,7 +210,8 @@
                         Command="{Binding OpenPreviewInGoogleEarthCommand}"
                         Width="210"
                         Height="32"
-                        HorizontalAlignment="Left" />
+                        HorizontalAlignment="Left"
+                        ToolTip="Open a temporary preview of the selected changes in Google Earth." />
             </StackPanel>
         </Border>
     </StackPanel>
