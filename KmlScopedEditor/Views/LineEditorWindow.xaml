@@ -49,6 +49,7 @@
                         <ToggleButton Focusable="False"
                                       x:Name="Step1Button"
                                       Style="{StaticResource StepButtonStyle}"
+                                      ToolTip="Step 1: optionally select and delete whole lines before splitting."
                                       Click="OnStep1Click">
                             <StackPanel Orientation="Horizontal">
                                 <Border Width="22" Height="22"
@@ -80,6 +81,7 @@
                         <ToggleButton Focusable="False"
                                       x:Name="Step2Button"
                                       Style="{StaticResource StepButtonStyle}"
+                                      ToolTip="Step 2: import, draw or choose line(s) to use for splitting."
                                       Click="OnStep2Click">
                             <StackPanel Orientation="Horizontal">
                                 <Border Width="22" Height="22"
@@ -111,6 +113,7 @@
                         <ToggleButton Focusable="False"
                                       x:Name="Step3Button"
                                       Style="{StaticResource StepButtonStyle}"
+                                      ToolTip="Step 3: select and remove unwanted pieces after splitting."
                                       Click="OnStep3Click">
                             <StackPanel Orientation="Horizontal">
                                 <Border Width="22" Height="22"
@@ -204,6 +207,7 @@
                             Height="30"
                             MinWidth="105"
                             Margin="0,0,6,0"
+                            ToolTip="Clear the current line selection."
                             Click="OnClearSelectionClick" />
                     <Button Grid.Column="1"
                             Focusable="False"
@@ -211,6 +215,7 @@
                             Height="30"
                             MinWidth="76"
                             Margin="0,0,6,0"
+                            ToolTip="Select unselected lines and clear the lines that are currently selected."
                             Click="OnInvertSelectionClick" />
                     <Button Grid.Column="2"
                             x:Name="Step1DeleteButton"
@@ -220,6 +225,7 @@
                             MinWidth="150"
                             Margin="0,0,8,0"
                             IsEnabled="False"
+                            ToolTip="Delete the currently selected line(s). This can be undone."
                             Click="OnDeleteSelectedClick" />
                     <ToggleButton Grid.Column="3"
                                   x:Name="Step1LassoButton"
@@ -228,6 +234,7 @@
                                   Height="30"
                                   MinWidth="70"
                                   Margin="0,0,4,0"
+                                  ToolTip="Turn lasso selection on or off. Drag a shape around lines to select them."
                                   Checked="OnLassoModeChanged"
                                   Unchecked="OnLassoModeChanged" />
                     <ComboBox Grid.Column="4"
@@ -273,6 +280,7 @@
                             Height="30"
                             MinWidth="142"
                             Margin="0,0,6,0"
+                            ToolTip="Import one or more line geometries from another KML or KMZ file as pending split lines."
                             Click="OnImportSplitLineClick" />
 
                     <Button Grid.Column="1"
@@ -291,6 +299,7 @@
                             Height="30"
                             MinWidth="132"
                             Margin="0,0,6,0"
+                            ToolTip="Copy the selected map line and use it as another pending split line."
                             Click="OnUseSelectedAsSplitLineClick" />
 
                     <Button Grid.Column="3"
@@ -301,6 +310,7 @@
                             MinWidth="130"
                             Margin="0,0,10,0"
                             IsEnabled="False"
+                            ToolTip="Remove the current pending split line(s) without changing the map."
                             Click="OnRemovePendingSplitLineClick" />
 
                     <Border Grid.Column="4"
@@ -538,6 +548,7 @@
                                 Height="30"
                                 MinWidth="108"
                                 Margin="0,0,6,0"
+                                ToolTip="Close the simplify preview without changing any geometry."
                                 Click="OnSimplifyCancelClick" />
 
                         <Button Grid.Column="6"
@@ -550,6 +561,7 @@
                                 Background="#2F6FCC"
                                 Foreground="White"
                                 FontWeight="SemiBold"
+                                ToolTip="Apply exactly the simplified or smoothed geometry shown in the preview."
                                 Click="OnSimplifyApplyClick" />
                     </Grid>
                 </Border>
@@ -591,6 +603,7 @@
                             Content="Cancel — discard"
                             Width="120"
                             Height="32"
+                            ToolTip="Close the Line Editor and discard geometry changes made in this session."
                             Click="OnCancelClick" />
                     <Button Focusable="False"
                             Content="Done — keep changes"
@@ -723,24 +736,28 @@
                             Content="+  Zoom in"
                             Width="112"
                             Height="29"
+                            ToolTip="Zoom in on the map."
                             Click="OnZoomInClick" />
                     <Button Focusable="False"
                             Content="−  Zoom out"
                             Width="112"
                             Height="29"
                             Margin="0,4,0,0"
+                            ToolTip="Zoom out from the map."
                             Click="OnZoomOutClick" />
                     <Button Focusable="False"
                             Content="↗ Fit"
                             Width="112"
                             Height="29"
                             Margin="0,4,0,0"
+                            ToolTip="Fit all current line geometry into the map view."
                             Click="OnFitViewClick" />
                     <Button Focusable="False"
                             Content="To selection"
                             Width="112"
                             Height="29"
                             Margin="0,4,0,0"
+                            ToolTip="Zoom the map to the currently selected line(s)."
                             Click="OnZoomSelectionClick" />
                 </StackPanel>
             </Grid>
