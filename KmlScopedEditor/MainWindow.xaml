@@ -8,7 +8,7 @@
         xmlns:views="clr-namespace:KmlScopedEditor.Views"
         mc:Ignorable="d"
         Title="Simple KML Editor"
-        Icon="/KmlScopedEditor;component/Assets/simple_kml_editor.ico"
+        Icon="{StaticResource AppIcon}"
         Height="820"
         Width="1380"
         MinHeight="680"
