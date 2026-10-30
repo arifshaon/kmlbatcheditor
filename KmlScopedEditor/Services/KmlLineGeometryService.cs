@@ -21,6 +21,7 @@ public sealed class KmlLineGeometryService
 
     private const double CoordinateToleranceDegrees = 0.000000001d;
     private const double OpenRingTrimDegrees = 0.0000001d;
+    private const double MinimumOpenRingGapMetres = 0.01d;
 
     private readonly XDocument _document;
     private readonly double? _fixedLongitudeScale;
@@ -809,6 +810,10 @@ public sealed class KmlLineGeometryService
                 opened,
                 OpenRingTrimDegrees);
 
+            opened = EnsureMinimumOpenEndpointGap(
+                opened,
+                MinimumOpenRingGapMetres);
+
             return HasLength(opened) && !IsClosed(opened)
                 ? new List<List<KmlCoordinate>> { opened }
                 : new List<List<KmlCoordinate>>();
@@ -912,6 +917,86 @@ public sealed class KmlLineGeometryService
         TrimEndByDegrees(result, trimDegrees);
 
         return RemoveConsecutiveDuplicates(result);
+    }
+
+    private static List<KmlCoordinate>
+        EnsureMinimumOpenEndpointGap(
+            IReadOnlyList<KmlCoordinate> points,
+            double minimumGapMetres)
+    {
+        var result = points.ToList();
+
+        if (result.Count < 3 ||
+            minimumGapMetres <= 0d)
+        {
+            return result;
+        }
+
+        var additionalTrim =
+            OpenRingTrimDegrees;
+
+        for (var attempt = 0;
+             attempt < 10 &&
+             result.Count >= 3 &&
+             HasLength(result) &&
+             CoordinateDistanceMetres(
+                 result[0],
+                 result[^1]) <
+             minimumGapMetres;
+             attempt++)
+        {
+            result =
+                TrimPolylineEndsByDegrees(
+                    result,
+                    additionalTrim);
+
+            additionalTrim *= 2d;
+        }
+
+        return result;
+    }
+
+    private static double CoordinateDistanceMetres(
+        KmlCoordinate a,
+        KmlCoordinate b)
+    {
+        var meanLatitudeRadians =
+            ((a.Latitude + b.Latitude) / 2d) *
+            Math.PI / 180d;
+
+        var metresPerLatitudeDegree =
+            111132.92d -
+            (559.82d *
+             Math.Cos(
+                 2d * meanLatitudeRadians)) +
+            (1.175d *
+             Math.Cos(
+                 4d * meanLatitudeRadians)) -
+            (0.0023d *
+             Math.Cos(
+                 6d * meanLatitudeRadians));
+
+        var metresPerLongitudeDegree =
+            (111412.84d *
+             Math.Cos(
+                 meanLatitudeRadians)) -
+            (93.5d *
+             Math.Cos(
+                 3d * meanLatitudeRadians)) +
+            (0.118d *
+             Math.Cos(
+                 5d * meanLatitudeRadians));
+
+        var dx =
+            (b.Longitude - a.Longitude) *
+            metresPerLongitudeDegree;
+        var dy =
+            (b.Latitude - a.Latitude) *
+            metresPerLatitudeDegree;
+
+        return Math.Sqrt(
+            (dx * dx) +
+            (dy * dy));
     }
 
     private static void TrimStartByDegrees(
