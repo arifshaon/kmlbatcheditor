@@ -55,6 +55,52 @@ public sealed class LineSimplificationService
                 Array.Empty<LineTopologyIssue>());
         }
 
+        var targetLines =
+            usableLines
+                .Where(line =>
+                    line.IsTarget)
+                .ToList();
+
+        if (targetLines.Count == 0)
+        {
+            return new LineSimplificationPreview(
+                geometryRevision,
+                0,
+                0,
+                0,
+                0,
+                0d,
+                Array.Empty<LineSimplificationReplacement>(),
+                Array.Empty<LineTopologyIssue>());
+        }
+
+        if (options.ToleranceMetres <= 0d &&
+            !options.Smooth)
+        {
+            var noOpReplacements =
+                targetLines
+                    .Select(line =>
+                        new LineSimplificationReplacement(
+                            line.FeatureIndex,
+                            line.Coordinates,
+                            false))
+                    .ToList();
+
+            var pointCount =
+                targetLines.Sum(line =>
+                    line.Coordinates.Count);
+
+            return new LineSimplificationPreview(
+                geometryRevision,
+                targetLines.Count,
+                0,
+                pointCount,
+                pointCount,
+                0d,
+                noOpReplacements,
+                Array.Empty<LineTopologyIssue>());
+        }
+
         var baseline =
             GetOrCreateBaseline(
                 usableLines,
