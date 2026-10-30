@@ -67,7 +67,7 @@
                 </Grid.ColumnDefinitions>
 
                 <CheckBox Grid.Column="0"
-                          IsThreeState="True"
+                          IsThreeState="False"
                           IsChecked="{Binding IsChecked, Mode=TwoWay}"
                           VerticalAlignment="Top"
                           Margin="0,2,7,0"
