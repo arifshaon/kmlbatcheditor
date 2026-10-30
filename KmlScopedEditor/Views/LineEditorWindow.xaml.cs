@@ -2161,6 +2161,14 @@ public partial class LineEditorWindow : Window
         object sender,
         KeyEventArgs e)
     {
+        if (SimplifyPanel.Visibility ==
+                Visibility.Visible &&
+            SimplifyToleranceComboBox
+                .IsKeyboardFocusWithin)
+        {
+            return;
+        }
+
         var control =
             (Keyboard.Modifiers & ModifierKeys.Control) ==
             ModifierKeys.Control;
