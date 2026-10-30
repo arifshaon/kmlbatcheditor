@@ -43,7 +43,7 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
     $Version = "1.0.0"
 }
 
-Write-Host "Publishing KML Scoped Editor $Version for Windows x64..." -ForegroundColor Cyan
+Write-Host "Publishing Simple KML Editor $Version for Windows x64..." -ForegroundColor Cyan
 
 foreach ($Path in @($PublishDir, $PortableDir)) {
     if (Test-Path -LiteralPath $Path) {
@@ -77,7 +77,7 @@ if (-not (Test-Path -LiteralPath $PublishedExe)) {
     throw "Publish completed, but KmlScopedEditor.exe was not found in $PublishDir"
 }
 
-$PortableZip = Join-Path $PortableDir "KML-Scoped-Editor-Portable-$Version-win-x64.zip"
+$PortableZip = Join-Path $PortableDir "Simple-KML-Editor-Portable-$Version-win-x64.zip"
 Compress-Archive `
     -Path (Join-Path $PublishDir "*") `
     -DestinationPath $PortableZip `
@@ -132,7 +132,7 @@ if ($LASTEXITCODE -ne 0) {
 
 $Setup = Get-ChildItem `
     -LiteralPath $InstallerDir `
-    -Filter "KML-Scoped-Editor-Setup-*.exe" |
+    -Filter "Simple-KML-Editor-Setup-*.exe" |
     Sort-Object LastWriteTime -Descending |
     Select-Object -First 1
 
