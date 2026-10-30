@@ -8,6 +8,11 @@ namespace KmlScopedEditor.Services;
 /// </summary>
 public sealed class LineSimplificationService
 {
+    private readonly object _baselineGate =
+        new();
+
+    private BaselineCache? _baselineCache;
+
     private const double ClosedToleranceDegrees = 0.000000001d;
     private const int OutputDecimalPlaces = 8;
     private const double TopologyGridTargetMetres = 40d;
@@ -50,11 +55,14 @@ public sealed class LineSimplificationService
                 Array.Empty<LineTopologyIssue>());
         }
 
+        var baseline =
+            GetOrCreateBaseline(
+                usableLines,
+                geometryRevision,
+                cancellationToken);
+
         var projection =
-            MetricProjection.Create(
-                usableLines
-                    .SelectMany(line =>
-                        line.Coordinates));
+            baseline.Projection;
 
         var replacements =
             new List<LineSimplificationReplacement>();
@@ -127,23 +135,20 @@ public sealed class LineSimplificationService
                         item => item.FeatureIndex,
                         item => item.Coordinates);
 
-            var beforeLines =
-                BuildMetricLines(
-                    usableLines,
-                    null,
-                    projection);
-
             var afterLines =
-                BuildMetricLines(
-                    usableLines,
+                BuildMetricLinesFromBaseline(
+                    baseline.Lines,
                     replacementsByIndex,
                     projection);
 
             var beforeIssues =
-                FindTopologyIssues(
-                    beforeLines,
-                    changedFeatureIndices,
-                    cancellationToken);
+                baseline.Issues
+                    .Where(issue =>
+                        changedFeatureIndices.Contains(
+                            issue.FirstFeatureIndex) ||
+                        changedFeatureIndices.Contains(
+                            issue.SecondFeatureIndex))
+                    .ToList();
 
             var afterIssues =
                 FindTopologyIssues(
@@ -167,6 +172,124 @@ public sealed class LineSimplificationService
             maximumDeviationMetres,
             replacements,
             newIssues);
+    }
+
+    private BaselineCache GetOrCreateBaseline(
+        IReadOnlyList<LineSimplificationInput> lines,
+        long geometryRevision,
+        CancellationToken cancellationToken)
+    {
+        var totalPointCount =
+            lines.Sum(line =>
+                line.Coordinates.Count);
+
+        lock (_baselineGate)
+        {
+            if (_baselineCache is not null &&
+                _baselineCache.GeometryRevision ==
+                    geometryRevision &&
+                _baselineCache.FeatureCount ==
+                    lines.Count &&
+                _baselineCache.TotalPointCount ==
+                    totalPointCount)
+            {
+                return _baselineCache;
+            }
+        }
+
+        var projection =
+            MetricProjection.Create(
+                lines.SelectMany(line =>
+                    line.Coordinates));
+
+        var metricLines =
+            BuildMetricLines(
+                lines,
+                null,
+                projection);
+
+        var allFeatureIndices =
+            metricLines
+                .Select(line =>
+                    line.FeatureIndex)
+                .ToHashSet();
+
+        var issues =
+            FindTopologyIssues(
+                metricLines,
+                allFeatureIndices,
+                cancellationToken);
+
+        var created =
+            new BaselineCache(
+                geometryRevision,
+                lines.Count,
+                totalPointCount,
+                projection,
+                metricLines,
+                issues);
+
+        lock (_baselineGate)
+        {
+            if (_baselineCache is null ||
+                _baselineCache.GeometryRevision <=
+                    geometryRevision)
+            {
+                _baselineCache =
+                    created;
+            }
+
+            if (_baselineCache.GeometryRevision ==
+                    geometryRevision &&
+                _baselineCache.FeatureCount ==
+                    lines.Count &&
+                _baselineCache.TotalPointCount ==
+                    totalPointCount)
+            {
+                return _baselineCache;
+            }
+        }
+
+        return created;
+    }
+
+    private static IReadOnlyList<MetricLine>
+        BuildMetricLinesFromBaseline(
+            IReadOnlyList<MetricLine> baselineLines,
+            IReadOnlyDictionary<
+                int,
+                IReadOnlyList<KmlCoordinate>>
+                replacements,
+            MetricProjection projection)
+    {
+        var result =
+            new List<MetricLine>(
+                baselineLines.Count);
+
+        foreach (var baselineLine in
+                 baselineLines)
+        {
+            if (!replacements.TryGetValue(
+                    baselineLine.FeatureIndex,
+                    out var coordinates))
+            {
+                result.Add(
+                    baselineLine);
+                continue;
+            }
+
+            result.Add(
+                new MetricLine(
+                    baselineLine.FeatureIndex,
+                    coordinates
+                        .Select(
+                            projection.Project)
+                        .ToList(),
+                    IsClosed(
+                        coordinates)));
+        }
+
+        return result;
     }
 
     private static IReadOnlyList<KmlCoordinate>
@@ -1374,6 +1497,14 @@ public sealed class LineSimplificationService
             (dy * dy));
     }
 
+    private sealed record BaselineCache(
+        long GeometryRevision,
+        int FeatureCount,
+        int TotalPointCount,
+        MetricProjection Projection,
+        IReadOnlyList<MetricLine> Lines,
+        IReadOnlyList<MetricTopologyIssue> Issues);
+
     private readonly record struct MetricPoint(
         double X,
         double Y);
@@ -2024,10 +2155,20 @@ public sealed class LineSimplificationService
         public static MetricProjection Create(
             IEnumerable<KmlCoordinate> coordinates)
         {
-            var points =
-                coordinates.ToList();
+            var count = 0L;
+            var longitudeTotal = 0d;
+            var latitudeTotal = 0d;
 
-            if (points.Count == 0)
+            foreach (var point in coordinates)
+            {
+                count++;
+                longitudeTotal +=
+                    point.Longitude;
+                latitudeTotal +=
+                    point.Latitude;
+            }
+
+            if (count == 0)
             {
                 return new MetricProjection(
                     0d,
@@ -2037,14 +2178,10 @@ public sealed class LineSimplificationService
             }
 
             var referenceLongitude =
-                points.Average(
-                    point =>
-                        point.Longitude);
+                longitudeTotal / count;
 
             var referenceLatitude =
-                points.Average(
-                    point =>
-                        point.Latitude);
+                latitudeTotal / count;
 
             var latitudeRadians =
                 referenceLatitude *
