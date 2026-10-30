@@ -4,11 +4,11 @@
         Title="About Simple KML Editor"
         Icon="{StaticResource AppIcon}"
         Width="540"
-        Height="500"
+        Height="560"
         MinWidth="540"
-        MinHeight="500"
+        MinHeight="560"
         MaxWidth="540"
-        MaxHeight="500"
+        MaxHeight="560"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
         Background="#F7F9FC"
@@ -24,7 +24,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
@@ -77,13 +77,14 @@
                         VerticalAlignment="Top">
                 <Separator Margin="0,0,0,14" />
 
-                <TextBlock FontSize="12"
-                           Foreground="#334155"
-                           Margin="0,0,0,8"
-                           TextAlignment="Center">
+                <TextBlock FontSize="13"
+                           Foreground="#173B6D"
+                           Margin="0,0,0,10"
+                           TextAlignment="Center"
+                           HorizontalAlignment="Center">
+                    <Run Text="Developed by " />
                     <Run FontWeight="SemiBold"
-                         Text="Developer: " />
-                    <Run Text="Arif Shaon" />
+                         Text="Arif Shaon" />
                 </TextBlock>
 
                 <TextBlock FontSize="12"
