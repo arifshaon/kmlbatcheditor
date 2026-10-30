@@ -118,6 +118,34 @@
 
     <Grid>
         <DockPanel IsEnabled="{Binding IsNotBusy}">
+            <Menu DockPanel.Dock="Top"
+                  Background="#F8FAFC"
+                  BorderBrush="#D9DEE7"
+                  BorderThickness="0,0,0,1">
+                <MenuItem Header="_File">
+                    <MenuItem Header="_Open..."
+                              Command="{Binding OpenKmlCommand}"
+                              ToolTip="Open a KML or KMZ file." />
+                    <MenuItem Header="_Save As..."
+                              Command="{Binding SaveAsCommand}"
+                              ToolTip="Save the current working document as a new KML or KMZ file." />
+                    <Separator />
+                    <MenuItem Header="Edit _Lines..."
+                              IsEnabled="{Binding HasLoadedDocument}"
+                              ToolTip="Open the Line Editor for the loaded file."
+                              Click="OnLineEditorClick" />
+                    <Separator />
+                    <MenuItem Header="E_xit"
+                              ToolTip="Close Simple KML Editor."
+                              Click="OnExitClick" />
+                </MenuItem>
+                <MenuItem Header="_Help">
+                    <MenuItem Header="_About Simple KML Editor"
+                              ToolTip="Show version and application information."
+                              Click="OnAboutClick" />
+                </MenuItem>
+            </Menu>
+
             <Border DockPanel.Dock="Top"
                     Background="White"
                     BorderBrush="#D9DEE7"
@@ -136,12 +164,14 @@
                         <Button Content="📂 Open..."
                                 Width="92"
                                 Height="32"
-                                Command="{Binding OpenKmlCommand}" />
+                                Command="{Binding OpenKmlCommand}"
+                                ToolTip="Open a KML or KMZ file." />
                         <Button Content="💾 Save As..."
                                 Width="110"
                                 Height="32"
                                 Margin="8,0,0,0"
-                                Command="{Binding SaveAsCommand}" />
+                                Command="{Binding SaveAsCommand}"
+                                ToolTip="Save the current working document as a new KML or KMZ file." />
                         <Button Content="✎ Edit Lines..."
                                 Width="116"
                                 Height="32"
@@ -183,7 +213,8 @@
                             Command="{Binding DismissNotificationCommand}"
                             Width="26"
                             Height="22"
-                            Margin="10,0,0,0" />
+                            Margin="10,0,0,0"
+                            ToolTip="Dismiss this message." />
                     <TextBlock Text="{Binding NotificationText}"
                                VerticalAlignment="Center"
                                TextWrapping="Wrap" />
@@ -274,27 +305,32 @@
                                                   Content="Tree item"
                                                   IsChecked="{Binding IsFolderSelectionMode, Mode=OneWay}"
                                                   Command="{Binding SetSelectionModeCommand}"
-                                                  CommandParameter="Folder" />
+                                                  CommandParameter="Folder"
+                                                  ToolTip="Target placemarks under the tree item you select." />
                                     <ToggleButton Style="{StaticResource ModeButtonStyle}"
                                                   Content="Ticked"
                                                   IsChecked="{Binding IsTickedSelectionMode, Mode=OneWay}"
                                                   Command="{Binding SetSelectionModeCommand}"
-                                                  CommandParameter="Ticked" />
+                                                  CommandParameter="Ticked"
+                                                  ToolTip="Target the placemarks you have ticked in the tree." />
                                     <ToggleButton Style="{StaticResource ModeButtonStyle}"
                                                   Content="Placemark name"
                                                   IsChecked="{Binding IsPlacemarkNameSelectionMode, Mode=OneWay}"
                                                   Command="{Binding SetSelectionModeCommand}"
-                                                  CommandParameter="PlacemarkName" />
+                                                  CommandParameter="PlacemarkName"
+                                                  ToolTip="Target placemarks by matching their names." />
                                     <ToggleButton Style="{StaticResource ModeButtonStyle}"
                                                   Content="Icon image"
                                                   IsChecked="{Binding IsIconImageSelectionMode, Mode=OneWay}"
                                                   Command="{Binding SetSelectionModeCommand}"
-                                                  CommandParameter="IconImage" />
+                                                  CommandParameter="IconImage"
+                                                  ToolTip="Target placemarks that use selected icon images." />
                                     <ToggleButton Style="{StaticResource ModeButtonStyle}"
                                                   Content="Icon variant"
                                                   IsChecked="{Binding IsIconVariantSelectionMode, Mode=OneWay}"
                                                   Command="{Binding SetSelectionModeCommand}"
-                                                  CommandParameter="IconVariant" />
+                                                  CommandParameter="IconVariant"
+                                                  ToolTip="Target placemarks that use selected icon/style variants." />
                                 </WrapPanel>
 
                                 <StackPanel Visibility="{Binding IsFolderSelectionMode, Converter={StaticResource BooleanToVisibilityConverter}}"
@@ -321,12 +357,14 @@
                                                 Command="{Binding TickAllCommand}"
                                                 MinWidth="76"
                                                 Height="28"
-                                                Margin="0,0,6,0" />
+                                                Margin="0,0,6,0"
+                                                ToolTip="Tick every item in the tree." />
                                         <Button Content="Untick all"
                                                 Command="{Binding UntickAllCommand}"
                                                 MinWidth="86"
                                                 Height="28"
-                                                Margin="0,0,10,0" />
+                                                Margin="0,0,10,0"
+                                                ToolTip="Clear all ticks in the tree." />
                                         <TextBlock Text="{Binding SelectionSummary}"
                                                    Foreground="#52606D"
                                                    VerticalAlignment="Center" />
@@ -444,7 +482,8 @@
                                                 Command="{Binding PickLineColorCommand}"
                                                 IsEnabled="{Binding EditSettings.ChangeLineColor}"
                                                 MinWidth="82"
-                                                Margin="0,2,0,2" />
+                                                Margin="0,2,0,2"
+                                                ToolTip="Choose the new line colour." />
 
                                         <CheckBox Grid.Row="1" Grid.Column="0"
                                                   Content="Line width"
@@ -515,7 +554,8 @@
                                                 Content="Browse..."
                                                 Command="{Binding BrowseIconFileCommand}"
                                                 MinWidth="82"
-                                                Margin="0,2,0,2" />
+                                                Margin="0,2,0,2"
+                                                ToolTip="Choose an icon image file to use." />
 
                                         <CheckBox Grid.Row="1" Grid.Column="0"
                                                   Content="Icon size"
@@ -541,7 +581,8 @@
                                                 Command="{Binding PickIconColorCommand}"
                                                 IsEnabled="{Binding EditSettings.ChangeIconColor}"
                                                 MinWidth="82"
-                                                Margin="0,2,0,2" />
+                                                Margin="0,2,0,2"
+                                                ToolTip="Choose the new icon colour." />
 
                                         <CheckBox Grid.Row="3" Grid.Column="0"
                                                   Content="Icon opacity"
@@ -609,7 +650,8 @@
                                                 Command="{Binding PickLabelColorCommand}"
                                                 IsEnabled="{Binding EditSettings.ChangeLabelColor}"
                                                 MinWidth="82"
-                                                Margin="0,2,0,2" />
+                                                Margin="0,2,0,2"
+                                                ToolTip="Choose the new label text colour." />
 
                                         <CheckBox Grid.Row="2" Grid.Column="0"
                                                   Content="Text opacity"
@@ -686,7 +728,8 @@
                                         FontWeight="SemiBold"
                                         Padding="16,7"
                                         Margin="16,0,12,0"
-                                        MinWidth="150" />
+                                        MinWidth="150"
+                                        ToolTip="Apply the selected style changes to the current working document." />
 
                                 <TextBlock Grid.Column="2"
                                            Text="Your original file is not changed until you use Save As."
@@ -799,7 +842,8 @@
                                 Visibility="{Binding CanCancelCurrentOperation, Converter={StaticResource BooleanToVisibilityConverter}}"
                                 Width="100"
                                 Height="32"
-                                HorizontalAlignment="Right" />
+                                HorizontalAlignment="Right"
+                                ToolTip="Cancel the current file operation." />
                     </StackPanel>
                 </Border>
             </Grid>
