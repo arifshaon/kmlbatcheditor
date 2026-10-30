@@ -1761,7 +1761,7 @@ public sealed class LineSimplificationService
         }
 
         public IEnumerable<
-            IReadOnlyList<TopologySegment>>
+            List<TopologySegment>>
             Buckets =>
             _buckets.Values;
 
