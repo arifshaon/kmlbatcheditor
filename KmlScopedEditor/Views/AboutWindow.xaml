@@ -14,109 +14,107 @@
         Background="#F7F9FC"
         ShowInTaskbar="False">
     <Border Margin="18"
-            Padding="24"
             Background="White"
             BorderBrush="#D9E0E9"
             BorderThickness="1"
             CornerRadius="10">
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="64" />
             </Grid.RowDefinitions>
 
-            <Border Grid.Row="0"
-                    Width="122"
-                    Height="122"
-                    CornerRadius="22"
-                    Background="#F3F8FD"
-                    Padding="12"
-                    HorizontalAlignment="Center">
-                <Image Source="{StaticResource AppIcon}"
-                       Stretch="Uniform" />
+            <ScrollViewer Grid.Row="0"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          Padding="24,24,24,12">
+                <StackPanel>
+                    <Border Width="122"
+                            Height="122"
+                            CornerRadius="22"
+                            Background="#F3F8FD"
+                            Padding="12"
+                            HorizontalAlignment="Center">
+                        <Image Source="{StaticResource AppIcon}"
+                               Stretch="Uniform" />
+                    </Border>
+
+                    <TextBlock Text="Simple KML Editor"
+                               Margin="0,16,0,0"
+                               FontSize="25"
+                               FontWeight="SemiBold"
+                               Foreground="#173B6D"
+                               HorizontalAlignment="Center" />
+
+                    <TextBlock x:Name="VersionText"
+                               Margin="0,4,0,0"
+                               FontSize="12"
+                               Foreground="#64748B"
+                               HorizontalAlignment="Center" />
+
+                    <TextBlock Text="Edit, split, simplify and style KML/KMZ files."
+                               Margin="18,18,18,0"
+                               FontSize="14"
+                               Foreground="#334155"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap" />
+
+                    <TextBlock Text="A focused desktop editor for working with KML and KMZ geometry, placemark styles and line-based map data without needing a full GIS application."
+                               Margin="18,10,18,0"
+                               FontSize="12"
+                               LineHeight="18"
+                               Foreground="#64748B"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap" />
+
+                    <Separator Margin="24,20,24,14" />
+
+                    <TextBlock FontSize="13"
+                               Foreground="#173B6D"
+                               Margin="0,0,0,10"
+                               TextAlignment="Center"
+                               HorizontalAlignment="Center">
+                        <Run Text="Developed by " />
+                        <Run FontWeight="SemiBold"
+                             Text="Arif Shaon" />
+                    </TextBlock>
+
+                    <TextBlock FontSize="12"
+                               Foreground="#334155"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap">
+                        <Run FontWeight="SemiBold"
+                             Text="Project repository: " />
+                        <Hyperlink NavigateUri="https://github.com/arifshaon/kmlbatcheditor"
+                                   ToolTip="Open the Simple KML Editor GitHub repository."
+                                   RequestNavigate="OnGitHubLinkClick">
+                            github.com/arifshaon/kmlbatcheditor
+                        </Hyperlink>
+                    </TextBlock>
+
+                    <TextBlock Text="© 2026 Arif Shaon"
+                               Margin="0,16,0,6"
+                               FontSize="11"
+                               Foreground="#94A3B8"
+                               HorizontalAlignment="Center" />
+                </StackPanel>
+            </ScrollViewer>
+
+            <Border Grid.Row="1"
+                    Background="#FAFBFD"
+                    BorderBrush="#E2E8F0"
+                    BorderThickness="0,1,0,0"
+                    Padding="14,10">
+                <Button Content="Close"
+                        Width="96"
+                        Height="34"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        IsDefault="True"
+                        IsCancel="True"
+                        ToolTip="Close this About window."
+                        Click="OnCloseClick" />
             </Border>
-
-            <StackPanel Grid.Row="1"
-                        Margin="0,16,0,0"
-                        HorizontalAlignment="Center">
-                <TextBlock Text="Simple KML Editor"
-                           FontSize="25"
-                           FontWeight="SemiBold"
-                           Foreground="#173B6D"
-                           HorizontalAlignment="Center" />
-
-                <TextBlock x:Name="VersionText"
-                           Margin="0,4,0,0"
-                           FontSize="12"
-                           Foreground="#64748B"
-                           HorizontalAlignment="Center" />
-            </StackPanel>
-
-            <StackPanel Grid.Row="2"
-                        Margin="18,18,18,0">
-                <TextBlock Text="Edit, split, simplify and style KML/KMZ files."
-                           FontSize="14"
-                           Foreground="#334155"
-                           TextAlignment="Center"
-                           TextWrapping="Wrap" />
-
-                <TextBlock Text="A focused desktop editor for working with KML and KMZ geometry, placemark styles and line-based map data without needing a full GIS application."
-                           Margin="0,10,0,0"
-                           FontSize="12"
-                           LineHeight="18"
-                           Foreground="#64748B"
-                           TextAlignment="Center"
-                           TextWrapping="Wrap" />
-            </StackPanel>
-
-            <StackPanel Grid.Row="3"
-                        Margin="24,20,24,0"
-                        VerticalAlignment="Top">
-                <Separator Margin="0,0,0,14" />
-
-                <TextBlock FontSize="13"
-                           Foreground="#173B6D"
-                           Margin="0,0,0,10"
-                           TextAlignment="Center"
-                           HorizontalAlignment="Center">
-                    <Run Text="Developed by " />
-                    <Run FontWeight="SemiBold"
-                         Text="Arif Shaon" />
-                </TextBlock>
-
-                <TextBlock FontSize="12"
-                           Foreground="#334155"
-                           TextAlignment="Center"
-                           TextWrapping="Wrap">
-                    <Run FontWeight="SemiBold"
-                         Text="Project repository: " />
-                    <Hyperlink NavigateUri="https://github.com/arifshaon/kmlbatcheditor"
-                               ToolTip="Open the Simple KML Editor GitHub repository."
-                               RequestNavigate="OnGitHubLinkClick">
-                        github.com/arifshaon/kmlbatcheditor
-                    </Hyperlink>
-                </TextBlock>
-
-                <TextBlock Text="© 2026 Arif Shaon"
-                           Margin="0,16,0,0"
-                           FontSize="11"
-                           Foreground="#94A3B8"
-                           HorizontalAlignment="Center" />
-            </StackPanel>
-
-            <Button Grid.Row="4"
-                    Content="Close"
-                    Width="90"
-                    Height="32"
-                    Margin="0,20,0,0"
-                    HorizontalAlignment="Right"
-                    IsDefault="True"
-                    IsCancel="True"
-                    ToolTip="Close this About window."
-                    Click="OnCloseClick" />
         </Grid>
     </Border>
 </Window>
