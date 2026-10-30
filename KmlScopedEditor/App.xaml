@@ -4,6 +4,64 @@
              xmlns:local="clr-namespace:KmlScopedEditor"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
+        <DrawingImage x:Key="AppIcon">
+            <DrawingImage.Drawing>
+                <DrawingGroup>
+                    <GeometryDrawing Brush="#F8FBFF"
+                                     Geometry="M 4,6 L 20,2 L 34,8 L 50,3 L 60,8 L 58,54 L 42,59 L 28,52 L 12,58 L 4,52 Z">
+                        <GeometryDrawing.Pen>
+                            <Pen Brush="#173B6D"
+                                 Thickness="3"
+                                 LineJoin="Round" />
+                        </GeometryDrawing.Pen>
+                    </GeometryDrawing>
+
+                    <GeometryDrawing Brush="#9BDD63"
+                                     Geometry="M 7,10 L 20,6 L 28,11 L 27,48 L 13,53 L 7,49 Z" />
+                    <GeometryDrawing Brush="#42B979"
+                                     Geometry="M 20,6 L 34,12 L 33,49 L 28,52 L 27,48 L 28,11 Z" />
+                    <GeometryDrawing Brush="#34A8D8"
+                                     Geometry="M 34,12 L 50,7 L 56,11 L 55,49 L 42,54 L 33,49 Z" />
+
+                    <GeometryDrawing Brush="{x:Null}"
+                                     Geometry="M 12,38 L 22,28 L 34,34 L 47,24 L 55,30">
+                        <GeometryDrawing.Pen>
+                            <Pen Brush="White"
+                                 Thickness="4"
+                                 StartLineCap="Round"
+                                 EndLineCap="Round"
+                                 LineJoin="Round" />
+                        </GeometryDrawing.Pen>
+                    </GeometryDrawing>
+
+                    <GeometryDrawing Brush="#1E64B7"
+                                     Geometry="M 12,38 m -3,0 a 3,3 0 1,0 6,0 a 3,3 0 1,0 -6,0
+                                               M 22,28 m -3,0 a 3,3 0 1,0 6,0 a 3,3 0 1,0 -6,0
+                                               M 34,34 m -3,0 a 3,3 0 1,0 6,0 a 3,3 0 1,0 -6,0
+                                               M 55,30 m -3,0 a 3,3 0 1,0 6,0 a 3,3 0 1,0 -6,0" />
+
+                    <GeometryDrawing Brush="{x:Null}"
+                                     Geometry="M 45,15 L 40,44">
+                        <GeometryDrawing.Pen>
+                            <Pen Brush="White"
+                                 Thickness="7"
+                                 StartLineCap="Round"
+                                 EndLineCap="Round" />
+                        </GeometryDrawing.Pen>
+                    </GeometryDrawing>
+
+                    <GeometryDrawing Brush="{x:Null}"
+                                     Geometry="M 45,15 L 40,44">
+                        <GeometryDrawing.Pen>
+                            <Pen Brush="#E52B2B"
+                                 Thickness="4"
+                                 DashStyle="{DynamicResource {x:Static DashStyles.Dash}}"
+                                 StartLineCap="Round"
+                                 EndLineCap="Round" />
+                        </GeometryDrawing.Pen>
+                    </GeometryDrawing>
+                </DrawingGroup>
+            </DrawingImage.Drawing>
+        </DrawingImage>
     </Application.Resources>
 </Application>
