@@ -30,6 +30,7 @@ public sealed class LineEditorSurface : FrameworkElement
 {
     private readonly DrawingVisual _baseVisual = new();
     private readonly DrawingVisual _selectionVisual = new();
+    private readonly DrawingVisual _simplifyPreviewVisual = new();
     private readonly DrawingVisual _overlayVisual = new();
     private readonly VisualCollection _visualLayers;
 
@@ -43,6 +44,11 @@ public sealed class LineEditorSurface : FrameworkElement
     private IReadOnlyList<Point> _appliedCutPoints = Array.Empty<Point>();
     private IReadOnlyList<Point> _draftCutPoints = Array.Empty<Point>();
     private Point? _draftCutPreviewPoint;
+    private IReadOnlyList<IReadOnlyList<Point>> _simplifyPreviewLines =
+        Array.Empty<IReadOnlyList<Point>>();
+    private IReadOnlyList<Point> _simplifyWarningPoints =
+        Array.Empty<Point>();
+    private bool _simplifyPreviewActive;
     private List<Point> _editableGuidePoints = new();
     private int _dragGuideVertexIndex = -1;
     private readonly Dictionary<XElement, StreamGeometry> _featureGeometry = new();
@@ -63,6 +69,9 @@ public sealed class LineEditorSurface : FrameworkElement
     private Pen? _selectStrokePen;
     private Pen? _splitStrokePen;
     private Pen? _lassoPen;
+    private Pen? _simplifyPreviewPen;
+    private Pen? _simplifyWarningPen;
+    private SolidColorBrush? _simplifyWarningBrush;
     private SolidColorBrush? _lassoFillBrush;
     private SolidColorBrush? _splitVertexBrush;
     private SolidColorBrush? _splitPointBrush;
@@ -103,6 +112,7 @@ public sealed class LineEditorSurface : FrameworkElement
         {
             _baseVisual,
             _selectionVisual,
+            _simplifyPreviewVisual,
             _overlayVisual
         };
 
@@ -285,6 +295,57 @@ public sealed class LineEditorSurface : FrameworkElement
         _dragGuideVertexIndex = -1;
         EnsureRenderCache();
         RedrawOverlayLayer();
+    }
+
+    public void SetSimplifyPreview(
+        IReadOnlyList<IReadOnlyList<Point>> lines,
+        IReadOnlyList<Point> warningPoints)
+    {
+        _simplifyPreviewLines =
+            lines ??
+            Array.Empty<IReadOnlyList<Point>>();
+
+        _simplifyWarningPoints =
+            warningPoints ??
+            Array.Empty<Point>();
+
+        _simplifyPreviewActive =
+            _simplifyPreviewLines.Count > 0;
+
+        var originalOpacity =
+            _simplifyPreviewActive
+                ? 0.30d
+                : 1d;
+
+        _baseVisual.Opacity =
+            originalOpacity;
+        _selectionVisual.Opacity =
+            originalOpacity;
+
+        EnsureRenderCache();
+        RedrawSimplifyPreviewLayer();
+        RedrawOverlayLayer();
+        InvalidateVisual();
+    }
+
+    public void ClearSimplifyPreview()
+    {
+        _simplifyPreviewLines =
+            Array.Empty<IReadOnlyList<Point>>();
+        _simplifyWarningPoints =
+            Array.Empty<Point>();
+        _simplifyPreviewActive = false;
+
+        _baseVisual.Opacity = 1d;
+        _selectionVisual.Opacity = 1d;
+
+        using (_simplifyPreviewVisual.RenderOpen())
+        {
+        }
+
+        EnsureRenderCache();
+        RedrawOverlayLayer();
+        InvalidateVisual();
     }
 
     public void SetHovered(XElement? hovered)
@@ -945,7 +1006,8 @@ public sealed class LineEditorSurface : FrameworkElement
             }
         }
 
-        if (_cutPoints.Count > 0)
+        if (!_simplifyPreviewActive &&
+            _cutPoints.Count > 0)
         {
             var radius = 2.6d / safeScale;
 
@@ -994,6 +1056,64 @@ public sealed class LineEditorSurface : FrameworkElement
         }
     }
 
+    private void RedrawSimplifyPreviewLayer()
+    {
+        using var context =
+            _simplifyPreviewVisual
+                .RenderOpen();
+
+        if (!_simplifyPreviewActive ||
+            _simplifyPreviewPen is null)
+        {
+            return;
+        }
+
+        var safeScale =
+            Math.Max(
+                double.IsFinite(
+                    _renderScaleBucket)
+                    ? _renderScaleBucket
+                    : _scale,
+                0.000001d);
+
+        var simplifyTolerance =
+            0.55d / safeScale;
+
+        foreach (var line in
+                 _simplifyPreviewLines)
+        {
+            if (line.Count < 2)
+                continue;
+
+            context.DrawGeometry(
+                null,
+                _simplifyPreviewPen,
+                BuildGeometry(
+                    line,
+                    simplifyTolerance));
+        }
+
+        if (_simplifyWarningPen is null ||
+            _simplifyWarningBrush is null)
+        {
+            return;
+        }
+
+        var radius =
+            7d / safeScale;
+
+        foreach (var point in
+                 _simplifyWarningPoints)
+        {
+            context.DrawEllipse(
+                _simplifyWarningBrush,
+                _simplifyWarningPen,
+                point,
+                radius,
+                radius);
+        }
+    }
+
     private void RefreshViewLayers()
     {
         EnsureRenderCache();
@@ -1006,6 +1126,7 @@ public sealed class LineEditorSurface : FrameworkElement
 
         _baseVisual.Transform = transform;
         _selectionVisual.Transform = transform;
+        _simplifyPreviewVisual.Transform = transform;
         _overlayVisual.Transform = transform;
     }
 
@@ -1138,6 +1259,10 @@ public sealed class LineEditorSurface : FrameworkElement
         {
         }
 
+        using (_simplifyPreviewVisual.RenderOpen())
+        {
+        }
+
         using (_overlayVisual.RenderOpen())
         {
         }
@@ -1214,6 +1339,22 @@ public sealed class LineEditorSurface : FrameworkElement
             2.0d / safeScale,
             DashStyles.Dash);
 
+        _simplifyPreviewPen = CreatePen(
+            Color.FromRgb(33, 63, 91),
+            2.2d / safeScale);
+
+        _simplifyWarningPen = CreatePen(
+            Color.FromRgb(210, 38, 38),
+            2.2d / safeScale);
+
+        _simplifyWarningBrush =
+            CreateFrozenBrush(
+                Color.FromArgb(
+                    30,
+                    210,
+                    38,
+                    38));
+
         _lassoFillBrush = CreateFrozenBrush(
             Color.FromArgb(
                 36,
@@ -1266,6 +1407,7 @@ public sealed class LineEditorSurface : FrameworkElement
         RebuildGuideGeometry();
         DrawBaseLayer();
         RedrawSelectionLayer();
+        RedrawSimplifyPreviewLayer();
         RedrawOverlayLayer();
         UpdateLayerTransforms();
     }
