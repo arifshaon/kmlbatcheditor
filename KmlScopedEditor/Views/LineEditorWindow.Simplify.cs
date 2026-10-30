@@ -164,7 +164,7 @@ public partial class LineEditorWindow
                 ". These locations are marked in red on the map.\n\nApply anyway?";
 
             var result =
-                MessageBox.Show(
+                System.Windows.MessageBox.Show(
                     this,
                     message,
                     "Simplify topology warning",
