@@ -521,6 +521,68 @@ public sealed class KmlLineGeometryService
             splitPoints);
     }
 
+    public int ApplyCoordinateReplacements(
+        IReadOnlyDictionary<
+            XElement,
+            IReadOnlyList<KmlCoordinate>> replacements)
+    {
+        ArgumentNullException.ThrowIfNull(
+            replacements);
+
+        if (replacements.Count == 0)
+            return 0;
+
+        var updatedFeatures =
+            Features.ToList();
+
+        var changed = 0;
+
+        for (var index = 0;
+             index < updatedFeatures.Count;
+             index++)
+        {
+            var feature =
+                updatedFeatures[index];
+
+            if (!replacements.TryGetValue(
+                    feature.LineStringElement,
+                    out var coordinates) ||
+                coordinates.Count < 2)
+            {
+                continue;
+            }
+
+            var coordinateElement =
+                feature.LineStringElement
+                    .Element(
+                        KmlNs + "coordinates");
+
+            if (coordinateElement is null)
+                continue;
+
+            coordinateElement.Value =
+                FormatEditedCoordinates(
+                    coordinates);
+
+            updatedFeatures[index] =
+                CreateFeature(
+                    feature.LineStringElement,
+                    feature.Name,
+                    coordinates);
+
+            changed++;
+        }
+
+        if (changed > 0)
+        {
+            Features = updatedFeatures;
+            RecalculateWorldBounds();
+            BuildSpatialIndex();
+        }
+
+        return changed;
+    }
+
     public int DeleteLines(IEnumerable<XElement> lineStrings)
     {
         var lines = lineStrings
@@ -1534,6 +1596,54 @@ public sealed class KmlLineGeometryService
 
                 return $"{longitude},{latitude},{altitude}";
             }));
+    }
+
+    private static string FormatEditedCoordinates(
+        IReadOnlyList<KmlCoordinate> coordinates)
+    {
+        var closed =
+            IsClosed(coordinates);
+
+        return string.Join(
+            " ",
+            coordinates.Select(
+                (point, index) =>
+                {
+                    var keepEndpointExact =
+                        !closed &&
+                        (index == 0 ||
+                         index ==
+                         coordinates.Count - 1);
+
+                    var format =
+                        keepEndpointExact
+                            ? "R"
+                            : "0.########";
+
+                    var longitude =
+                        point.Longitude.ToString(
+                            format,
+                            CultureInfo.InvariantCulture);
+
+                    var latitude =
+                        point.Latitude.ToString(
+                            format,
+                            CultureInfo.InvariantCulture);
+
+                    if (!point.Altitude.HasValue)
+                    {
+                        return
+                            $"{longitude},{latitude}";
+                    }
+
+                    var altitude =
+                        point.Altitude.Value.ToString(
+                            "R",
+                            CultureInfo.InvariantCulture);
+
+                    return
+                        $"{longitude},{latitude},{altitude}";
+                }));
     }
 
     private static bool IsClosed(
