@@ -1686,11 +1686,16 @@ public partial class LineEditorWindow : Window
                     group.First())
                 .ToList();
 
+        if (helperRemovalTargets.Count > 0)
+        {
+            _geometry.DeleteLines(
+                helperRemovalTargets);
+        }
+
         var helperLinesRemoved =
-            helperRemovalTargets.Count > 0
-                ? _geometry.DeleteLines(
-                    helperRemovalTargets)
-                : 0;
+            allHelperElements.Count(element =>
+                element.Document !=
+                _workingDocument);
 
         var helperConsumedGuideIds =
             helperElementsByGuide
