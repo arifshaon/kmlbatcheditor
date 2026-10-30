@@ -1,8 +1,8 @@
-# KML Scoped Editor
+# Simple KML Editor
 
 A Windows desktop application for safely batch-editing placemark styles and interactively editing line geometry in Google Earth **KML** and **KMZ** files.
 
-KML Scoped Editor lets you select placemarks by tree item, placemark name, icon image, or icon variant, then change one or more style properties without deliberately changing unrelated placemark data or style settings.
+Simple KML Editor lets you select placemarks by tree item, placemark name, icon image, or icon variant, then change one or more style properties without deliberately changing unrelated placemark data or style settings.
 
 The application is built with **C#**, **.NET 8**, and **WPF**.
 
@@ -10,7 +10,7 @@ The application is built with **C#**, **.NET 8**, and **WPF**.
 
 ## What the application does
 
-KML Scoped Editor is designed for controlled changes across large groups of Google Earth placemarks.
+Simple KML Editor is designed for controlled changes across large groups of Google Earth placemarks.
 
 You can change:
 
@@ -46,8 +46,8 @@ For example, you can change the text colour of every placemark in a folder while
 - Supports cancellation where an operation can be stopped safely.
 - Displays clear success, warning, and error notifications.
 - Saves the edited document as a new KML or KMZ file.
-- Includes an experimental Line Editor for selecting, splitting, and deleting KML LineString geometry.
-- Supports zoom, pan, fit-to-view, invert selection, and undo while line editing.
+- Includes a Line Editor for selecting, splitting, deleting, simplifying, and smoothing KML LineString geometry.
+- Supports additive pending split lines, topology warnings, zoom, pan, fit-to-view, lasso selection, and chronological undo while line editing.
 
 ---
 
@@ -61,12 +61,12 @@ The Line Editor follows the manual cleanup workflow directly:
 
 Nothing needs to be selected for a normal split. By default, any line crossed by the split path can be split. To deliberately restrict the operation, select the target lines first and tick **Only split the selected lines**.
 
-There is one **Apply split** action for both imported and drawn split paths; **Enter** does the same thing. Double-click finishes a drawn path but does not apply it automatically. The preview summary reports how many lines and intersection points would be split.
+Imported, drawn, and **Use selected line** split paths can coexist as pending split lines. **Enter**, double-click, or **Finish Drawing Here** only finishes the current drawing; they never apply a split. Only **Apply split** changes the geometry. The preview summary reports how many lines and intersection points would be split.
 
 After a successful split, the editor advances to **Remove pieces** and hides the temporary split overlay. **Done — keep changes** returns the geometry edits to the loaded working document; **Cancel — discard** closes without keeping them. The main-window **Save As** command is still required to write a KML/KMZ file to disk.
 
-Navigation: **right-drag** or **Space+drag** pans from any step; middle-drag also pans; the mouse wheel and on-map controls zoom; **F** fits the view; **To selection** fits highlighted lines. **Ctrl+Z** undoes the last split/deletion.
+Navigation: **right-drag** or **Space+drag** pans from any step; middle-drag also pans; the mouse wheel and on-map controls zoom; **F** fits the view; **To selection** fits highlighted lines. **Ctrl+Z** undoes the newest action across geometry edits and pending split-line edits.
 
 Imported split lines are temporary overlays and are not saved into the output KML/KMZ.
 
-For large contour files, the Line Editor uses a shared spatial grid for hit-testing/splitting, retained rendering layers, and display-only Douglas–Peucker simplification. These optimizations do not change the stored KML coordinates.
+For large contour files, the Line Editor uses spatial indexing and retained drawing layers for performance. The explicit **Simplify / smooth...** feature can reduce stored coordinates using a metre-based tolerance, optionally smooth curves, preview measured deviation, and warn about newly introduced crossings before Apply.
