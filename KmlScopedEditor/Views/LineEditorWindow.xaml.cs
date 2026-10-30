@@ -453,7 +453,13 @@ public partial class LineEditorWindow : Window
 
     private void SetWorkflowStep(int step)
     {
-        _workflowStep = Math.Clamp(step, 1, 3);
+        var nextStep =
+            Math.Clamp(step, 1, 3);
+
+        CloseSimplifyPreviewForWorkflowChange(
+            nextStep);
+
+        _workflowStep = nextStep;
 
         Step1Button.IsChecked = _workflowStep == 1;
         Step2Button.IsChecked = _workflowStep == 2;
@@ -1743,6 +1749,7 @@ public partial class LineEditorWindow : Window
             PushDocumentUndo(snapshot);
             _pendingEditUndo.Clear();
             _pendingGuideDragUndoState = null;
+            MarkGeometryChanged();
         }
 
         RefreshSurface();
@@ -1819,6 +1826,7 @@ public partial class LineEditorWindow : Window
         }
 
         PushDocumentUndo(snapshot);
+        MarkGeometryChanged();
         _selected.Clear();
 
         RefreshSurface();
@@ -1919,6 +1927,8 @@ public partial class LineEditorWindow : Window
                 _workingDocument,
                 _projectionScale);
 
+        MarkGeometryChanged();
+
         _hasPerformedCut =
             state.HasPerformedCut;
 
@@ -1946,7 +1956,9 @@ public partial class LineEditorWindow : Window
 
         _cutPoints.Clear();
 
-        if (state.Kind == UndoActionKind.Deletion)
+        if (state.Kind is
+            UndoActionKind.Deletion or
+            UndoActionKind.Simplify)
         {
             _cutPoints.AddRange(
                 state.CutPoints);
@@ -1969,11 +1981,17 @@ public partial class LineEditorWindow : Window
             _guides.Any(guide => !guide.Applied);
 
         UpdateStatus(
-            state.Kind == UndoActionKind.Split
-                ? restoredPendingSplit
-                    ? "Split undone — the split line is ready to apply again."
-                    : "Split undone."
-                : "Deletion undone.");
+            state.Kind switch
+            {
+                UndoActionKind.Split =>
+                    restoredPendingSplit
+                        ? "Split undone — the split line is ready to apply again."
+                        : "Split undone.",
+                UndoActionKind.Simplify =>
+                    "Simplify undone.",
+                _ =>
+                    "Deletion undone."
+            });
     }
 
     private void HandleStep2Delete()
@@ -2282,6 +2300,9 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        CancelSimplifyPreviewInternal(
+            collapsePanel: true);
+
         if (_draftCutPoints.Count >= 2)
         {
             CommitDraftCutAsPendingGuide();
@@ -2345,6 +2366,9 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        CancelSimplifyPreviewInternal(
+            collapsePanel: true);
+
         _pendingEditUndo.Clear();
         _pendingGuideDragUndoState = null;
         DialogResult = false;
@@ -2756,6 +2780,7 @@ public partial class LineEditorWindow : Window
             ToolHintForCurrentTool();
 
         UpdateScopeText();
+        UpdateSimplifySelectionState();
     }
 
     private string ToolHintForCurrentTool()
@@ -3258,10 +3283,15 @@ public partial class LineEditorWindow : Window
         else if (_undo.Count > 0)
         {
             tooltip =
-                _undo.Peek().Kind ==
-                    UndoActionKind.Split
-                    ? "Undo the last applied split (Ctrl+Z)"
-                    : "Undo the last line deletion (Ctrl+Z)";
+                _undo.Peek().Kind switch
+                {
+                    UndoActionKind.Split =>
+                        "Undo the last applied split (Ctrl+Z)",
+                    UndoActionKind.Simplify =>
+                        "Undo the last simplify operation (Ctrl+Z)",
+                    _ =>
+                        "Undo the last line deletion (Ctrl+Z)"
+                };
         }
         else
         {
@@ -3348,7 +3378,8 @@ public partial class LineEditorWindow : Window
     private enum UndoActionKind
     {
         Split,
-        Deletion
+        Deletion,
+        Simplify
     }
 
     private sealed record GuideUndoState(
