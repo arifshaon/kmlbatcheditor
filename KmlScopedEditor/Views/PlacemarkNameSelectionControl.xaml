@@ -47,12 +47,14 @@
             <Button Content="Select visible"
                     Command="{Binding SelectVisiblePlacemarkNamesCommand}"
                     MinWidth="100"
-                    Height="28" />
+                    Height="28"
+                    ToolTip="Select all placemark names currently shown by the filter." />
             <Button Content="Clear all"
                     Command="{Binding ClearPlacemarkNameSelectionsCommand}"
                     MinWidth="90"
                     Height="28"
-                    Margin="6,0,0,0" />
+                    Margin="6,0,0,0"
+                    ToolTip="Clear all selected placemark names." />
             <TextBlock Text="{Binding PlacemarkNameSearchSummary}"
                        Foreground="#52606D"
                        VerticalAlignment="Center"
