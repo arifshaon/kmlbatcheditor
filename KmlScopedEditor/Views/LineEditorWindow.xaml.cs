@@ -101,6 +101,8 @@ public partial class LineEditorWindow : Window
         EditorSurface.ContextRequested += OnContextRequested;
         EditorSurface.EditableGuideChanged += OnEditableGuideChanged;
         PreviewKeyDown += OnPreviewKeyDown;
+        Closed += (_, _) =>
+            CancelSimplifyPreviewComputation();
 
         Loaded += (_, _) =>
         {
@@ -1898,7 +1900,7 @@ public partial class LineEditorWindow : Window
             !hasDocumentUndo)
         {
             UpdateStatus(
-                "There is no split-line edit, split, or deletion to undo.");
+                "There is no split-line edit, split, deletion, or simplify operation to undo.");
             return;
         }
 
