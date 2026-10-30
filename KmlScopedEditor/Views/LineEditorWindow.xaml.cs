@@ -2851,7 +2851,7 @@ public partial class LineEditorWindow : Window
                     new LineEditorGuideVisual(
                         ProjectGuide(
                             guide.Guide),
-                        guide.Applied)
+                        guide.Applied))
                 .ToList();
 
         EditorSurface.SetDocument(
