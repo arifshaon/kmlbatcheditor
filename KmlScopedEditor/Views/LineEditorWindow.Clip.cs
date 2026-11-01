@@ -646,7 +646,8 @@ public partial class LineEditorWindow
                 classification
                     .DeletedLines.Count,
                 overlay,
-                cutPointsByGuide);
+                cutPointsByGuide,
+                openBoundary);
 
         return true;
     }
@@ -716,40 +717,8 @@ public partial class LineEditorWindow
             }
         }
 
-        RemoveHelperLinesFromGeometry(
-            _geometry,
-            pending);
-
-        var open =
-            pending
-                .Where(
-                    guide =>
-                        !guide.Guide.IsClosed)
-                .ToList();
-
-        PreparedOpenBoundary?
-            openBoundary = null;
-
-        if (open.Count == 1)
-        {
-            var openPoints =
-                ProjectGuide(
-                    open[0].Guide)
-                .ToList();
-
-            if (!KmlBoundaryClipService
-                    .TryPrepareOpenBoundary(
-                        openPoints,
-                        _geometry.WorldBounds,
-                        previewState.DirectionSampleDistance,
-                        out openBoundary,
-                        out error))
-            {
-                ClearCutTargetMarkers();
-                UpdateStatus(error);
-                return;
-            }
-        }
+        var openBoundary =
+            previewPlan.OpenBoundary;
 
         var totalLinesSplit = 0;
         var applySequence =
@@ -761,6 +730,10 @@ public partial class LineEditorWindow
 
         try
         {
+            RemoveHelperLinesFromGeometry(
+                _geometry,
+                pending);
+
             foreach (var guide in pending)
             {
                 IReadOnlyList<Point> stroke =
@@ -1027,7 +1000,8 @@ public partial class LineEditorWindow
         LineEditorClipPreviewOverlay Overlay,
         IReadOnlyDictionary<
             Guid,
-            List<Point>> CutPointsByGuide)
+            List<Point>> CutPointsByGuide,
+        PreparedOpenBoundary? OpenBoundary)
     {
         public static ClipPlan Empty { get; } =
             new(
@@ -1045,6 +1019,7 @@ public partial class LineEditorWindow
                         IReadOnlyList<Point>>()),
                 new Dictionary<
                     Guid,
-                    List<Point>>());
+                    List<Point>>(),
+                null);
     }
 }
