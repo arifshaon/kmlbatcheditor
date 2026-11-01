@@ -367,160 +367,183 @@ public partial class LineEditorWindow
         return true;
     }
 
-    private void BuildAndShowClipPreview(
-        ClipMode mode,
-        Point? keepPoint)
+    // Each asynchronous preview has a generation. Cancelling or editing a
+    // boundary invalidates old results even if worker calculation completes.
+    private long _clipPreviewGeneration;
+    private bool _clipPreviewInProgress;
+
+    private async void BuildAndShowClipPreview(
+        ClipMode mode, Point? keepPoint)
     {
-        if (!TryPrepareGuidesForClip(
-                out var pending))
-        {
+        if (!TryPrepareGuidesForClip(out var pending))
             return;
-        }
 
         var directionSampleDistance =
-            EditorSurface
-                .WorldToleranceFromPixels(
-                    10d);
+            EditorSurface.WorldToleranceFromPixels(10d);
 
-        if (!TryBuildClipPlan(
-                pending,
-                mode,
-                keepPoint,
-                directionSampleDistance,
-                out var plan,
-                out var error))
+        if (!TryCaptureClipWork(pending, mode, keepPoint,
+                out var work, out var captureError))
         {
-            CancelClipPreviewInternal(
-                updateStatus: false);
-            if (pending.Count == 1 &&
-                !pending[0].Guide.IsClosed &&
-                error.Contains("doesn’t divide", StringComparison.Ordinal))
-                OfferToCloseRefusedClipGuide(pending[0]);
-            else
-                UpdateStatus(error);
+            UpdateStatus(captureError);
             return;
         }
 
-        _clipPreviewState = new ClipPreviewState(
-            mode,
-            keepPoint,
-            plan,
-            _geometryRevision,
-            OnlySplitSelectedCheckBox.IsChecked == true,
-            GetValidSelectedLines().ToHashSet(),
-            CaptureClipGuides(pending));
+        CancelClipPreviewInternal(updateStatus: false);
+        var generation = ++_clipPreviewGeneration;
+        var geometryRevision = _geometryRevision;
+        var onlySelected = OnlySplitSelectedCheckBox.IsChecked == true;
+        var selectedLines = GetValidSelectedLines().ToHashSet();
+        var guideVersions = CaptureClipGuides(pending);
+        _clipPreviewInProgress = true;
+        ApplyClipButton.IsEnabled = false;
+        CancelClipPreviewButton.IsEnabled = true;
+        ClipPreviewSummaryText.Text = "Calculating clip preview...";
+        UpdateStatus("Calculating clip preview. No geometry has been changed.");
 
-        EditorSurface.SetClipPreview(
-            plan.Overlay);
+        try
+        {
+            // Work owns a separate XDocument and copied guide coordinate
+            // arrays. It never touches live XML, selected XElements or WPF
+            // controls on the worker thread.
+            var result = await Task.Run(() =>
+            {
+                var ok = TryBuildClipPlan(
+                    work, mode, keepPoint, directionSampleDistance,
+                    out var plan, out var error);
+                return (Ok: ok, Plan: plan, Error: error);
+            });
 
-        ApplyClipButton.IsEnabled =
-            plan.DeletedPieces > 0;
+            if (generation != _clipPreviewGeneration)
+                return;
 
-        CancelClipPreviewButton.IsEnabled =
-            true;
+            _clipPreviewInProgress = false;
+            if (geometryRevision != _geometryRevision ||
+                onlySelected != (OnlySplitSelectedCheckBox.IsChecked == true) ||
+                !selectedLines.SetEquals(GetValidSelectedLines()) ||
+                !ClipGuidesMatch(guideVersions,
+                    _guides.Where(guide => !guide.Applied).ToList()))
+            {
+                CancelClipPreviewInternal(updateStatus: false);
+                UpdateStatus("The boundary or selection changed. Preview Clip again.");
+                return;
+            }
 
-        ClipPreviewSummaryText.Text = FormatClipSummary(plan);
+            if (!result.Ok)
+            {
+                CancelClipPreviewInternal(updateStatus: false);
+                if (pending.Count == 1 && !pending[0].Guide.IsClosed &&
+                    result.Error.Contains("doesn’t divide", StringComparison.Ordinal))
+                    OfferToCloseRefusedClipGuide(pending[0]);
+                else
+                    UpdateStatus(result.Error);
+                return;
+            }
 
-        UpdateStatus(
-            plan.DeletedPieces == 0
+            var plan = result.Plan;
+            _clipPreviewState = new ClipPreviewState(
+                mode, keepPoint, plan, geometryRevision,
+                onlySelected, selectedLines, guideVersions);
+
+            EditorSurface.SetClipPreview(plan.Overlay);
+            ApplyClipButton.IsEnabled = plan.DeletedPieces > 0;
+            CancelClipPreviewButton.IsEnabled = true;
+            ClipPreviewSummaryText.Text = FormatClipSummary(plan);
+            UpdateStatus(plan.DeletedPieces == 0
                 ? "Clip preview: nothing is on the delete side. No changes have been made."
                 : $"Clip preview: will delete {plan.DeletedPieces:N0} piece(s) and keep {plan.KeptPieces:N0}. Choose Apply clip to continue.");
+        }
+        catch (Exception exception)
+        {
+            if (generation != _clipPreviewGeneration)
+                return;
+            CancelClipPreviewInternal(updateStatus: false);
+            UpdateStatus($"Clip preview failed: {exception.Message}");
+        }
     }
 
-    private bool TryBuildClipPlan(
+    private bool TryCaptureClipWork(
         IReadOnlyList<CutGuideState> pending,
+        ClipMode mode,
+        Point? keepPoint,
+        out ClipWorkSnapshot snapshot,
+        out string error)
+    {
+        snapshot = null!;
+        error = string.Empty;
+        var open = pending.Where(guide => !guide.Guide.IsClosed).ToList();
+        if (open.Count > 0)
+        {
+            if (open.Count != 1 || pending.Count != 1 ||
+                mode != ClipMode.KeepClickedSide || !keepPoint.HasValue)
+            {
+                error = "Clip uses one open line at a time. Choose the side to keep by clicking the map.";
+                return false;
+            }
+        }
+        else if (mode == ClipMode.KeepClickedSide)
+        {
+            error = "Choose side is for one open boundary. Use Keep inside or Keep outside for closed loops.";
+            return false;
+        }
+
+        var selected = GetValidSelectedLines();
+        var limit = OnlySplitSelectedCheckBox.IsChecked == true;
+        if (limit && selected.Count == 0)
+        {
+            error = "Clip is limited to selected lines, but no lines are selected. Select lines or turn the limit off.";
+            return false;
+        }
+
+        var protectedIds = pending
+            .Where(guide => guide.RemoveMatchingSourceBeforeCut &&
+                !string.IsNullOrWhiteSpace(guide.SourceLineId))
+            .Select(guide => guide.SourceLineId!)
+            .ToHashSet(StringComparer.Ordinal);
+        var targetCount = _geometry.Features.Count(feature =>
+            !protectedIds.Contains(
+                feature.LineStringElement.Attribute(SourceGuideMarkerAttribute)?.Value ?? "") &&
+            (!limit || selected.Contains(feature.LineStringElement)));
+        if (targetCount == 0)
+        {
+            error = "There are no eligible lines to clip. The boundary itself is protected.";
+            return false;
+        }
+
+        var clone = new XDocument(_workingDocument);
+        MarkCloneTargets(clone, selected, limit, protectedIds);
+        snapshot = new ClipWorkSnapshot(
+            clone, _projectionScale, CaptureClipGuides(pending),
+            limit, targetCount);
+        return true;
+    }
+
+    private static bool TryBuildClipPlan(
+        ClipWorkSnapshot work,
         ClipMode mode,
         Point? keepPoint,
         double directionSampleDistance,
         out ClipPlan plan,
         out string error)
     {
-        plan =
-            ClipPlan.Empty;
-        error =
-            string.Empty;
-
-        var open =
-            pending
-                .Where(
-                    guide =>
-                        !guide.Guide.IsClosed)
-                .ToList();
-
-        if (open.Count > 0)
-        {
-            if (open.Count != 1 ||
-                pending.Count != 1 ||
-                mode !=
-                    ClipMode.KeepClickedSide ||
-                !keepPoint.HasValue)
-            {
-                error =
-                    "Clip uses one open line at a time. Choose the side to keep by clicking the map.";
-                return false;
-            }
-        }
-        else if (mode ==
-                 ClipMode.KeepClickedSide)
-        {
-            error =
-                "Choose side is for one open boundary. Use Keep inside or Keep outside for closed loops.";
-            return false;
-        }
-
-        var sourceSelected =
-            GetValidSelectedLines();
-
-        var limitToSelection = OnlySplitSelectedCheckBox.IsChecked == true;
-        if (limitToSelection && sourceSelected.Count == 0)
-        {
-            error = "Clip is limited to selected lines, but no lines are selected. Select lines or turn the limit off.";
-            return false;
-        }
-
-        var protectedSourceIds = pending
-            .Where(guide => guide.RemoveMatchingSourceBeforeCut &&
-                !string.IsNullOrWhiteSpace(guide.SourceLineId))
-            .Select(guide => guide.SourceLineId!)
-            .ToHashSet(StringComparer.Ordinal);
-        var scopedTargets = _geometry.Features.Count(feature =>
-            !protectedSourceIds.Contains(
-                feature.LineStringElement.Attribute(SourceGuideMarkerAttribute)?.Value ?? "") &&
-            (!limitToSelection ||
-                sourceSelected.Contains(feature.LineStringElement)));
-        if (scopedTargets == 0)
-        {
-            error = "There are no eligible lines to clip. The boundary itself is protected.";
-            return false;
-        }
-
-        var clone =
-            new XDocument(
-                _workingDocument);
-
-        MarkCloneTargets(
-            clone,
-            sourceSelected,
-            limitToSelection,
-            protectedSourceIds);
-
-        var previewGeometry =
-            new KmlLineGeometryService(
-                clone,
-                _projectionScale);
+        plan = ClipPlan.Empty;
+        error = string.Empty;
+        var open = work.Guides.Where(guide => !guide.IsClosed).ToList();
+        var clone = work.Document;
+        var previewGeometry = new KmlLineGeometryService(
+            clone, work.ProjectionScale);
 
         // Clip preserves source lines used as boundaries; Apply split retains
         // its existing source-helper deletion behaviour.
 
         var closedLoops =
-            pending
+            work.Guides
                 .Where(
                     guide =>
-                        guide.Guide.IsClosed)
+                        guide.IsClosed)
                 .Select(
                     guide =>
                         (IReadOnlyList<Point>)
-                        guide.Guide.Coordinates
+                        guide.Coordinates
                             .Select(
                                 previewGeometry.Project)
                             .ToList())
@@ -533,7 +556,7 @@ public partial class LineEditorWindow
         {
             var openPoints =
                 open[0]
-                    .Guide.Coordinates
+                    .Coordinates
                     .Select(
                         previewGeometry.Project)
                     .ToList();
@@ -556,14 +579,14 @@ public partial class LineEditorWindow
                 Guid,
                 List<Point>>();
 
-        foreach (var guide in pending)
+        foreach (var guide in work.Guides)
         {
             IReadOnlyList<Point> stroke;
 
-            if (guide.Guide.IsClosed)
+            if (guide.IsClosed)
             {
                 stroke =
-                    guide.Guide.Coordinates
+                    guide.Coordinates
                         .Select(
                             previewGeometry.Project)
                         .ToList();
@@ -678,8 +701,8 @@ public partial class LineEditorWindow
             cutPointsByGuide,
             openBoundary,
             clone,
-            limitToSelection
-                ? $"limited to {scopedTargets:N0} selected line(s)"
+            work.LimitToSelection
+                ? $"limited to {work.TargetCount:N0} selected line(s)"
                 : "all eligible lines",
             crossingLoop);
 
