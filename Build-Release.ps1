@@ -77,6 +77,15 @@ if (-not (Test-Path -LiteralPath $PublishedExe)) {
     throw "Publish completed, but KmlScopedEditor.exe was not found in $PublishDir"
 }
 
+# Ensure every new portable and installed distribution contains both the
+# noncommercial software license and the copyright/third-party notice.
+foreach ($RequiredFile in @("LICENSE", "NOTICE")) {
+    $NoticePath = Join-Path $PublishDir $RequiredFile
+    if (-not (Test-Path -LiteralPath $NoticePath)) {
+        throw "Publish output is missing required licensing file: $NoticePath"
+    }
+}
+
 $PortableZip = Join-Path $PortableDir "Simple-KML-Editor-Portable-$Version-win-x64.zip"
 Compress-Archive `
     -Path (Join-Path $PublishDir "*") `

@@ -16,4 +16,17 @@
     <Authors>Arif Shaon</Authors>
     <Description>Windows desktop application for editing KML and KMZ placemark styles and line geometry, with preview, splitting, simplification, smoothing, and scoped batch editing.</Description>
   </PropertyGroup>
+
+  <!-- Ship the current noncommercial license and required notice with
+       portable ZIPs and installed Windows builds. -->
+  <ItemGroup>
+    <None Include="..\LICENSE"
+          Link="LICENSE"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="Always" />
+    <None Include="..\NOTICE"
+          Link="NOTICE"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="Always" />
+  </ItemGroup>
 </Project>
