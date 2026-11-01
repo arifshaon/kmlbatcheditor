@@ -456,14 +456,7 @@ public static class KmlBoundaryClipService
             return false;
         }
 
-        context = new SideSelectionContext(
-            new BoundarySegmentIndex(segments),
-            openBoundary is null
-                ? valid.Select(loop => new PreparedPolygon(loop)).ToList()
-                : new List<PreparedPolygon>(),
-            openBoundary is null ? null : new PreparedPolygon(openBoundary.RegionA),
-            openBoundary is null ? null : new PreparedPolygon(openBoundary.RegionB),
-            openBoundary);
+        context = new SideSelectionContext(valid, openBoundary);
         return true;
     }
 
@@ -476,16 +469,23 @@ public static class KmlBoundaryClipService
         private readonly bool _isOpen;
         private readonly double _tolerance = WorldUnitsFromMetres(1d);
 
-        private SideSelectionContext(
-            BoundarySegmentIndex index,
-            IReadOnlyList<PreparedPolygon> closed,
-            PreparedPolygon? a, PreparedPolygon? b,
+        internal SideSelectionContext(
+            IReadOnlyList<IReadOnlyList<Point>> closedLoops,
             PreparedOpenBoundary? openBoundary)
         {
-            _index = index;
-            _closed = closed;
-            _a = a;
-            _b = b;
+            var segments = openBoundary is null
+                ? closedLoops.SelectMany(loop =>
+                {
+                    var edges = BuildSegments(loop).ToList();
+                    if ((loop[0] - loop[^1]).Length > PointEpsilon)
+                        edges.Add((loop[^1], loop[0]));
+                    return edges;
+                }).ToList()
+                : BuildSegments(openBoundary.ExtendedPath).ToList();
+            _index = new BoundarySegmentIndex(segments);
+            _closed = closedLoops.Select(loop => new PreparedPolygon(loop)).ToList();
+            _a = openBoundary is null ? null : new PreparedPolygon(openBoundary.RegionA);
+            _b = openBoundary is null ? null : new PreparedPolygon(openBoundary.RegionB);
             _isOpen = openBoundary is not null;
         }
 
