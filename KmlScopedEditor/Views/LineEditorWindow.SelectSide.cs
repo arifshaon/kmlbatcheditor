@@ -17,6 +17,7 @@ public partial class LineEditorWindow
     private PreparedOpenBoundary? _sideSelectOpenBoundary;
     private long _sideSelectRevision = -1;
     private int _sideSelectSequence = -1;
+    private readonly SideRepairPromptTracker _sideSelectRepairPrompts = new();
 
     private void OnStep3SelectSideChanged(object sender, RoutedEventArgs e)
     {
@@ -147,6 +148,7 @@ public partial class LineEditorWindow
         _sideSelectOpenBoundary = null;
         _sideSelectRevision = -1;
         _sideSelectSequence = -1;
+        _sideSelectRepairPrompts.Clear();
         _sideSelectToggleUpdating = true;
         try
         {
@@ -203,31 +205,59 @@ public partial class LineEditorWindow
         if (!e.IsAdditive && !e.IsDeselect)
             _selected.Clear();
 
-        if (e.IsDeselect)
+        var changedCount = 0;
+        foreach (var line in result.ClickedSide)
         {
-            foreach (var line in result.ClickedSide)
-                _selected.Remove(line);
-        }
-        else
-        {
-            foreach (var line in result.ClickedSide)
-                _selected.Add(line);
+            if (e.IsDeselect)
+            {
+                if (_selected.Remove(line))
+                    changedCount++;
+            }
+            else if (_selected.Add(line))
+            {
+                changedCount++;
+            }
         }
 
         EditorSurface.SetSelection(_selected);
         UpdateCutScopeDisplay();
         UpdatePendingGuidePreview();
+
+        // After a successful repair, remember anything still crossing in the
+        // new geometry revision before returning to normal click handling.
+        IReadOnlyList<XElement> newCrossings;
+        if (allowRepairPrompt)
+        {
+            newCrossings = _sideSelectRepairPrompts.TakeNewCrossings(
+                _geometryRevision, _sideSelectSequence, result.Crossing);
+        }
+        else
+        {
+            _sideSelectRepairPrompts.RememberUnresolved(
+                _geometryRevision, _sideSelectSequence, result.Crossing);
+            newCrossings = Array.Empty<XElement>();
+        }
+
+        var selectionMessage = e.IsDeselect
+            ? $"Removed {changedCount:N0} pieces on that side from the selection."
+            : e.IsAdditive
+                ? $"Added {changedCount:N0} pieces on that side to the selection."
+                : $"Selected {result.ClickedSide.Count:N0} pieces on that side.";
+
         UpdateStatus(
-            $"Selected {result.ClickedSide.Count:N0} pieces on that side. " +
+            $"{selectionMessage} " +
             $"{result.OnBoundary.Count:N0} lie on the split line and " +
             $"{result.Crossing.Count:N0} cross it; neither kind was included. " +
+            (result.Crossing.Count > 0 && newCrossings.Count == 0
+                ? "Repair has already been offered for the unresolved crossings. "
+                : string.Empty) +
             "Press Delete selected pieces to remove them.");
 
-        if (!allowRepairPrompt || result.Crossing.Count == 0)
+        if (newCrossings.Count == 0)
             return;
 
         var choice = System.Windows.MessageBox.Show(this,
-            $"{result.Crossing.Count:N0} line(s) cross the split line but weren't split. " +
+            $"{newCrossings.Count:N0} line(s) cross the split line but weren't split. " +
             "Split them now along the split line, extended to the map edge?",
             "Split crossing lines", MessageBoxButton.YesNo,
             MessageBoxImage.Question);
@@ -235,7 +265,7 @@ public partial class LineEditorWindow
         if (choice != MessageBoxResult.Yes)
             return;
 
-        if (RepairCrossingLines(result.Crossing))
+        if (RepairCrossingLines(newCrossings))
         {
             RefreshSideSelectAfterGeometryChange();
             if (_sideSelectActive)
