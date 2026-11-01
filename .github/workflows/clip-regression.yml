@@ -1,0 +1,22 @@
+name: Windows build and clip geometry regression
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-and-clip-regression:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Build Simple KML Editor
+        run: dotnet build KmlScopedEditor/KmlScopedEditor.csproj -c Release
+      - name: Run clip geometry regression
+        run: dotnet run --project KmlScopedEditor.RegressionTests/KmlScopedEditor.RegressionTests.csproj -c Release
