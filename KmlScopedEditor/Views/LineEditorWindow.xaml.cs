@@ -2007,7 +2007,7 @@ public partial class LineEditorWindow : Window
             !hasDocumentUndo)
         {
             UpdateStatus(
-                "There is no split-line edit, split, deletion, or simplify operation to undo.");
+                "There is no split-line edit, split, clip, deletion, or simplify operation to undo.");
             return;
         }
 
@@ -2129,8 +2129,14 @@ public partial class LineEditorWindow : Window
                         _lastPointerWorldPoint.Value,
                         EditorSurface.WorldToleranceFromPixels(14d));
 
+                var minimumPointCount =
+                    editingGuide.Guide.IsClosed
+                        ? 4
+                        : 2;
+
                 if (vertexIndex >= 0 &&
-                    editingGuide.Guide.Coordinates.Count > 2)
+                    editingGuide.Guide.Coordinates.Count >
+                        minimumPointCount)
                 {
                     PushPendingGuideEditUndo();
 
@@ -2194,8 +2200,13 @@ public partial class LineEditorWindow : Window
         var nearestIndex = -1;
         var nearestDistance = tolerance;
 
+        var searchableCount =
+            state.Guide.IsClosed
+                ? Math.Max(0, points.Count - 1)
+                : points.Count;
+
         for (var index = 0;
-             index < points.Count;
+             index < searchableCount;
              index++)
         {
             var distance =
@@ -2872,11 +2883,24 @@ public partial class LineEditorWindow : Window
                     guide => !guide.Applied)
                 : null;
 
+        var draftPointCount =
+            IsWorldLoopClosed(_draftCutPoints)
+                ? Math.Max(0, _draftCutPoints.Count - 1)
+                : _draftCutPoints.Count;
+
+        var pendingPointCount =
+            singlePendingGuide is not null &&
+            singlePendingGuide.Guide.IsClosed
+                ? Math.Max(
+                    0,
+                    singlePendingGuide.Guide.Coordinates.Count - 1)
+                : singlePendingGuide?.Guide.Coordinates.Count ?? 0;
+
         SplitLineSummaryText.Text =
             _draftCutPoints.Count >= 2
-                ? $"{(IsWorldLoopClosed(_draftCutPoints) ? "closed loop" : "open line")} · {_draftCutPoints.Count:N0} points"
+                ? $"{(IsWorldLoopClosed(_draftCutPoints) ? "closed loop" : "open line")} · {draftPointCount:N0} points"
                 : singlePendingGuide is not null
-                    ? $"{(singlePendingGuide.Guide.IsClosed ? "closed loop" : "open line")} · {singlePendingGuide.Guide.Coordinates.Count:N0} points"
+                    ? $"{(singlePendingGuide.Guide.IsClosed ? "closed loop" : "open line")} · {pendingPointCount:N0} points"
                     : pendingGuides > 1
                         ? $"{pendingGuides:N0} pending boundaries"
                         : "No split line yet";
@@ -3327,15 +3351,32 @@ public partial class LineEditorWindow : Window
     {
         var points = ProjectGuide(state.Guide).ToList();
 
-        if (points.Count <= 2)
+        var minimumPointCount =
+            state.Guide.IsClosed
+                ? 4
+                : 2;
+
+        if (points.Count <=
+            minimumPointCount)
+        {
+            UpdateStatus(
+                state.Guide.IsClosed
+                    ? "A closed loop needs at least three vertices."
+                    : "A split line needs at least two vertices.");
             return;
+        }
 
         var nearestIndex = -1;
         var nearestDistance =
             EditorSurface.WorldToleranceFromPixels(14d);
 
+        var searchableCount =
+            state.Guide.IsClosed
+                ? points.Count - 1
+                : points.Count;
+
         for (var index = 0;
-             index < points.Count;
+             index < searchableCount;
              index++)
         {
             var distance =
