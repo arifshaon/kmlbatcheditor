@@ -15,6 +15,8 @@ AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppComments={#MyAppDescription}
+; Present the full license before installing the application.
+LicenseFile=..\LICENSE
 DefaultDirName={localappdata}\Programs\Simple KML Editor
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
