@@ -570,6 +570,12 @@ public partial class LineEditorWindow : Window
             IsWorldLoopClosed(
                 _draftCutPoints);
 
+        if (draftIsClosed)
+        {
+            _draftCutPoints[^1] =
+                _draftCutPoints[0];
+        }
+
         var guide =
             new KmlCutGuide(
                 "Split line",
@@ -753,6 +759,18 @@ public partial class LineEditorWindow : Window
         object? sender,
         LineEditorStrokeEventArgs e)
     {
+        if (_clipSidePickActive &&
+            e.Tool == LineEditorTool.Split)
+        {
+            if (e.WorldPoints.Count > 0)
+            {
+                HandleClipSideClick(
+                    e.WorldPoints[^1]);
+            }
+
+            return;
+        }
+
         if (e.Tool == LineEditorTool.Select)
         {
             var matches =
@@ -825,6 +843,9 @@ public partial class LineEditorWindow : Window
         object? sender,
         LineEditorStrokeEventArgs e)
     {
+        if (_clipSidePickActive)
+            return;
+
         if (e.Tool != LineEditorTool.Split ||
             e.WorldPoints.Count < 2)
         {
@@ -1452,9 +1473,19 @@ public partial class LineEditorWindow : Window
             IsCoordinateLoopClosed(
                 feature.Coordinates);
 
+        var selectedCoordinates =
+            feature.Coordinates.ToList();
+
+        if (selectedIsClosed &&
+            selectedCoordinates.Count >= 4)
+        {
+            selectedCoordinates[^1] =
+                selectedCoordinates[0];
+        }
+
         var guide = new KmlCutGuide(
             feature.Name,
-            feature.Coordinates.ToList(),
+            selectedCoordinates,
             selectedIsClosed);
 
         var sourceLineId =
@@ -2318,7 +2349,13 @@ public partial class LineEditorWindow : Window
 
         if (e.Key == Key.Escape)
         {
-            if (_draftCutPoints.Count > 0 ||
+            if (_clipPreviewState is not null ||
+                _clipSidePickActive)
+            {
+                CancelClipPreviewInternal(
+                    updateStatus: true);
+            }
+            else if (_draftCutPoints.Count > 0 ||
                 _draftCutDrawing)
             {
                 CancelDraftCutLine(
