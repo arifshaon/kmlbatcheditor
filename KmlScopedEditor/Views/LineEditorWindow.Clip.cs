@@ -28,10 +28,14 @@ public partial class LineEditorWindow
             var pendingOpen = _guides
                 .Where(guide => !guide.Applied && !guide.Guide.IsClosed)
                 .ToList();
-            if (pendingOpen.Count == 1 && ClosePendingClipGuide(pendingOpen[0]))
-                UpdateStatus("Pending boundary closed. Choose Keep inside or Keep outside.");
-            else
-                UpdateStatus("Draw at least three points, or use one pending open boundary.");
+            if (pendingOpen.Count == 1)
+            {
+                if (ClosePendingClipGuide(pendingOpen[0]))
+                    UpdateStatus("Pending boundary closed. Choose Keep inside or Keep outside.");
+                return;
+            }
+
+            UpdateStatus("Draw at least three points, or use one pending open boundary.");
             return;
         }
 
@@ -805,8 +809,15 @@ public partial class LineEditorWindow
             "Close boundary loop",
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
-        if (choice == MessageBoxResult.Yes && ClosePendingClipGuide(guide))
-            UpdateStatus("Boundary loop closed. Choose Keep inside or Keep outside.");
+        if (choice == MessageBoxResult.Yes)
+        {
+            if (ClosePendingClipGuide(guide))
+                UpdateStatus("Boundary loop closed. Choose Keep inside or Keep outside.");
+        }
+        else
+        {
+            UpdateStatus("This line does not divide the map. No geometry was changed.");
+        }
     }
 
     private bool ClosePendingClipGuide(CutGuideState guide)
