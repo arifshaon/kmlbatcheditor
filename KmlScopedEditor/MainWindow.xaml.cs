@@ -63,8 +63,17 @@ public partial class MainWindow : System.Windows.Window
 
         if (!accepted)
         {
-            // A cancelled or unchanged editor must not save any pending
-            // Split selection state or discard the previous applied history.
+            // Preserve only the checked/unchecked Split scope preference.
+            // Cancelling must not persist edited geometry or split guides.
+            _lineEditorSessionState = _lineEditorSessionState is null
+                ? sessionState with
+                {
+                    AppliedGuides = Array.Empty<LineEditorSessionGuideState>()
+                }
+                : _lineEditorSessionState with
+                {
+                    LimitToSelectedLines = sessionState.LimitToSelectedLines
+                };
             return;
         }
 
