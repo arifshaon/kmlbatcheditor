@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Xml.Linq;
 using KmlScopedEditor.Services;
+using KmlScopedEditor.Models;
 using Point = System.Windows.Point;
 using Rect = System.Windows.Rect;
 
@@ -50,7 +51,7 @@ public partial class LineEditorWindow
         _lassoModeEnabled = false;
         EditorSurface.LassoMode = false;
         SetTool(LineEditorTool.Select);
-        EditorSurface.Cursor = Cursors.Cross;
+        EditorSurface.Cursor = System.Windows.Input.Cursors.Cross;
         ShowSideSelectBoundary();
         UpdateStatus("Click the side to select. Shift-click adds; Alt-click removes.");
         return true;
@@ -152,7 +153,7 @@ public partial class LineEditorWindow
         }
         EditorSurface.ClearClipPreview();
         EditorSurface.Cursor = EditorSurface.Tool == LineEditorTool.Pan
-            ? Cursors.Hand : Cursors.Arrow;
+            ? System.Windows.Input.Cursors.Hand : System.Windows.Input.Cursors.Arrow;
     }
 
     private void RefreshSideSelectAfterGeometryChange()
