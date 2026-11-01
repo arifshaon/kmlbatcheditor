@@ -41,6 +41,9 @@ public partial class LineEditorWindow
             SimplifyPanel.Visibility =
                 Visibility.Visible;
 
+            // Each opening defaults to the explicitly selected lines.
+            // Choosing All lines must be a deliberate user action.
+            SimplifySelectedRadioButton.IsChecked = true;
             UpdateSimplifySelectionState();
 
             // Never silently expand smoothing/simplification to every
