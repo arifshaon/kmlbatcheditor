@@ -74,13 +74,13 @@ Imported split lines are temporary overlays and are not saved into the output KM
 For large contour files, the Line Editor uses spatial indexing and retained drawing layers for performance. The explicit **Simplify / smooth...** feature can reduce stored coordinates using a metre-based tolerance, optionally smooth curves, preview measured deviation, and warn about newly introduced crossings before Apply.
 
 
-### Clip regression checks
+### Select side and split regression checks
 
-Clip geometry correctness checks and a Windows GUI acceptance checklist are documented in
+Step 3 Select side and Step 2 Split regression checks are documented in
 [CLIP_REGRESSION_TESTS.md](CLIP_REGRESSION_TESTS.md). On Windows with .NET 8 installed:
 
 ```powershell
 dotnet run --project KmlScopedEditor.RegressionTests/KmlScopedEditor.RegressionTests.csproj -c Release
 ```
 
-The CI workflow also builds the WPF application and runs these geometry checks on Windows.
+The CI workflow builds the WPF application and runs geometry checks on Windows. Step 2 retains the Version 1.2 Split behaviour; side selection and optional repair now take place in Step 3.
