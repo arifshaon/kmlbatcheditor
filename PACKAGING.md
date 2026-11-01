@@ -2,7 +2,11 @@
 
 The packaging scripts create a self-contained Windows x64 application, a portable ZIP, and a Windows Setup installer. Recipients do not need Visual Studio or a separate .NET installation.
 
-The current development release target is **version 1.3.0**. Build verification is required before distributing the installer.
+The current version is **1.3.0**. New builds of this source are offered
+under the **PolyForm Noncommercial License 1.0.0**. Commercial use of the
+project is not permitted by that license. Earlier copies licensed under
+MIT retain their earlier permissions; do not re-label historical binaries
+as though the noncommercial license applied to them.
 
 It includes the current Simple KML Editor interface, placemark style editing, the Line Editor, additive pending split lines, line simplification/smoothing with topology warnings, chronological undo, tree tick preservation, splash screen, application menu, About dialog, and contextual tooltips.
 
@@ -78,6 +82,19 @@ builds the same Windows packages on a Windows runner and uploads:
 
 as downloadable workflow artifacts.
 
+## License in the downloadable packages
+
+Each new Windows installer and portable package must carry the repository's
+`LICENSE` (PolyForm Noncommercial 1.0.0) and `NOTICE` files. The project
+file copies both into the published application directory, and
+`Build-Release.ps1` fails if either file is absent. The Inno Setup wizard
+presents the license before installation.
+
+The license covers only the original project material that the licensor
+has the rights to license. Any third-party components retain their own
+licenses. For licensing detail and historical MIT permissions, see
+[LICENSE](LICENSE) and [NOTICE](NOTICE).
+
 ## Upgrading an existing installation
 
 The installer keeps the existing permanent `AppId`:
@@ -109,7 +126,10 @@ After installing version 1.3.0:
 7. check Step 2 **Only split the selected lines** is checked by default, remains checked when selection is cleared, and still splits all eligible lines when none are selected;
 8. check Step 3 **Select side** on an applied split, including open divider display ending at the map extent;
 9. run the independent geometry regression runner and verify the real-file acceptance examples;
-10. save a KML/KMZ file and reopen it.
+10. confirm the install wizard displays the PolyForm Noncommercial
+    license and that `LICENSE` and `NOTICE` are present in the installed
+    directory and portable ZIP;
+11. save a KML/KMZ file and reopen it.
 
 ## Windows security warning
 
