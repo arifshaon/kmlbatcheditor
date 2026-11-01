@@ -994,14 +994,16 @@ public static class KmlBoundaryClipService
                 edges.Add((polygon[^1], polygon[0]));
             }
 
-            _bounds = Rect.Empty;
+            // Rect is mutable; build locally before assigning the readonly field.
+            var bounds = Rect.Empty;
             foreach (var point in polygon)
             {
-                if (_bounds.IsEmpty)
-                    _bounds = new Rect(point, point);
+                if (bounds.IsEmpty)
+                    bounds = new Rect(point, point);
                 else
-                    _bounds.Union(point);
+                    bounds.Union(point);
             }
+            _bounds = bounds;
 
             _minimumY = _bounds.IsEmpty ? 0d : _bounds.Top;
             _bucketCount = Math.Clamp(edges.Count / 4, 8, 512);
