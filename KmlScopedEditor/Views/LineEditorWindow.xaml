@@ -355,8 +355,9 @@
                                 VerticalAlignment="Center">
                         <CheckBox x:Name="OnlySplitSelectedCheckBox"
                                   Content="Only split the selected lines"
+                                  IsChecked="True"
                                   VerticalAlignment="Center"
-                                  ToolTip="When checked, split only the selected lines. With no selection, all lines can be split."
+                                  ToolTip="Checked by default: split only selected lines. When no lines are selected, Apply split still splits all eligible lines."
                                   Checked="OnOnlySplitSelectedChanged"
                                   Unchecked="OnOnlySplitSelectedChanged" />
                         <TextBlock x:Name="SelectedSplitScopeText"
@@ -536,12 +537,12 @@
                             <RadioButton x:Name="SimplifyAllRadioButton"
                                          GroupName="SimplifyScope"
                                          Content="All lines"
+                                         IsChecked="True"
                                          Checked="OnSimplifySettingsChanged"
                                          Margin="0,0,8,0" />
                             <RadioButton x:Name="SimplifySelectedRadioButton"
                                          GroupName="SimplifyScope"
                                          Content="Only selected lines (0)"
-                                         IsChecked="True"
                                          Checked="OnSimplifySettingsChanged" />
                         </StackPanel>
 
