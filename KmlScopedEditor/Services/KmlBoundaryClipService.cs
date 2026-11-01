@@ -816,6 +816,9 @@ public static class KmlBoundaryClipService
                 rect.Height));
     }
 
+    public static bool LoopSelfIntersects(IReadOnlyList<Point> loop) =>
+        PolylineSelfIntersects(loop);
+
     private static bool
         PolylineSelfIntersects(
             IReadOnlyList<Point> points)
