@@ -104,8 +104,7 @@ public partial class LineEditorWindow : Window
         Closed += (_, _) =>
         {
             CancelSimplifyPreviewComputation();
-            _clipPreviewGeneration++;
-            _clipPreviewInProgress = false;
+            EndSideSelectMode();
         };
 
         Loaded += (_, _) =>
@@ -467,8 +466,9 @@ public partial class LineEditorWindow : Window
         var nextStep =
             Math.Clamp(step, 1, 3);
 
-        CloseSimplifyPreviewForWorkflowChange(
-            nextStep);
+        CloseSimplifyPreviewForWorkflowChange(nextStep);
+        if (_workflowStep != nextStep)
+            EndSideSelectMode();
 
         _workflowStep = nextStep;
 
@@ -485,15 +485,6 @@ public partial class LineEditorWindow : Window
             _workflowStep == 2
                 ? Visibility.Visible
                 : Visibility.Collapsed;
-
-        ClipActionsPanel.Visibility =
-            _workflowStep == 2
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-
-        if (_workflowStep != 2)
-            CancelClipPreviewInternal(
-                updateStatus: false);
 
         Step3ActionsPanel.Visibility =
             _workflowStep == 3
@@ -726,6 +717,9 @@ public partial class LineEditorWindow : Window
 
     private void SetTool(LineEditorTool tool)
     {
+        if (_sideSelectActive && tool != LineEditorTool.Select)
+            EndSideSelectMode();
+
         EditorSurface.Tool = tool;
 
         EditorSurface.Cursor = tool switch
@@ -743,10 +737,10 @@ public partial class LineEditorWindow : Window
             1 =>
                 "Optional cleanup before splitting. Select whole lines you do not want, then Delete selected.",
             2 =>
-                "Import or draw a split/clip boundary. Clip removes lines only. If selected-only is checked, select target lines before Clip.",
+                "Import or draw a split line; only Apply split performs the split. You can then select pieces in Step 3.",
             _ =>
                 _step3InstructionOverride ??
-                "Cleanup after splitting. Select the new split pieces you do not want, then Delete selected."
+                "Cleanup after splitting. Click Select side to select one side of the last split line, then Delete selected pieces."
         };
 
         ToolHintText.Text = tool switch
@@ -766,15 +760,9 @@ public partial class LineEditorWindow : Window
         object? sender,
         LineEditorStrokeEventArgs e)
     {
-        if (_clipSidePickActive &&
-            e.Tool == LineEditorTool.Split)
+        if (_sideSelectActive)
         {
-            if (e.WorldPoints.Count > 0)
-            {
-                HandleClipSideClick(
-                    e.WorldPoints[^1]);
-            }
-
+            UpdateStatus("Click without dragging to choose a side.");
             return;
         }
 
@@ -850,9 +838,6 @@ public partial class LineEditorWindow : Window
         object? sender,
         LineEditorStrokeEventArgs e)
     {
-        if (_clipSidePickActive)
-            return;
-
         if (e.Tool != LineEditorTool.Split ||
             e.WorldPoints.Count < 2)
         {
@@ -894,11 +879,10 @@ public partial class LineEditorWindow : Window
         object? sender,
         LineEditorClickEventArgs e)
     {
-        if (_clipSidePickActive &&
-            e.Tool == LineEditorTool.Split)
+        if (_sideSelectActive && e.Tool == LineEditorTool.Select)
         {
-            HandleClipSideClick(
-                e.WorldPoint);
+            if (!e.IsDoubleClick)
+                HandleSideSelectClick(e);
             return;
         }
 
@@ -1529,6 +1513,7 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        EndSideSelectMode();
         ApplyCurrentSplit();
     }
 
@@ -1544,6 +1529,9 @@ public partial class LineEditorWindow : Window
             sender is
                 System.Windows.Controls.Primitives.ToggleButton button &&
             button.IsChecked == true;
+
+        if (enabled && _sideSelectActive)
+            EndSideSelectMode();
 
         _lassoModeEnabled = enabled;
 
@@ -1633,17 +1621,14 @@ public partial class LineEditorWindow : Window
         UpdatePendingGuidePreview();
         UpdateCutScopeDisplay();
 
-        CancelClipPreviewInternal(
-            updateStatus: false);
-
         var selectedCount =
             GetValidSelectedLines().Count;
 
         UpdateStatus(
             OnlySplitSelectedCheckBox.IsChecked == true &&
             selectedCount > 0
-                ? $"Split/clip scope limited to {selectedCount:N0} selected line(s)."
-                : "No active selection limit; split/clip operations can affect all lines.");
+                ? $"Split scope limited to {selectedCount:N0} selected line(s)."
+                : "No active selection limit; the split will cross all lines.");
     }
 
     private void ApplyCurrentSplit()
@@ -1947,6 +1932,7 @@ public partial class LineEditorWindow : Window
 
         RefreshSurface();
         UpdateCutScopeDisplay();
+        RefreshSideSelectAfterGeometryChange();
 
         UpdateStatus(
             $"Deleted {deleted:N0} selected {CurrentLineLabel}.");
@@ -1998,6 +1984,7 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        EndSideSelectMode();
         if (_workflowStep == 2 &&
             _draftCutPoints.Count > 0)
         {
@@ -2014,7 +2001,7 @@ public partial class LineEditorWindow : Window
             !hasDocumentUndo)
         {
             UpdateStatus(
-                "There is no split-line edit, split, clip, deletion, or simplify operation to undo.");
+                "There is no split-line edit, split, repair, deletion, or simplify operation to undo.");
             return;
         }
 
@@ -2082,9 +2069,7 @@ public partial class LineEditorWindow : Window
 
         _selected.Clear();
 
-        if (state.Kind is
-            UndoActionKind.Split or
-            UndoActionKind.Clip)
+        if (state.Kind == UndoActionKind.Split)
         {
             _step3InstructionOverride = null;
             SetWorkflowStep(2);
@@ -2105,8 +2090,8 @@ public partial class LineEditorWindow : Window
                     restoredPendingSplit
                         ? "Split undone — the split line is ready to apply again."
                         : "Split undone.",
-                UndoActionKind.Clip =>
-                    "Clip undone.",
+                UndoActionKind.RepairSplit =>
+                    "Extra split undone.",
                 UndoActionKind.Simplify =>
                     "Simplify undone.",
                 _ =>
@@ -2367,11 +2352,10 @@ public partial class LineEditorWindow : Window
 
         if (e.Key == Key.Escape)
         {
-            if (_clipPreviewState is not null ||
-                _clipSidePickActive)
+            if (_sideSelectActive)
             {
-                CancelClipPreviewInternal(
-                    updateStatus: true);
+                EndSideSelectMode();
+                UpdateStatus("Select side mode ended.");
             }
             else if (_draftCutPoints.Count > 0 ||
                 _draftCutDrawing)
@@ -2445,6 +2429,7 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        EndSideSelectMode();
         CancelSimplifyPreviewInternal(
             collapsePanel: true);
 
@@ -2519,6 +2504,7 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        EndSideSelectMode();
         CancelSimplifyPreviewInternal(
             collapsePanel: true);
 
@@ -2773,8 +2759,6 @@ public partial class LineEditorWindow : Window
 
     private void UpdatePendingGuidePreview()
     {
-        CancelClipPreviewInternal(
-            updateStatus: false);
         UpdateLiveSplitPreview();
     }
 
@@ -2867,16 +2851,18 @@ public partial class LineEditorWindow : Window
         UseSelectedLineButton.IsEnabled =
             validSelected.Count == 1;
 
-        OnlySplitSelectedCheckBox.IsEnabled = true;
+        // Restore version 1.2's Step 2 scope behaviour.
+        OnlySplitSelectedCheckBox.IsEnabled = validSelected.Count > 0;
+        if (validSelected.Count == 0 &&
+            OnlySplitSelectedCheckBox.IsChecked == true)
+            OnlySplitSelectedCheckBox.IsChecked = false;
 
         SelectedSplitScopeText.Text =
             validSelected.Count == 0
-                ? OnlySplitSelectedCheckBox.IsChecked == true
-                    ? "No lines selected — Clip requires a selection; Split can still target all lines."
-                    : "No lines selected — split and clip can target all lines."
+                ? "(none selected)"
                 : OnlySplitSelectedCheckBox.IsChecked == true
-                    ? $"{validSelected.Count:N0} selected — split limited to selection."
-                    : $"{validSelected.Count:N0} selected — selection limit is off, so the split will cross all lines.";
+                    ? $"{validSelected.Count:N0} selected — split limited to selection"
+                    : $"{validSelected.Count:N0} lines selected — the split will still cross all lines. Tick to limit it.";
 
         EditorSurface.SetSelectionSoft(
             _workflowStep == 2 &&
@@ -2959,7 +2945,7 @@ public partial class LineEditorWindow : Window
 
         UpdateScopeText();
         UpdateSimplifySelectionState();
-        UpdateClipControlState();
+
     }
 
     private string ToolHintForCurrentTool()
@@ -2971,7 +2957,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Select =>
                 "V Select · click toggles · drag crosses lines · Ctrl+drag lasso adds · Lasso controls can add/remove · Delete removes selected · right-drag pan",
             _ =>
-                "Split / Clip · import or draw a boundary · Enter finishes drawing · Apply split changes lines · Clip removes lines only · Delete removes pending guides, never map lines · right-drag pans"
+                "Split · import or draw lines · Enter finishes drawing · only Apply split changes lines · Delete removes pending guides, never map lines · right-drag pans"
         };
     }
 
@@ -3583,7 +3569,7 @@ public partial class LineEditorWindow : Window
     private enum UndoActionKind
     {
         Split,
-        Clip,
+        RepairSplit,
         Deletion,
         Simplify
     }
@@ -3625,4 +3611,4 @@ public sealed record LineEditorSessionState(
     bool HideAppliedSplitHistory,
     string AppliedHistoryColor,
     double AppliedHistoryThickness,
-    bool LimitToSelectedLines = true);
+    bool LimitToSelectedLines = false);
