@@ -61,7 +61,7 @@ The Line Editor follows the manual cleanup workflow directly:
 2. **Split** — import a KML/KMZ split path, draw a new split path, or use one selected document line as the split path. Imported paths are editable: drag their vertex handles, or right-click to add/delete vertices.
 3. **Remove pieces** — after the split is applied, select the unwanted resulting pieces and delete them.
 
-Nothing needs to be selected for a normal split. By default, any line crossed by the split path can be split. To deliberately restrict the operation, select the target lines first and tick **Only split the selected lines**.
+For version 1.3, **Only split the selected lines** is checked by default. If any lines are selected, Apply split affects only those selected lines. If nothing is selected, Apply split still splits **all eligible lines**; the checkbox stays checked so the preference is not lost. Uncheck it deliberately to split all lines even when some are selected. The checkbox choice is remembered within the current document's editor session.
 
 Imported, drawn, and **Use selected line** split paths can coexist as pending split lines. **Enter**, double-click, or **Finish Drawing Here** only finishes the current drawing; they never apply a split. Only **Apply split** changes the geometry. The preview summary reports how many lines and intersection points would be split.
 
@@ -71,7 +71,7 @@ Navigation: **right-drag** or **Space+drag** pans from any step; middle-drag als
 
 Imported split lines are temporary overlays and are not saved into the output KML/KMZ.
 
-For large contour files, the Line Editor uses spatial indexing and retained drawing layers for performance. The explicit **Simplify / smooth...** feature can reduce stored coordinates using a metre-based tolerance, optionally smooth curves, preview measured deviation, and warn about newly introduced crossings before Apply.
+For large contour files, the Line Editor uses spatial indexing and retained drawing layers for performance. The explicit **Simplify / smooth...** feature can reduce stored coordinates using a metre-based tolerance, optionally smooth curves, preview measured deviation, and warn about newly introduced crossings before Apply. As in version 1.2, **All lines** is the initial Simplify / smooth scope; **Only selected lines** can be chosen explicitly.
 
 
 ### Select side and split regression checks
@@ -83,4 +83,4 @@ Step 3 Select side and Step 2 Split regression checks are documented in
 dotnet run --project KmlScopedEditor.RegressionTests/KmlScopedEditor.RegressionTests.csproj -c Release
 ```
 
-The CI workflow builds the WPF application and runs geometry checks on Windows. Step 2 retains the Version 1.2 Split behaviour; side selection and optional repair now take place in Step 3.
+The CI workflow builds the WPF application and runs geometry checks on Windows. Version 1.3 changes the Step 2 selection-only **default**, while retaining Apply split and the all-lines fallback. Side selection and optional repair take place in Step 3. Simplify / smooth keeps its version 1.2 All-lines default.
