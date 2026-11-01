@@ -49,7 +49,9 @@ public sealed class LineEditorSurface : FrameworkElement
     private IReadOnlyList<Point> _simplifyWarningPoints =
         Array.Empty<Point>();
     private bool _simplifyPreviewActive;
+    private LineEditorClipPreviewOverlay? _clipPreview;
     private List<Point> _editableGuidePoints = new();
+    private bool _editableGuideIsClosed;
     private int _dragGuideVertexIndex = -1;
     private readonly Dictionary<XElement, StreamGeometry> _featureGeometry = new();
     private readonly List<(LineEditorGuideVisual Guide, StreamGeometry Geometry)> _guideGeometry = new();
@@ -71,7 +73,9 @@ public sealed class LineEditorSurface : FrameworkElement
     private Pen? _lassoPen;
     private Pen? _simplifyPreviewPen;
     private Pen? _simplifyWarningPen;
+    private Pen? _clipExtensionPen;
     private SolidColorBrush? _simplifyWarningBrush;
+    private SolidColorBrush? _clipShadeBrush;
     private SolidColorBrush? _lassoFillBrush;
     private SolidColorBrush? _splitVertexBrush;
     private SolidColorBrush? _splitPointBrush;
@@ -289,12 +293,30 @@ public sealed class LineEditorSurface : FrameworkElement
     }
 
     public void SetEditableGuide(
-        IReadOnlyList<Point>? points)
+        IReadOnlyList<Point>? points,
+        bool isClosed = false)
     {
         _editableGuidePoints = points?.ToList() ?? new List<Point>();
+        _editableGuideIsClosed =
+            isClosed &&
+            _editableGuidePoints.Count >= 4;
         _dragGuideVertexIndex = -1;
         EnsureRenderCache();
         RedrawOverlayLayer();
+    }
+
+    public void SetClipPreview(
+        LineEditorClipPreviewOverlay? preview)
+    {
+        _clipPreview = preview;
+        EnsureRenderCache();
+        RedrawOverlayLayer();
+        InvalidateVisual();
+    }
+
+    public void ClearClipPreview()
+    {
+        SetClipPreview(null);
     }
 
     public void SetSimplifyPreview(
@@ -749,6 +771,13 @@ public sealed class LineEditorSurface : FrameworkElement
             var world = ScreenToWorld(screen);
             _editableGuidePoints[_dragGuideVertexIndex] = world;
 
+            if (_editableGuideIsClosed &&
+                _dragGuideVertexIndex == 0 &&
+                _editableGuidePoints.Count >= 2)
+            {
+                _editableGuidePoints[^1] = world;
+            }
+
             EditableGuideChanged?.Invoke(
                 this,
                 new LineEditorGuideEditEventArgs(
@@ -926,6 +955,37 @@ public sealed class LineEditorSurface : FrameworkElement
                 : _scale,
             0.000001d);
 
+        if (_clipPreview is not null &&
+            _clipShadeBrush is not null)
+        {
+            var shade =
+                BuildClipShadeGeometry(
+                    _clipPreview);
+
+            if (shade is not null)
+            {
+                context.DrawGeometry(
+                    _clipShadeBrush,
+                    null,
+                    shade);
+            }
+
+            if (_clipExtensionPen is not null)
+            {
+                foreach (var extension in
+                         _clipPreview.ExtensionLines)
+                {
+                    if (extension.Count >= 2)
+                    {
+                        context.DrawGeometry(
+                            null,
+                            _clipExtensionPen,
+                            BuildGeometry(extension));
+                    }
+                }
+            }
+        }
+
         foreach (var item in _guideGeometry)
         {
             var splitLinePen = item.Guide.Applied
@@ -952,12 +1012,20 @@ public sealed class LineEditorSurface : FrameworkElement
 
             var handleRadius = 5.0d / safeScale;
 
-            foreach (var point in _editableGuidePoints)
+            var handleCount =
+                _editableGuideIsClosed &&
+                _editableGuidePoints.Count >= 2
+                    ? _editableGuidePoints.Count - 1
+                    : _editableGuidePoints.Count;
+
+            for (var index = 0;
+                 index < handleCount;
+                 index++)
             {
                 context.DrawEllipse(
                     _splitVertexBrush,
                     _hoverPen,
-                    point,
+                    _editableGuidePoints[index],
                     handleRadius,
                     handleRadius);
             }
@@ -1347,6 +1415,11 @@ public sealed class LineEditorSurface : FrameworkElement
             Color.FromRgb(210, 38, 38),
             2.2d / safeScale);
 
+        _clipExtensionPen = CreatePen(
+            Color.FromArgb(210, 213, 112, 23),
+            2.0d / safeScale,
+            DashStyles.Dash);
+
         _simplifyWarningBrush =
             CreateFrozenBrush(
                 Color.FromArgb(
@@ -1354,6 +1427,13 @@ public sealed class LineEditorSurface : FrameworkElement
                     210,
                     38,
                     38));
+
+        _clipShadeBrush = CreateFrozenBrush(
+            Color.FromArgb(
+                62,
+                210,
+                55,
+                55));
 
         _lassoFillBrush = CreateFrozenBrush(
             Color.FromArgb(
@@ -1419,6 +1499,94 @@ public sealed class LineEditorSurface : FrameworkElement
             Math.Log(safeScale, 2d) * 2d) / 2d;
 
         return Math.Pow(2d, exponent);
+    }
+
+    private static Geometry? BuildClipShadeGeometry(
+        LineEditorClipPreviewOverlay preview)
+    {
+        Geometry? shaded = null;
+
+        static Geometry Union(
+            Geometry? current,
+            Geometry next)
+        {
+            if (current is null)
+                return next;
+
+            return new CombinedGeometry(
+                GeometryCombineMode.Union,
+                current,
+                next);
+        }
+
+        if (preview.ClosedLoops.Count > 0)
+        {
+            Geometry? closedUnion = null;
+
+            foreach (var loop in preview.ClosedLoops)
+            {
+                if (loop.Count < 3)
+                    continue;
+
+                closedUnion = Union(
+                    closedUnion,
+                    BuildPolygonGeometry(loop));
+            }
+
+            if (preview.ShadeOutsideClosedLoops &&
+                !preview.Bounds.IsEmpty)
+            {
+                var rectangle =
+                    BuildPolygonGeometry(
+                        new[]
+                        {
+                            new Point(
+                                preview.Bounds.Left,
+                                preview.Bounds.Top),
+                            new Point(
+                                preview.Bounds.Right,
+                                preview.Bounds.Top),
+                            new Point(
+                                preview.Bounds.Right,
+                                preview.Bounds.Bottom),
+                            new Point(
+                                preview.Bounds.Left,
+                                preview.Bounds.Bottom)
+                        });
+
+                shaded =
+                    closedUnion is null
+                        ? rectangle
+                        : new CombinedGeometry(
+                            GeometryCombineMode.Exclude,
+                            rectangle,
+                            closedUnion);
+            }
+            else
+            {
+                shaded = closedUnion;
+            }
+        }
+
+        foreach (var polygon in
+                 preview.ShadedPolygons)
+        {
+            if (polygon.Count < 3)
+                continue;
+
+            shaded = Union(
+                shaded,
+                BuildPolygonGeometry(
+                    polygon));
+        }
+
+        if (shaded is not null &&
+            shaded.CanFreeze)
+        {
+            shaded.Freeze();
+        }
+
+        return shaded;
     }
 
     private static StreamGeometry BuildPolygonGeometry(
@@ -1712,8 +1880,14 @@ public sealed class LineEditorSurface : FrameworkElement
         var bestIndex = -1;
         var bestDistance = tolerance;
 
+        var count =
+            _editableGuideIsClosed &&
+            _editableGuidePoints.Count >= 2
+                ? _editableGuidePoints.Count - 1
+                : _editableGuidePoints.Count;
+
         for (var index = 0;
-             index < _editableGuidePoints.Count;
+             index < count;
              index++)
         {
             var distance =
@@ -1826,3 +2000,11 @@ public sealed class LineEditorContextEventArgs : EventArgs
 
     public Point WorldPoint { get; }
 }
+
+
+public sealed record LineEditorClipPreviewOverlay(
+    Rect Bounds,
+    IReadOnlyList<IReadOnlyList<Point>> ClosedLoops,
+    bool ShadeOutsideClosedLoops,
+    IReadOnlyList<IReadOnlyList<Point>> ShadedPolygons,
+    IReadOnlyList<IReadOnlyList<Point>> ExtensionLines);
