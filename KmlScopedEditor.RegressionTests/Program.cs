@@ -13,21 +13,17 @@ internal static class Program
 
     private static void Main()
     {
-        Run(nameof(ClosedLoopWithRepeatedEndpoint), ClosedLoopWithRepeatedEndpoint);
-        Run(nameof(TwoClosedLoopsUseUnion), TwoClosedLoopsUseUnion);
-        Run(nameof(ShortBoundaryEdges), ShortBoundaryEdges);
-        Run(nameof(OpenLineSidesAreComplementary), OpenLineSidesAreComplementary);
-        Run(nameof(SelfCrossingLoopIsDetected), SelfCrossingLoopIsDetected);
-        Run(nameof(SplitThenClipPreservesLength), SplitThenClipPreservesLength);
-        Run(nameof(SelectedScopeDoesNotTouchOthers), SelectedScopeDoesNotTouchOthers);
-        Run(nameof(PointsAndPolygonsSurviveLineDeletion), PointsAndPolygonsSurviveLineDeletion);
-        Run(nameof(LargeBoundaryClassificationBenchmark), LargeBoundaryClassificationBenchmark);
+        // Select side replaces the old Clip classifier; preserve
+        // independent geometry/deletion checks alongside the new tests.
         Run(nameof(SideSelectionTwoSides), SideSelectionTwoSides);
         Run(nameof(SideSelectionCrossingLongSegment), SideSelectionCrossingLongSegment);
         Run(nameof(SideSelectionThreeMetreLoop), SideSelectionThreeMetreLoop);
         Run(nameof(SideSelectionBoundaryPoints), SideSelectionBoundaryPoints);
         Run(nameof(SideSelectionOpenComplement), SideSelectionOpenComplement);
         Run(nameof(SideSelectionLargeIndexBenchmark), SideSelectionLargeIndexBenchmark);
+        Run(nameof(SelfCrossingLoopIsDetected), SelfCrossingLoopIsDetected);
+        Run(nameof(SelectedScopeDoesNotTouchOthers), SelectedScopeDoesNotTouchOthers);
+        Run(nameof(PointsAndPolygonsSurviveLineDeletion), PointsAndPolygonsSurviveLineDeletion);
         Console.WriteLine($"PASS: {_passed} regression checks.");
     }
 
