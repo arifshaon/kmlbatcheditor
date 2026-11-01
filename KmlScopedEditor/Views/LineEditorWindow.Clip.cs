@@ -193,8 +193,7 @@ public partial class LineEditorWindow
         }
 
         ApplyClip(
-            _clipPreviewState.Mode,
-            _clipPreviewState.KeepPoint);
+            _clipPreviewState);
     }
 
     private void OnCancelClipPreviewClick(
@@ -369,10 +368,16 @@ public partial class LineEditorWindow
             return;
         }
 
+        var directionSampleDistance =
+            EditorSurface
+                .WorldToleranceFromPixels(
+                    10d);
+
         if (!TryBuildClipPlan(
                 pending,
                 mode,
                 keepPoint,
+                directionSampleDistance,
                 out var plan,
                 out var error))
         {
@@ -386,6 +391,7 @@ public partial class LineEditorWindow
             new ClipPreviewState(
                 mode,
                 keepPoint,
+                directionSampleDistance,
                 plan.KeptPieces,
                 plan.DeletedPieces);
 
@@ -413,6 +419,7 @@ public partial class LineEditorWindow
         IReadOnlyList<CutGuideState> pending,
         ClipMode mode,
         Point? keepPoint,
+        double directionSampleDistance,
         out ClipPlan plan,
         out string error)
     {
@@ -505,9 +512,7 @@ public partial class LineEditorWindow
                     .TryPrepareOpenBoundary(
                         openPoints,
                         previewGeometry.WorldBounds,
-                        EditorSurface
-                            .WorldToleranceFromPixels(
-                                10d),
+                        directionSampleDistance,
                         out openBoundary,
                         out error))
             {
@@ -647,9 +652,13 @@ public partial class LineEditorWindow
     }
 
     private void ApplyClip(
-        ClipMode mode,
-        Point? keepPoint)
+        ClipPreviewState previewState)
     {
+        var mode =
+            previewState.Mode;
+        var keepPoint =
+            previewState.KeepPoint;
+
         if (!TryPrepareGuidesForClip(
                 out var pending))
         {
@@ -663,6 +672,7 @@ public partial class LineEditorWindow
                 pending,
                 mode,
                 keepPoint,
+                previewState.DirectionSampleDistance,
                 out var previewPlan,
                 out var error))
         {
@@ -731,9 +741,7 @@ public partial class LineEditorWindow
                     .TryPrepareOpenBoundary(
                         openPoints,
                         _geometry.WorldBounds,
-                        EditorSurface
-                            .WorldToleranceFromPixels(
-                                10d),
+                        previewState.DirectionSampleDistance,
                         out openBoundary,
                         out error))
             {
@@ -1008,6 +1016,7 @@ public partial class LineEditorWindow
     private sealed record ClipPreviewState(
         ClipMode Mode,
         Point? KeepPoint,
+        double DirectionSampleDistance,
         int KeptPieces,
         int DeletedPieces);
 
