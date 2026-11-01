@@ -682,352 +682,255 @@ public partial class LineEditorWindow
         return true;
     }
 
-    private void ApplyClip(
-        ClipPreviewState previewState)
+    private void ApplyClip(ClipPreviewState previewState)
     {
-        var mode =
-            previewState.Mode;
-        var keepPoint =
-            previewState.KeepPoint;
-
-        if (!TryPrepareGuidesForClip(
-                out var pending))
+        var pending = _guides.Where(guide => !guide.Applied).ToList();
+        if (previewState.GeometryRevision != _geometryRevision ||
+            previewState.OnlySelected != (OnlySplitSelectedCheckBox.IsChecked == true) ||
+            !previewState.SelectedLines.SetEquals(GetValidSelectedLines()) ||
+            !ClipGuidesMatch(previewState.Guides, pending))
         {
+            CancelClipPreviewInternal(updateStatus: false);
+            UpdateStatus("The lines, boundary, or selection changed. Preview Clip again before applying.");
             return;
         }
 
-        // Re-run the preview calculation immediately before changing the real
-        // document. This keeps Apply aligned with what the user is seeing and
-        // also protects against a stale preview after scope/guide changes.
-        if (!TryBuildClipPlan(
-                pending,
-                mode,
-                keepPoint,
-                previewState.DirectionSampleDistance,
-                out var previewPlan,
-                out var error))
+        var plan = previewState.Plan;
+        if (plan.DeletedPieces == 0)
         {
-            UpdateStatus(error);
+            UpdateStatus("Nothing is on the delete side. No geometry was changed.");
             return;
         }
 
-        if (previewPlan.DeletedPieces == 0)
-        {
-            UpdateStatus(
-                "Nothing is on the delete side. No geometry was changed.");
-            return;
-        }
-
-        var snapshot =
-            CaptureUndoState(
-                UndoActionKind.Clip);
-
-        var selectedTargets =
-            GetValidSelectedLines();
-
-        var limitToSelection =
-            OnlySplitSelectedCheckBox.IsChecked ==
-                true &&
-            selectedTargets.Count > 0;
-
-        ClearCutTargetMarkers();
-
-        if (limitToSelection)
-        {
-            foreach (var line in
-                     selectedTargets)
-            {
-                if (line.Document ==
-                    _workingDocument)
-                {
-                    line.SetAttributeValue(
-                        CutTargetMarkerAttribute,
-                        "true");
-                }
-            }
-        }
-
-        var openBoundary =
-            previewPlan.OpenBoundary;
-
-        var totalLinesSplit = 0;
-        var applySequence =
-            _nextAppliedSequence + 1;
-        var cutPointsByGuide =
-            new Dictionary<
-                Guid,
-                List<Point>>();
-
+        var snapshot = CaptureUndoState(UndoActionKind.Clip);
         try
         {
-            RemoveHelperLinesFromGeometry(
-                _geometry,
-                pending);
+            // The exact document that produced the preview becomes the result:
+            // no second split or classification, and no scope fallback.
+            _workingDocument = new XDocument(plan.ResultDocument);
+            _geometry = new KmlLineGeometryService(
+                _workingDocument, _projectionScale);
 
-            foreach (var guide in pending)
-            {
-                IReadOnlyList<Point> stroke =
-                    guide.Guide.IsClosed
-                        ? ProjectGuide(
-                            guide.Guide)
-                        : openBoundary!
-                            .ExtendedPath;
-
-                var result =
-                    _geometry
-                        .SplitWithStroke(
-                            stroke,
-                            CutTargetMarkerAttribute);
-
-                totalLinesSplit +=
-                    result.LinesSplit;
-
-                cutPointsByGuide[
-                    guide.Id] =
-                    result.CutPoints.ToList();
-            }
-
-            ClipClassificationResult
-                classification;
-
-            if (openBoundary is not null)
-            {
-                if (!KmlBoundaryClipService
-                        .TryClassifyOpen(
-                            _geometry.Features,
-                            openBoundary,
-                            keepPoint!.Value,
-                            CutTargetMarkerAttribute,
-                            out classification,
-                            out _,
-                            out error))
-                {
-                    throw new InvalidOperationException(
-                        error);
-                }
-            }
-            else
-            {
-                var loops =
-                    pending
-                        .Select(
-                            guide =>
-                                (IReadOnlyList<Point>)
-                                ProjectGuide(
-                                    guide.Guide))
-                        .ToList();
-
-                classification =
-                    KmlBoundaryClipService
-                        .ClassifyClosed(
-                            _geometry.Features,
-                            loops,
-                            mode ==
-                                ClipMode.KeepInside,
-                            CutTargetMarkerAttribute);
-            }
-
-            var deleted =
-                _geometry.DeleteLines(
-                    classification.DeletedLines);
-
-            if (deleted == 0)
-            {
-                throw new InvalidOperationException(
-                    "Nothing is on the delete side. No geometry was changed.");
-            }
-
+            var applySequence = _nextAppliedSequence + 1;
             foreach (var guide in pending)
             {
                 guide.Applied = true;
-                guide.AppliedSequence =
-                    applySequence;
-                guide.AppliedCutPoints =
-                    cutPointsByGuide
-                        .GetValueOrDefault(
-                            guide.Id,
-                            new List<Point>());
+                guide.AppliedSequence = applySequence;
+                guide.AppliedCutPoints = plan.CutPointsByGuide
+                    .GetValueOrDefault(guide.Id, new List<Point>())
+                    .ToList();
             }
 
-            _nextAppliedSequence =
-                applySequence;
-
-            _hasPerformedCut =
-                _hasPerformedCut ||
-                totalLinesSplit > 0;
-
-            PushDocumentUndo(
-                snapshot);
+            _nextAppliedSequence = applySequence;
+            _hasPerformedCut = _hasPerformedCut || plan.LinesSplit > 0;
+            PushDocumentUndo(snapshot);
             _pendingEditUndo.Clear();
             _pendingGuideDragUndoState = null;
             MarkGeometryChanged();
-
             _selected.Clear();
             _cutPoints.Clear();
 
-            var kept =
-                classification
-                    .KeptLines.Count;
-
-            CancelClipPreviewInternal(
-                updateStatus: false);
-
+            CancelClipPreviewInternal(updateStatus: false);
             _step3InstructionOverride =
-                $"Clip applied: {deleted:N0} unwanted piece(s) deleted. Select any leftovers you want to tidy.";
-
+                $"Clip applied: {plan.DeletedPieces:N0} unwanted line piece(s) deleted.";
             SetWorkflowStep(3);
             RefreshSurface();
             UpdateCutScopeDisplay();
-
             UpdateStatus(
-                $"Clipped to boundary: {totalLinesSplit:N0} line(s) split, {kept:N0} piece(s) kept, {deleted:N0} deleted.");
+                $"Clipped to boundary: {plan.LinesSplit:N0} line(s) split, " +
+                $"{plan.KeptPieces:N0} piece(s) kept, {plan.DeletedPieces:N0} deleted.");
         }
         catch (Exception exception)
         {
-            // Restore the single pre-clip snapshot so a failed transaction
-            // cannot leave a partially split/deleted working document.
-            _workingDocument =
-                new XDocument(
-                    snapshot.Document);
-
-            _geometry =
-                new KmlLineGeometryService(
-                    _workingDocument,
-                    _projectionScale);
-
-            foreach (var guide in
-                     _guides)
+            _workingDocument = new XDocument(snapshot.Document);
+            _geometry = new KmlLineGeometryService(
+                _workingDocument, _projectionScale);
+            foreach (var guide in _guides)
             {
-                if (snapshot.GuideStates
-                    .TryGetValue(
-                        guide.Id,
-                        out var state))
-                {
-                    guide.Applied =
-                        state.Applied;
-                    guide.AppliedSequence =
-                        state.AppliedSequence;
-                    guide.AppliedCutPoints =
-                        state.AppliedCutPoints
-                            .ToList();
-                }
+                if (!snapshot.GuideStates.TryGetValue(guide.Id, out var state))
+                    continue;
+                guide.Applied = state.Applied;
+                guide.AppliedSequence = state.AppliedSequence;
+                guide.AppliedCutPoints = state.AppliedCutPoints.ToList();
             }
 
             RefreshSurface();
             UpdatePendingGuidePreview();
             UpdateCutScopeDisplay();
+            UpdateStatus($"Clip was not applied. {exception.Message}");
+        }
+    }
 
-            UpdateStatus(
-                $"Clip was not applied. {exception.Message}");
-        }
-        finally
+    private static string FormatClipSummary(ClipPlan plan) =>
+        (plan.DeletedPieces == 0
+            ? $"Nothing on the delete side; keep {plan.KeptPieces:N0} line piece(s)"
+            : $"Will delete {plan.DeletedPieces:N0} line piece(s), keep {plan.KeptPieces:N0}") +
+        $" — {plan.ScopeDescription}. Clip removes lines only." +
+        (plan.HasSelfCrossingLoop
+            ? " This loop crosses itself; inside follows the even-odd rule."
+            : "");
+
+    private static List<ClipGuideVersion> CaptureClipGuides(
+        IReadOnlyList<CutGuideState> pending) =>
+        pending.Select(guide => new ClipGuideVersion(
+            guide.Id, guide.Guide.IsClosed, guide.SourceLineId,
+            guide.Guide.Coordinates.ToList())).ToList();
+
+    private static bool ClipGuidesMatch(
+        IReadOnlyList<ClipGuideVersion> captured,
+        IReadOnlyList<CutGuideState> pending)
+    {
+        if (captured.Count != pending.Count)
+            return false;
+
+        for (var i = 0; i < captured.Count; i++)
         {
-            ClearCutTargetMarkers();
+            var version = captured[i];
+            var current = pending[i];
+            if (version.Id != current.Id ||
+                version.IsClosed != current.Guide.IsClosed ||
+                version.SourceLineId != current.SourceLineId ||
+                !version.Coordinates.SequenceEqual(current.Guide.Coordinates))
+                return false;
         }
+        return true;
+    }
+
+    private void OfferToCloseRefusedClipGuide(CutGuideState guide)
+    {
+        var choice = System.Windows.MessageBox.Show(
+            this,
+            "This open boundary does not divide the map. Join its ends and use it as a closed loop? " +
+            "You can then choose Keep inside or Keep outside.",
+            "Close boundary loop",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        if (choice == MessageBoxResult.Yes && ClosePendingClipGuide(guide))
+            UpdateStatus("Boundary loop closed. Choose Keep inside or Keep outside.");
+    }
+
+    private bool ClosePendingClipGuide(CutGuideState guide)
+    {
+        if (guide.Applied || guide.Guide.IsClosed)
+            return false;
+
+        var coordinates = guide.Guide.Coordinates.ToList();
+        var distinct = coordinates.Select(_geometry.Project).Distinct().ToList();
+        if (distinct.Count < 3)
+        {
+            UpdateStatus("A closed loop needs at least three distinct points.");
+            return false;
+        }
+
+        if (IsCoordinateLoopClosed(coordinates))
+            coordinates[^1] = coordinates[0];
+        else
+            coordinates.Add(coordinates[0]);
+
+        var points = coordinates.Select(_geometry.Project).ToList();
+        if (points.Take(points.Count - 1).Distinct().Count() < 3)
+        {
+            UpdateStatus("Closing this line would leave fewer than three distinct vertices.");
+            return false;
+        }
+
+        // A self-crossing loop may have zero signed area but still enclose
+        // even-odd regions. Reject only an entirely collinear boundary.
+        var nonCollinear = false;
+        for (var i = 1; i < points.Count - 2; i++)
+        {
+            var ab = points[i] - points[0];
+            var ac = points[i + 1] - points[0];
+            if (Math.Abs(ab.X * ac.Y - ab.Y * ac.X) > 1e-18d)
+            {
+                nonCollinear = true;
+                break;
+            }
+        }
+        if (!nonCollinear)
+        {
+            UpdateStatus("Joining these endpoints would make a degenerate loop.");
+            return false;
+        }
+
+        PushPendingGuideEditUndo();
+        guide.Guide = new KmlCutGuide(
+            guide.Guide.Name, coordinates, true);
+        CancelClipPreviewInternal(updateStatus: false);
+        StartEditingGuide(guide);
+        RefreshSurface();
+        UpdatePendingGuidePreview();
+        UpdateCutScopeDisplay();
+        return true;
     }
 
     private void MarkCloneTargets(
         XDocument clone,
         IReadOnlyCollection<XElement> selected,
-        bool limitToSelection)
+        bool limitToSelection,
+        IReadOnlySet<string> protectedSourceIds)
     {
-        if (!limitToSelection)
-            return;
+        var sourceLines = _workingDocument
+            .Descendants(KmlNs + "LineString").ToList();
+        var cloneLines = clone.Descendants(KmlNs + "LineString").ToList();
+        var selectedSet = selected.ToHashSet();
 
-        var sourceLines =
-            _workingDocument
-                .Descendants(
-                    KmlNs +
-                    "LineString")
-                .ToList();
-
-        var cloneLines =
-            clone
-                .Descendants(
-                    KmlNs +
-                    "LineString")
-                .ToList();
-
-        var selectedSet =
-            selected.ToHashSet();
-
-        var count =
-            Math.Min(
-                sourceLines.Count,
-                cloneLines.Count);
-
-        for (var index = 0;
-             index < count;
-             index++)
+        for (var i = 0; i < Math.Min(sourceLines.Count, cloneLines.Count); i++)
         {
-            if (selectedSet.Contains(
-                    sourceLines[index]))
+            var original = sourceLines[i];
+            var protectedSource = protectedSourceIds.Contains(
+                original.Attribute(SourceGuideMarkerAttribute)?.Value ?? "");
+            if (!protectedSource &&
+                (!limitToSelection || selectedSet.Contains(original)))
             {
-                cloneLines[index]
-                    .SetAttributeValue(
-                        CutTargetMarkerAttribute,
-                        "true");
+                cloneLines[i].SetAttributeValue(
+                    CutTargetMarkerAttribute, "true");
             }
         }
     }
 
-    private static void RemoveHelperLinesFromGeometry(
-        KmlLineGeometryService geometry,
-        IReadOnlyList<CutGuideState> guides)
-    {
-        var sourceIds =
-            guides
-                .Where(
-                    guide =>
-                        guide.RemoveMatchingSourceBeforeCut &&
-                        !string.IsNullOrWhiteSpace(
-                            guide.SourceLineId))
-                .Select(
-                    guide =>
-                        guide.SourceLineId!)
-                .ToHashSet(
-                    StringComparer.Ordinal);
-
-        if (sourceIds.Count == 0)
-            return;
-
-        var helpers =
-            geometry.Features
-                .Where(
-                    feature =>
-                        sourceIds.Contains(
-                            feature.LineStringElement
-                                .Attribute(
-                                    SourceGuideMarkerAttribute)
-                                ?.Value ??
-                            string.Empty))
-                .Select(
-                    feature =>
-                        feature.LineStringElement)
-                .ToList();
-
-        if (helpers.Count > 0)
-            geometry.DeleteLines(helpers);
-    }
+    private sealed record ClipGuideVersion(
+        Guid Id,
+        bool IsClosed,
+        string? SourceLineId,
+        IReadOnlyList<KmlCoordinate> Coordinates);
 
     private sealed record ClipPreviewState(
         ClipMode Mode,
         Point? KeepPoint,
-        double DirectionSampleDistance,
-        int KeptPieces,
-        int DeletedPieces);
+        ClipPlan Plan,
+        long GeometryRevision,
+        bool OnlySelected,
+        HashSet<XElement> SelectedLines,
+        IReadOnlyList<ClipGuideVersion> Guides);
 
     private sealed record ClipPlan(
         int LinesSplit,
         int KeptPieces,
         int DeletedPieces,
         LineEditorClipPreviewOverlay Overlay,
-        IReadOnlyDictionary<
-            Guid,
-            List<Point>> CutPointsByGuide,
-        PreparedOpenBoundary? OpenBoundary)
+        IReadOnlyDictionary<Guid, List<Point>> CutPointsByGuide,
+        PreparedOpenBoundary? OpenBoundary,
+        XDocument ResultDocument,
+        string ScopeDescription,
+        bool HasSelfCrossingLoop)
     {
-        public static ClipPlan Empty { get; } =
+        public static ClipPlan Empty { get; } = new(
+            0, 0, 0,
+            new LineEditorClipPreviewOverlay(
+                Rect.Empty,
+                Array.Empty<IReadOnlyList<Point>>(),
+                false,
+                Array.Empty<IReadOnlyList<Point>>(),
+                Array.Empty<IReadOnlyList<Point>>()),
+            new Dictionary<Guid, List<Point>>(),
+            null,
+            new XDocument(),
+            "no eligible lines",
+            false);
+    }
+
+} =
             new(
                 0,
                 0,
