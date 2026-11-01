@@ -33,6 +33,7 @@ public partial class LineEditorWindow
         if (_workflowStep == 2)
             return;
 
+        EndSideSelectMode();
         _simplifyPanelInitializing = true;
 
         try
@@ -42,13 +43,8 @@ public partial class LineEditorWindow
 
             UpdateSimplifySelectionState();
 
-            if (_selected.Count == 0 &&
-                SimplifySelectedRadioButton
-                    .IsChecked == true)
-            {
-                SimplifyAllRadioButton
-                    .IsChecked = true;
-            }
+            // Never silently expand smoothing/simplification to every
+            // line merely because the selection is empty.
 
             UpdateSmoothOnlyWarning();
         }
