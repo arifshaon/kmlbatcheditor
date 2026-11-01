@@ -63,8 +63,8 @@ public partial class MainWindow : System.Windows.Window
 
         if (!accepted)
         {
-            // Never persist cancelled geometry/history, but remember the
-            // user's scope preference even when the editor closes unchanged.
+            // Preserve only the checked/unchecked Split scope preference.
+            // Cancelling must not persist edited geometry or split guides.
             _lineEditorSessionState = _lineEditorSessionState is null
                 ? sessionState with
                 {

@@ -1,64 +1,71 @@
-# Clip regression verification (Windows, .NET 8)
+# Select side regression and Windows acceptance checks
 
-This document accompanies the Clip correctness and workflow fixes. Run the
-geometry checks from the repository root on Windows:
+## Automated checks
+
+On Windows, from the repository root:
 
 ```powershell
+dotnet build KmlScopedEditor/KmlScopedEditor.csproj -c Release
 dotnet run --project KmlScopedEditor.RegressionTests/KmlScopedEditor.RegressionTests.csproj -c Release
 ```
 
-The test runner uses the same compiled geometry service as the application,
-without external test packages. It exercises: repeated closing coordinates;
-two-loop union and complement; ~0.1 m edges; horizontal, vertical, diagonal,
-and U-shaped open boundaries; self-crossing detection; length conservation;
-selection scope; preserving Point and Polygon geometry; and classification of
-1,500 lines against a 2,000-edge loop. The benchmark prints elapsed time;
-the suggested target is below 500 ms on the reference Windows machine.
+The geometry runner covers open and closed divider regions, a 0.1 m
+boundary edge, source scope, point/polygon preservation, and true segment
+crossings. Crucially, regression cases run the **real SplitWithStroke**
+implementation first and verify that fresh closed/open split pieces show
+**zero false crossings** and selected-only splitting of **5 of 18** lines
+leaves exactly **13 genuine crossings**. The 3 m loop crossed by a line with
+2 m vertex spacing remains detectable. Repair-offer tracking is tested across
+repeated clicks, failed/declined repairs, geometry revisions and guide
+sequences. The benchmark uses a 2,000-vertex boundary against 1,500 lines. The performance target on the
+reference Windows machine is under **500 ms**; the test reports elapsed
+milliseconds, not an assertion about arbitrary hardware.
 
-## Line Editor integration checks
+## Manual integration acceptance
 
-These require the GUI; they cannot be established by geometry-only tests.
+1. Confirm the **Version 1.3 Step 2** Split workflow: import/draw/use
+   a line, followed by Apply split. **Only split the selected lines** must
+   be checked by default. With a selection, only selected lines are split.
+   With no selection, all eligible lines are split, but the box must
+   **remain checked** (including after Clear selection and returning
+   from Step 3). Unchecking the box deliberately splits all lines even
+   when a selection exists. Check preference restoration after closing
+   the editor without applying changes. Source helper removal remains
+   unchanged.
+2. **Closed loop:** cut.kmz → Close loop → Apply split → Step 3 Select side →
+   click outside → Delete. **58 pieces remain**, as measured in the
+   prototype. Recheck the result against the reference data.
+3. **Open divider:** cut.kmz → Apply split → Select side → click below the
+   line → authorize an extra split if prompted → **180 pieces below** are
+   selected, as measured by the prototype. Delete only after inspection.
+4. Check horizontal, vertical, diagonal, and U-shaped open guides, both
+   sides, and opposite-side complementarity. Refuse a hook/ends-facing
+   divider that does not partition the map.
+5. Check narrow-loop crossing of a long segment whose endpoints and midpoint
+   are outside, plus the 3 m / 2 m-spaced-points regression.
+6. Crossing repair is offered once. If declined, crossings remain unselected.
+   If accepted, only flagged crossing lines split, the selection is repeated,
+   no prompt loop occurs, and the latest applied guide sequence is unchanged.
+7. Undo deletes first, then the extra repair split while staying in Step 3,
+   then the original split while returning to Step 2. A crossing repair
+   declined or found ineffective must **not** repeatedly prompt on each
+   subsequent click for the same geometry/guide revision.
+8. Verify Step 3 Select side stays active on ordinary clicks and Delete, and
+   exits on toggle, Escape, Pan, step change, Apply split, Undo, Done, Cancel
+   and opening Simplify. No stale dashed overlay is left after exit.
+9. Confirm selections restored across normal surface refresh, correct
+   Shift-add / Alt-remove, and refusal of clicks within 1 m of the boundary.
+10. **Ridge regression:** Preserve the previously measured result of
+    **38 pieces (87.7%)**. Test normal Split, lasso, Simplify and Done.
+11. **Simplify / smooth:** Restore the **version 1.2 default of All
+    lines** in Steps 1 and 3. The user may switch to **Only selected lines**.
+    If the selection is then empty when the panel is reopened, it falls
+    back to All lines as it did in 1.2. Nothing is modified until Apply.
+12. Confirm Points, Polygons, mixed MultiGeometry, overlays, original source
+    line deletion semantics and Save As are unaffected.
 
-1. **Closed loops:** Import/draw one loop, Keep inside; Undo; Keep outside.
-   Confirm complementary retained/deleted segments and no off-side segments.
-2. **Two loops:** Keep inside means inside either loop; Keep outside is their
-   complement. No boundary source is deleted.
-3. **Open boundaries:** Test vertical, horizontal, diagonal, cut.kmz, and a U
-   shape. Clicking the opposite side must invert the result without strange
-   corner connections. Self-intersecting or non-dividing open boundaries
-   should still be refused.
-4. **Non-dividing open line:** Use a hook or ends facing each other; on refusal
-   accept “Join its ends.” The pending guide becomes a closed loop, the
-   original source line stays unchanged, and Ctrl+Z restores the open guide.
-   Check insufficient distinct vertices are rejected.
-5. **Use selected line:** Select an existing closed source contour, choose
-   Use selected line, turn off the selected-only limit if no other lines are
-   selected, then Clip. The source remains one intact LineString while other
-   eligible lines are clipped. Repeat with multiple boundary sources.
-   Separately verify Apply Split still removes helper sources as before.
-6. **Scope:** Select several lines and enable Limit to selected. Preview
-   identifies N selected eligible lines; unselected KML coordinate strings
-   remain unchanged. With no selection, Clip refuses rather than expanding
-   to the whole document.
-7. **Preview exactness:** Preview Clip, change the boundary, selection, or
-   document, then attempt Apply. A stale plan must never apply. With an
-   unchanged preview, Apply must yield the exact geometry previewed.
-8. **Undo:** Apply a Clip, Ctrl+Z, and inspect the full KML document and
-   pending guide state. Undo restores the original lines. Then apply again.
-9. **Preservation:** With Point, Polygon and GroundOverlay features in the
-   same file, Clip must modify only eligible LineStrings.
-10. **Persistence:** Turn off selected-only scope, close the editor without
-    saving geometry, reopen it; the checkbox should remain off for the same
-    document. Opening a new KML resets the session.
-11. **Self-crossing loop:** Preview a figure-eight and confirm the even-odd
-    warning appears; ensure displayed retained/delete regions match the rule.
-12. **Performance:** With the Winchester dataset (~132,000 vertices),
-    preview and apply a 557-point boundary and a ~2,400-point one.
-    Record elapsed time and verify the UI remains usable. Apply must not
-    recalculate the expensive classification.
+## Verification limitation
 
-## Known verification limits
-
-The container used to prepare these changes does not have the .NET 8 SDK or
-a Windows WPF runtime. A Windows clean rebuild and the GUI checks above are
-required before describing the release as runtime-verified.
+Source auditing alone is not enough. A successful Windows build, automated
+geometry tests and manual checks with the reference files are required
+before declaring the redesign release-ready.

@@ -2,7 +2,7 @@
 
 The packaging scripts create a self-contained Windows x64 application, a portable ZIP, and a Windows Setup installer. Recipients do not need Visual Studio or a separate .NET installation.
 
-The current tester release is **version 1.2.0**.
+The current development release target is **version 1.3.0**. Build verification is required before distributing the installer.
 
 It includes the current Simple KML Editor interface, placemark style editing, the Line Editor, additive pending split lines, line simplification/smoothing with topology warnings, chronological undo, tree tick preservation, splash screen, application menu, About dialog, and contextual tooltips.
 
@@ -26,12 +26,12 @@ The release version is read from:
 KmlScopedEditor\KmlScopedEditor.csproj
 ```
 
-For version 1.2.0:
+For version 1.3.0:
 
 ```xml
-<Version>1.2.0</Version>
-<FileVersion>1.2.0.0</FileVersion>
-<AssemblyVersion>1.2.0.0</AssemblyVersion>
+<Version>1.3.0</Version>
+<FileVersion>1.3.0.0</FileVersion>
+<AssemblyVersion>1.3.0.0</AssemblyVersion>
 ```
 
 ## Build the installer locally
@@ -59,8 +59,8 @@ Outputs:
 
 ```text
 artifacts\publish\win-x64\KmlScopedEditor.exe
-artifacts\portable\Simple-KML-Editor-Portable-1.2.0-win-x64.zip
-artifacts\installer\Simple-KML-Editor-Setup-1.2.0.exe
+artifacts\portable\Simple-KML-Editor-Portable-1.3.0-win-x64.zip
+artifacts\installer\Simple-KML-Editor-Setup-1.3.0.exe
 ```
 
 ## GitHub Actions tester build
@@ -73,8 +73,8 @@ The workflow:
 
 builds the same Windows packages on a Windows runner and uploads:
 
-- `Simple-KML-Editor-Setup-1.2.0`
-- `Simple-KML-Editor-Portable-1.2.0-win-x64`
+- `Simple-KML-Editor-Setup-1.3.0`
+- `Simple-KML-Editor-Portable-1.3.0-win-x64`
 
 as downloadable workflow artifacts.
 
@@ -86,7 +86,7 @@ The installer keeps the existing permanent `AppId`:
 {7F5C89B1-E9E9-438F-AF80-5057DD72C1F0}
 ```
 
-Do not change this value in `Installer\KmlScopedEditor.iss`. Keeping it stable allows Simple KML Editor 1.2.0 to upgrade earlier KML Scoped Editor installations instead of creating a separate application entry.
+Do not change this value in `Installer\KmlScopedEditor.iss`. Keeping it stable allows Simple KML Editor 1.3.0 to upgrade existing version 1.2.0 installations instead of creating a second application entry.
 
 For a fresh installation, the default location is:
 
@@ -98,15 +98,18 @@ The installer runs per-user and does not require administrator privileges. It cr
 
 ## Suggested tester checks
 
-After installing version 1.2.0:
+After installing version 1.3.0:
 
 1. confirm the splash screen appears and the main window opens as **Simple KML Editor**;
 2. open a KML/KMZ file and confirm the File/Help menus and button tooltips;
 3. open **Help > About Simple KML Editor** and confirm the developer name, GitHub link and Close button are fully visible;
 4. confirm tree ticking uses a normal two-click tick/untick cycle;
 5. open Line Editor and test pending split lines, Apply split and Undo;
-6. test **Simplify / smooth...** in Step 1 and Step 3;
-7. save a KML/KMZ file and reopen it.
+6. test **Simplify / smooth...** in Step 1 and Step 3, with **All lines** selected by default;
+7. check Step 2 **Only split the selected lines** is checked by default, remains checked when selection is cleared, and still splits all eligible lines when none are selected;
+8. check Step 3 **Select side** on an applied split, including open divider display ending at the map extent;
+9. run the independent geometry regression runner and verify the real-file acceptance examples;
+10. save a KML/KMZ file and reopen it.
 
 ## Windows security warning
 

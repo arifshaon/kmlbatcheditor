@@ -8,7 +8,7 @@ This file is the canonical project handover/resource for the **Simple KML Editor
 
 - Visible product name: **Simple KML Editor**.
 - Internal project/repository names remain **KmlScopedEditor** / `kmlbatcheditor`.
-- Current application version: **1.2.0**.
+- Current source/application version on the version 1.3 development branch: **1.3.0** (not yet released).
 - Developer/publisher: **Arif Shaon**.
 - Repository: **https://github.com/arifshaon/kmlbatcheditor**.
 - Main purpose: edit KML/KMZ placemark styles and line geometry, including splitting, deleting, simplifying, smoothing, previewing, and scoped batch editing.
@@ -161,79 +161,62 @@ Important correctness rule:
 
 Output must not retain temporary editor markers.
 
-## 6. Clip to boundary
+## 6. Select side (Step 3)
 
-The Line Editor Step 2 now supports clipping editable line geometry using either an **open** or **closed** pending boundary.
+Version 1.3 keeps the established **Step 2 Apply split** workflow: import,
+draw or use a selected line as a guide, optionally Close loop, then Apply
+split. The later Clip panel has been removed; Select side belongs to Step 3.
 
-### User behavior
-- **Closed boundary**
-  - **Keep inside** previews/deletes eligible LineStrings outside the boundary.
-  - **Keep outside** previews/deletes eligible LineStrings inside the boundary.
-- **Open boundary**
-  - **Choose side** asks the user to click clearly on the side to keep.
-  - The software extends both boundary ends beyond the geometry extent before splitting/classification.
-- Crossed lines are split first; eligible line pieces and untouched eligible whole lines are classified. Clip removes **LineStrings only**, never Points, Polygons, or overlays.
-- Clip always previews before destructive changes:
-  - deletion area shaded;
-  - open-line extensions shown dashed;
-  - kept/deleted counts shown;
-  - **Apply clip** performs the operation;
-  - **Cancel preview** changes nothing.
-- After Apply, the clip boundary becomes applied split history and the editor advances to Step 3 for optional cleanup.
+**New version 1.3 selection-scope default:** **Only split the selected lines**
+is checked by default. When one or more lines are selected, Apply split
+targets those lines only. When no lines are selected, Apply split still
+targets **all eligible lines**, without clearing the checked preference.
+The checkbox stays enabled and the current scope is explained in the UI.
+Users may uncheck it to split all lines even when some are selected.
+The scope preference is preserved across editor sessions for the same
+document, including when the editor closes without keeping geometry changes.
 
-### Closed boundaries
-- `KmlCutGuide` has `IsClosed`.
-- Closure is propagated through pending-guide undo and Line Editor session history.
-- A line is treated as closed when it has a valid ring and its first/last coordinates are within about 0.5 m; closed geometry is normalized so the last coordinate exactly equals the first.
-- **Close loop** works while drawing and for a single pending open guide. A refused non-dividing open clip guide offers to join its endpoints; the pending-guide change is undoable, with validation for degenerate loops.
-- Closed-loop editing preserves closure and does not expose the duplicated final coordinate as a separate logical handle.
-- A valid closed loop cannot be reduced below three distinct vertices.
-- **Use selected line** recognizes a selected closed contour as a closed boundary.
-- Imported Google Earth `Polygon/outerBoundaryIs/LinearRing` is supported as a closed boundary.
-- Polygon inner rings/holes are intentionally not imported as independent clip loops in this version. Treating holes as union loops would invert their semantics.
-- Several closed boundaries are allowed:
-  - Keep inside = inside **any** loop;
-  - Keep outside = outside **all** loops.
+### Step 3: select a side, then delete if desired
 
-### Open boundaries
-- Clip uses **one open boundary at a time**.
-- An open boundary cannot be combined with another open or closed pending boundary for Clip.
-- Endpoint direction is sampled from roughly 10 screen pixels back along the path rather than relying on a potentially jittery final hand-drawn segment.
-- The prepared divider is extended to a bounds rectangle outside the editable geometry.
-- A self-intersecting or otherwise invalid open divider is refused. The user can opt to close a non-dividing open guide, then use Keep inside/Keep outside.
-- The preview stores the exact resulting document, so zooming between Preview and Apply cannot recalculate a different clip.
+- After applying a split, click **Select side** in Step 3.
+- The system uses the most recent applied sequence, including guides restored
+  from the current document's editor session.
+- For closed guides, inside means inside any latest closed loop; outside means
+  outside all. For open guides, a single simple divider is extended beyond
+  the editable geometry and divided into two regions. Multiple open guides or
+  mixed open/closed guides from the last sequence are not supported.
+- The boundary is displayed as a dashed overlay. Open-line extensions are drawn
+  only up to the map's extent; the selection calculation still extends them
+  beyond it with a margin. Click in the map on the side you want. Clicks within
+  1 m of the divider are refused.
+- Plain click replaces the selection; Shift adds and Alt removes. Dragging does
+  not trigger side selection. The mode remains enabled for further clicks.
+- Pieces on the boundary are excluded. Pieces that actually cross the guide
+  are identified by indexed **segment intersections** as well as sampled-side
+  checks, so long segments crossing narrow loops are not silently selected.
+- If crossings remain, the user can authorize an additional split of those
+  crossing lines only. The repair creates a separate `RepairSplit` undo action,
+  does not change the original guide's `AppliedSequence`, reclassifies once,
+  and does not repeatedly prompt. No-op repairs have no undo entry.
+- The actual deletion remains the existing **Delete selected pieces** action.
+  Select side by itself does not change KML geometry.
+- Toggle off, Escape, Pan, workflow changes, Apply split, Undo, Done, Cancel,
+  or opening Simplify end Select side. Deletion refreshes the boundary cache
+  while retaining the mode if it is still valid.
+- The prepared side selection includes an indexed divider, prepared polygons,
+  and a geometry revision; stale state is rebuilt after a geometry change.
 
-### Classification
-- Geometry uses a **1 metre boundary-retention band** and a separate ~1 mm point-on-segment predicate tolerance.
-- Degenerate edges are treated as points rather than marking every point as on-boundary.
-- Per-piece classification uses an indexed boundary-distance search: the first candidate clearly farther than 5 m decides the side; pieces near the boundary retain a farthest-candidate check. Pieces entirely within 1 m of the boundary are kept.
-- Closed boundaries use indexed even-odd point-in-polygon logic; self-crossing loops show an explicit warning.
-- Rectangle perimeter corner positions are unwrapped and sorted to construct untwisted open-side regions.
-- Open boundaries divide an enclosing rectangle into two regions; the user click chooses which region is retained.
+### Simplify / smooth scope
 
-### Selection scope
-The Step 2 checkbox is now:
-- **Limit to selected lines when selected**
-- checked by default.
+Simplify/smooth continues to work in Step 1 and Step 3 with **the original
+version 1.2 default of All lines**. Users may explicitly select
+**Only selected lines**. As in version 1.2, opening Simplify/smooth with an
+empty selection resets a previously selected-only scope to All lines.
+The panel never applies changes without the user choosing Apply.
 
-Semantics:
-- **Clip:** checked + zero selected lines = refuse safely; checked + selected lines = only the selected eligible lines; unchecked = all eligible lines.
-- **Split:** retains its existing no-selection fallback to all lines.
-- Clip's preview always states the effective scope, excluding protected boundary source lines.
-- The checked/unchecked preference is retained when reopening the editor on the same document.
-
-### Preview and transaction safety
-- Clip preview runs expensive split/classification on a background worker using an independent cloned document and copied guide coordinates. UI/WPF state remains on the UI thread; cancelled or stale worker results are ignored.
-- Every eligible clip target is marked explicitly, including when the scope is all lines. Lines used as source boundaries are protected and excluded from splitting/classification, not deleted.
-- Apply Split still removes helper sources; Clip deliberately does not.
-- A completed preview contains the **exact result document** and its scope/geometry/guide revision; stale previews cannot be applied.
-- Apply captures one `UndoActionKind.Clip` snapshot and commits the prepared result without repeating split/classification. A failed transaction restores the pre-clip snapshot.
-- Target markers are removed from the prepared document before Apply.
-- A single Ctrl+Z reverses the whole clip, returns to Step 2, and reports **Clip undone.**
-- Success message follows:
-  - `Clipped to boundary: X line(s) split, Y piece(s) kept, Z deleted.`
-
-Regression checks and Windows GUI acceptance steps are in [CLIP_REGRESSION_TESTS.md](CLIP_REGRESSION_TESTS.md).
+The full regression instructions are in
+[CLIP_REGRESSION_TESTS.md](CLIP_REGRESSION_TESTS.md), retained as a filename
+for compatibility with earlier references.
 
 ## 7. Ring opening / hairpin handling
 
@@ -393,13 +376,18 @@ Important behavior:
 
 ## 14. Packaging and installer
 
-### Current version
-- **1.2.0**
+### Current development version (not yet released)
+- **1.3.0**
 
 Project file:
-- `Version 1.2.0`
-- `FileVersion 1.2.0.0`
-- `AssemblyVersion 1.2.0.0`
+- `Version 1.3.0`
+- `FileVersion 1.3.0.0`
+- `AssemblyVersion 1.3.0.0`
+
+Version 1.3.0 is the current release target. The packaging scripts
+read the version from the project file and name the new installer and
+portable ZIP accordingly. Historical version 1.2.0 packages are not
+version 1.3 release artifacts.
 
 ### Local build outputs
 `Build-Release.ps1` produces:
@@ -407,9 +395,9 @@ Project file:
 - Published EXE:
   - `artifacts\publish\win-x64\KmlScopedEditor.exe`
 - Portable ZIP:
-  - `artifacts\portable\Simple-KML-Editor-Portable-1.2.0-win-x64.zip`
+  - `artifacts\portable\Simple-KML-Editor-Portable-1.3.0-win-x64.zip`
 - Installer:
-  - `artifacts\installer\Simple-KML-Editor-Setup-1.2.0.exe`
+  - `artifacts\installer\Simple-KML-Editor-Setup-1.3.0.exe`
 
 ### Build commands
 - `Build-Portable.cmd`
@@ -439,7 +427,7 @@ The application itself can still publish successfully without Inno Setup; only S
 - The permanent installer `AppId` is:
   - `{7F5C89B1-E9E9-438F-AF80-5057DD72C1F0}`
 - **Do not change this AppId.**
-- It is deliberately retained so v1.2.0 upgrades earlier KML Scoped Editor installations instead of creating a second installed product.
+- It is deliberately retained so v1.3.0 upgrades existing v1.2.0 installations without creating a second installed product.
 
 ### Signing
 - Installer/application are currently unsigned.
@@ -457,10 +445,10 @@ It:
 - installs Inno Setup;
 - executes `Build-Release.ps1 -Installer`;
 - uploads:
-  - `Simple-KML-Editor-Setup-1.2.0`
-  - `Simple-KML-Editor-Portable-1.2.0-win-x64`
+  - `Simple-KML-Editor-Setup-1.3.0`
+  - `Simple-KML-Editor-Portable-1.3.0-win-x64`
 
-A successful Windows Actions run confirmed that the v1.2.0 source and installer process compile successfully on Windows.
+Windows release packaging must produce version 1.3.0 artifacts and pass the installer build before the new version is distributed.
 
 Note:
 - GitHub Actions artifacts are downloaded as ZIP archives, even when the artifact contains a single installer EXE.
@@ -473,7 +461,7 @@ Be careful distinguishing:
 - **committed historical artifacts** already present in the repo; and
 - **new locally/generated build outputs**, which may exist only on the build machine or as GitHub Actions artifacts.
 
-For tester distribution, prefer the freshly built v1.2.0 installer, not an old committed v1.1.0 binary.
+For version 1.3 testers, use only a newly built and verified version 1.3.0 installer. Previous version 1.2.0 packages remain historical artifacts.
 
 ## 17. Tester-facing guidance
 

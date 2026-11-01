@@ -33,6 +33,7 @@ public partial class LineEditorWindow
         if (_workflowStep == 2)
             return;
 
+        EndSideSelectMode();
         _simplifyPanelInitializing = true;
 
         try
@@ -40,14 +41,15 @@ public partial class LineEditorWindow
             SimplifyPanel.Visibility =
                 Visibility.Visible;
 
+            // Preserve v1.2 Simplify/smooth scope: All lines is the
+            // initial default; a previously chosen selected-only scope
+            // falls back to All lines when the selection is empty.
             UpdateSimplifySelectionState();
 
             if (_selected.Count == 0 &&
-                SimplifySelectedRadioButton
-                    .IsChecked == true)
+                SimplifySelectedRadioButton.IsChecked == true)
             {
-                SimplifyAllRadioButton
-                    .IsChecked = true;
+                SimplifyAllRadioButton.IsChecked = true;
             }
 
             UpdateSmoothOnlyWarning();
