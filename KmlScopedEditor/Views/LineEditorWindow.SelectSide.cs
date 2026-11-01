@@ -121,9 +121,11 @@ public partial class LineEditorWindow
         if (!_sideSelectActive)
             return;
 
+        // Display only: open-line extensions stop at the map's edge. The
+        // prepared boundary used for selection keeps its margin.
         var paths = _sideSelectOpenBoundary is not null
-            ? new List<IReadOnlyList<Point>>
-                { _sideSelectOpenBoundary.ExtendedPath }
+            ? KmlBoundaryClipService.ClipOpenBoundaryForDisplay(
+                _sideSelectOpenBoundary, _geometry.WorldBounds).ToList()
             : _sideSelectClosedLoops.ToList();
 
         var bounds = _sideSelectOpenBoundary?.Bounds ??

@@ -185,8 +185,10 @@ document, including when the editor closes without keeping geometry changes.
   outside all. For open guides, a single simple divider is extended beyond
   the editable geometry and divided into two regions. Multiple open guides or
   mixed open/closed guides from the last sequence are not supported.
-- The boundary is displayed as a dashed overlay. Click in the map on the side
-  you want. Clicks within 1 m of the divider are refused.
+- The boundary is displayed as a dashed overlay. Open-line extensions are drawn
+  only up to the map's extent; the selection calculation still extends them
+  beyond it with a margin. Click in the map on the side you want. Clicks within
+  1 m of the divider are refused.
 - Plain click replaces the selection; Shift adds and Alt removes. Dragging does
   not trigger side selection. The mode remains enabled for further clicks.
 - Pieces on the boundary are excluded. Pieces that actually cross the guide

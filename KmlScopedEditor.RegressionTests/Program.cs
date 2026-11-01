@@ -28,6 +28,7 @@ internal static class Program
         Run(nameof(SideRepairPromptRememberedUntilRevisionChanges), SideRepairPromptRememberedUntilRevisionChanges);
         Run(nameof(SideSelectionLargeIndexBenchmark), SideSelectionLargeIndexBenchmark);
         Run(nameof(SelfCrossingLoopIsDetected), SelfCrossingLoopIsDetected);
+        Run(nameof(OpenBoundaryDisplayStopsAtMapEdge), OpenBoundaryDisplayStopsAtMapEdge);
         Run(nameof(SelectedScopeDoesNotTouchOthers), SelectedScopeDoesNotTouchOthers);
         Run(nameof(SplitDefaultsToSelectedButUsesAllIfNoneSelected), SplitDefaultsToSelectedButUsesAllIfNoneSelected);
         Run(nameof(PointsAndPolygonsSurviveLineDeletion), PointsAndPolygonsSurviveLineDeletion);
@@ -73,6 +74,38 @@ internal static class Program
         geometry.Features
             .Where(f => lines.Contains(f.LineStringElement))
             .Select(f => f.Name).ToHashSet();
+
+    private static void OpenBoundaryDisplayStopsAtMapEdge()
+    {
+        var geometry = Geometry(
+            ("south", new[] { (-.002, -.001), (.002, -.001) }),
+            ("north", new[] { (-.002, .001), (.002, .001) }));
+        var line = new[] { (-.0005, -.0005), (.0005, .0005) }
+            .Select(p => geometry.Project(new KmlCoordinate(p.Item1, p.Item2, null)))
+            .ToList();
+        Require(KmlBoundaryClipService.TryPrepareOpenBoundary(
+                line, geometry.WorldBounds,
+                KmlBoundaryClipService.WorldUnitsFromMetres(10d),
+                out var prepared, out var error) && prepared is not null,
+            "Open divider refused: " + error);
+
+        var bounds = geometry.WorldBounds;
+        const double eps = 1e-12;
+        bool Inside(Point p) =>
+            p.X >= bounds.Left - eps && p.X <= bounds.Right + eps &&
+            p.Y >= bounds.Top - eps && p.Y <= bounds.Bottom + eps;
+        bool OnEdge(Point p) =>
+            Math.Abs(p.X - bounds.Left) < eps || Math.Abs(p.X - bounds.Right) < eps ||
+            Math.Abs(p.Y - bounds.Top) < eps || Math.Abs(p.Y - bounds.Bottom) < eps;
+
+        var display = KmlBoundaryClipService.ClipOpenBoundaryForDisplay(prepared!, bounds);
+        Require(display.SelectMany(path => path).All(Inside),
+            "Displayed extensions must stay within the map extent.");
+        Require(OnEdge(display[0][0]) && OnEdge(display[^1][^1]),
+            "Displayed extensions must end exactly on the map edge.");
+        Require(!prepared!.ExtendedPath.All(Inside),
+            "The selection boundary must still extend beyond the map extent.");
+    }
 
     private static void SelfCrossingLoopIsDetected()
     {

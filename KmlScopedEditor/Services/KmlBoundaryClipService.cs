@@ -786,6 +786,80 @@ public static class KmlBoundaryClipService
     public static bool LoopSelfIntersects(IReadOnlyList<Point> loop) =>
         PolylineSelfIntersects(loop);
 
+    /// <summary>
+    /// Display only: the open divider with its two extensions shortened to
+    /// <paramref name="displayBounds"/> (normally the map's extent). Side
+    /// selection keeps using the full <see cref="PreparedOpenBoundary.ExtendedPath"/>,
+    /// whose margin beyond the map keeps edge-touching lines unambiguous.
+    /// </summary>
+    public static IReadOnlyList<IReadOnlyList<Point>> ClipOpenBoundaryForDisplay(
+        PreparedOpenBoundary boundary,
+        Rect displayBounds)
+    {
+        var path = boundary.ExtendedPath;
+        if (displayBounds.IsEmpty || path.Count < 3)
+            return new[] { path };
+
+        var result = new List<IReadOnlyList<Point>>();
+        if (TryClipSegmentToRect(path[0], path[1], displayBounds, out var startA, out var startB))
+            result.Add(new[] { startA, startB });
+        if (path.Count >= 4)
+            result.Add(path.Skip(1).Take(path.Count - 2).ToList());
+        if (TryClipSegmentToRect(path[^2], path[^1], displayBounds, out var endA, out var endB))
+            result.Add(new[] { endA, endB });
+        return result;
+    }
+
+    // Liang-Barsky segment clipping. Returns false when no part of the
+    // segment lies inside the rectangle.
+    public static bool TryClipSegmentToRect(
+        Point a,
+        Point b,
+        Rect rect,
+        out Point clippedA,
+        out Point clippedB)
+    {
+        clippedA = a;
+        clippedB = b;
+        if (rect.IsEmpty)
+            return false;
+
+        double t0 = 0d, t1 = 1d;
+        var dx = b.X - a.X;
+        var dy = b.Y - a.Y;
+
+        bool Clip(double p, double q)
+        {
+            if (p == 0d)
+                return q >= 0d;
+            var r = q / p;
+            if (p < 0d)
+            {
+                if (r > t1)
+                    return false;
+                if (r > t0)
+                    t0 = r;
+            }
+            else
+            {
+                if (r < t0)
+                    return false;
+                if (r < t1)
+                    t1 = r;
+            }
+            return true;
+        }
+
+        if (!Clip(-dx, a.X - rect.Left) || !Clip(dx, rect.Right - a.X) ||
+            !Clip(-dy, a.Y - rect.Top) || !Clip(dy, rect.Bottom - a.Y) ||
+            t1 - t0 <= 1e-12d)
+            return false;
+
+        clippedA = new Point(a.X + t0 * dx, a.Y + t0 * dy);
+        clippedB = new Point(a.X + t1 * dx, a.Y + t1 * dy);
+        return true;
+    }
+
     private static bool PolylineSelfIntersects(IReadOnlyList<Point> points)
     {
         if (points.Count < 4)
