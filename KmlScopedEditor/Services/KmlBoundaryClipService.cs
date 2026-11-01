@@ -541,7 +541,7 @@ public static class KmlBoundaryClipService
                 var crossed = false;
                 for (var i = 1; i < points.Count; i++)
                 {
-                    if (_index.HasProperCrossing(points[i - 1], points[i]))
+                    if (_index.HasProperCrossing(points[i - 1], points[i], Side))
                     {
                         crossed = true;
                         break;
@@ -1609,12 +1609,15 @@ public static class KmlBoundaryClipService
                    (node.Right is not null && AnyWithin(node.Right, point, limit));
         }
 
-        public bool HasProperCrossing(Point a, Point b) =>
-            _root is not null && Crosses(_root, a, b,
+        public bool HasProperCrossing(
+            Point a, Point b, Func<Point, bool> side) =>
+            _root is not null && Crosses(_root, a, b, side,
                 new Rect(new Point(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y)),
                          new Point(Math.Max(a.X, b.X), Math.Max(a.Y, b.Y))));
 
-        private static bool Crosses(Node node, Point a, Point b, Rect search)
+        private static bool Crosses(
+            Node node, Point a, Point b,
+            Func<Point, bool> side, Rect search)
         {
             if (!node.Bounds.IntersectsWith(search))
                 return false;
@@ -1639,13 +1642,28 @@ public static class KmlBoundaryClipService
                     if (t > endpointTolerance && t < 1d - endpointTolerance &&
                         u >= -endpointTolerance && u <= 1d + endpointTolerance)
                     {
-                        return true;
+                        if (u > endpointTolerance &&
+                            u < 1d - endpointTolerance)
+                            return true;
+
+                        // At an endpoint of a guide segment, a tangent
+                        // touch must not count as a crossing. Compare the
+                        // sides immediately before/after the intersection.
+                        // The offsets are >1mm geometric tolerance and
+                        // stay strictly within the target segment.
+                        var delta = Math.Min(
+                            WorldUnitsFromMetres(0.01d) / Math.Max(ab.Length, 1e-12d),
+                            Math.Min(t, 1d - t) * 0.25d);
+                        if (delta > 0d &&
+                            side(a + ab * (t - delta)) !=
+                            side(a + ab * (t + delta)))
+                            return true;
                     }
                 }
                 return false;
             }
-            return (node.Left is not null && Crosses(node.Left, a, b, search)) ||
-                   (node.Right is not null && Crosses(node.Right, a, b, search));
+            return (node.Left is not null && Crosses(node.Left, a, b, side, search)) ||
+                   (node.Right is not null && Crosses(node.Right, a, b, side, search));
         }
 
         public double Distance(Point point)
