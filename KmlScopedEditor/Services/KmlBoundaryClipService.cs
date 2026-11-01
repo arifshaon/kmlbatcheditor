@@ -1239,9 +1239,18 @@ public static class KmlBoundaryClipService
                     var t = Cross(ac, cd) / denominator;
                     var u = Cross(ac, ab) / denominator;
                     var endpointTolerance = 1e-9d;
+                    // A Split-created endpoint can differ from its boundary
+                    // intersection by rounding error. Compare distance in
+                    // metres, not just the fraction of a feature segment.
+                    var endpointGap = WorldUnitsFromMetres(0.001d) /
+                        Math.Max(ab.Length, 1e-15d);
+                    var featureEndTolerance = Math.Min(0.49d,
+                        Math.Max(endpointTolerance, endpointGap));
+
                     // The feature must genuinely pass *through* the
                     // boundary, not merely end or touch at a cut point.
-                    if (t > endpointTolerance && t < 1d - endpointTolerance &&
+                    if (t > featureEndTolerance &&
+                        t < 1d - featureEndTolerance &&
                         u >= -endpointTolerance && u <= 1d + endpointTolerance)
                     {
                         if (u > endpointTolerance &&
