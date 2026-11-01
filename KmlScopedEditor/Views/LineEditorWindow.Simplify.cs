@@ -41,13 +41,16 @@ public partial class LineEditorWindow
             SimplifyPanel.Visibility =
                 Visibility.Visible;
 
-            // Each opening defaults to the explicitly selected lines.
-            // Choosing All lines must be a deliberate user action.
-            SimplifySelectedRadioButton.IsChecked = true;
+            // Preserve v1.2 Simplify/smooth scope: All lines is the
+            // initial default; a previously chosen selected-only scope
+            // falls back to All lines when the selection is empty.
             UpdateSimplifySelectionState();
 
-            // Never silently expand smoothing/simplification to every
-            // line merely because the selection is empty.
+            if (_selected.Count == 0 &&
+                SimplifySelectedRadioButton.IsChecked == true)
+            {
+                SimplifyAllRadioButton.IsChecked = true;
+            }
 
             UpdateSmoothOnlyWarning();
         }
