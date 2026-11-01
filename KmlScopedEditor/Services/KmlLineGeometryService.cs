@@ -1761,6 +1761,8 @@ public sealed class KmlLineGeometryService
         var r = b - a;
         var s = d - c;
         var denominator = Cross(r, s);
+        var rLength = r.Length;
+        var sLength = s.Length;
 
         targetT = 0d;
         strokeT = 0d;
@@ -1768,7 +1770,8 @@ public sealed class KmlLineGeometryService
 
         // Collinear overlaps are ambiguous for a cut gesture. Ignore them;
         // crossing or near-crossing gestures are what the line editor expects.
-        if (Math.Abs(denominator) < 0.000000000001d)
+        if (rLength <= 1e-12d || sLength <= 1e-12d ||
+            Math.Abs(denominator) <= 1e-12d * rLength * sLength)
             return false;
 
         var cMinusA = c - a;
