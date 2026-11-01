@@ -128,9 +128,6 @@ public partial class LineEditorWindow : Window
 
         _hideAppliedSplitHistory =
             sessionState.HideAppliedSplitHistory;
-        OnlySplitSelectedCheckBox.IsChecked =
-            sessionState.LimitToSelectedLines;
-
         if (!string.IsNullOrWhiteSpace(
                 sessionState.AppliedHistoryColor))
         {
@@ -216,8 +213,7 @@ public partial class LineEditorWindow : Window
             appliedGuides,
             _hideAppliedSplitHistory,
             _appliedHistoryColor.ToString(),
-            _appliedHistoryThickness,
-            OnlySplitSelectedCheckBox.IsChecked == true);
+            _appliedHistoryThickness);
     }
 
     private void InitializeAppliedHistoryAppearanceControls()
@@ -3610,5 +3606,4 @@ public sealed record LineEditorSessionState(
     IReadOnlyList<LineEditorSessionGuideState> AppliedGuides,
     bool HideAppliedSplitHistory,
     string AppliedHistoryColor,
-    double AppliedHistoryThickness,
-    bool LimitToSelectedLines = false);
+    double AppliedHistoryThickness);
