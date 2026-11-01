@@ -3476,8 +3476,8 @@ public partial class LineEditorWindow : Window
                 {
                     UndoActionKind.Split =>
                         "Undo the last applied split (Ctrl+Z)",
-                    UndoActionKind.Clip =>
-                        "Undo the last clip operation (Ctrl+Z)",
+                    UndoActionKind.RepairSplit =>
+                        "Undo the extra split on crossing lines (Ctrl+Z)",
                     UndoActionKind.Simplify =>
                         "Undo the last simplify operation (Ctrl+Z)",
                     _ =>
