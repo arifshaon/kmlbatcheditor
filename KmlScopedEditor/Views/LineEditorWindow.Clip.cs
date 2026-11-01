@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Xml.Linq;
+using KmlScopedEditor.Models;
 using KmlScopedEditor.Services;
 using Point = System.Windows.Point;
 using Rect = System.Windows.Rect;
