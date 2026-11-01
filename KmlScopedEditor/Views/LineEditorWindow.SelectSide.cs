@@ -53,7 +53,12 @@ public partial class LineEditorWindow
         SetTool(LineEditorTool.Select);
         EditorSurface.Cursor = System.Windows.Input.Cursors.Cross;
         ShowSideSelectBoundary();
-        UpdateStatus("Click the side to select. Shift-click adds; Alt-click removes.");
+        var crossedLoop = _sideSelectClosedLoops.Any(
+            KmlBoundaryClipService.LoopSelfIntersects);
+        UpdateStatus("Click the side to select. Shift-click adds; Alt-click removes." +
+            (crossedLoop
+                ? " Warning: the last closed loop crosses itself; inside uses the even-odd rule."
+                : ""));
         return true;
     }
 
