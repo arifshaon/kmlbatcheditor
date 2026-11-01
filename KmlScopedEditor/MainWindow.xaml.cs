@@ -58,11 +58,24 @@ public partial class MainWindow : System.Windows.Window
             Owner = this
         };
 
-        if (editor.ShowDialog() != true)
-            return;
+        var accepted = editor.ShowDialog() == true;
+        var sessionState = editor.SessionState;
 
-        var sessionState =
-            editor.SessionState;
+        if (!accepted)
+        {
+            // Never persist cancelled geometry/history, but remember the
+            // user's scope preference even when the editor closes unchanged.
+            _lineEditorSessionState = _lineEditorSessionState is null
+                ? sessionState with
+                {
+                    AppliedGuides = Array.Empty<LineEditorSessionGuideState>()
+                }
+                : _lineEditorSessionState with
+                {
+                    LimitToSelectedLines = sessionState.LimitToSelectedLines
+                };
+            return;
+        }
 
         await viewModel.ApplyLineEditorDocumentAsync(
             editor.EditedDocument);
