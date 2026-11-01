@@ -72,3 +72,15 @@ Navigation: **right-drag** or **Space+drag** pans from any step; middle-drag als
 Imported split lines are temporary overlays and are not saved into the output KML/KMZ.
 
 For large contour files, the Line Editor uses spatial indexing and retained drawing layers for performance. The explicit **Simplify / smooth...** feature can reduce stored coordinates using a metre-based tolerance, optionally smooth curves, preview measured deviation, and warn about newly introduced crossings before Apply.
+
+
+### Clip regression checks
+
+Clip geometry correctness checks and a Windows GUI acceptance checklist are documented in
+[CLIP_REGRESSION_TESTS.md](CLIP_REGRESSION_TESTS.md). On Windows with .NET 8 installed:
+
+```powershell
+dotnet run --project KmlScopedEditor.RegressionTests/KmlScopedEditor.RegressionTests.csproj -c Release
+```
+
+The CI workflow also builds the WPF application and runs these geometry checks on Windows.
