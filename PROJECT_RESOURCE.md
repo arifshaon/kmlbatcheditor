@@ -11,6 +11,11 @@ This file is the canonical project handover/resource for the **Simple KML Editor
 - Current source/application version on the version 1.3 development branch: **1.3.0** (not yet released).
 - Developer/publisher: **Arif Shaon**.
 - Repository: **https://github.com/arifshaon/kmlbatcheditor**.
+- Licensing of the current source: **PolyForm Noncommercial License 1.0.0**,
+  a source-available license that does not grant commercial use. The legal
+  text is in `LICENSE`; `NOTICE` records the copyright and important
+  exceptions. Previously distributed MIT-licensed copies retain their
+  historic grants. Third-party materials keep their respective licenses.
 - Main purpose: edit KML/KMZ placemark styles and line geometry, including splitting, deleting, simplifying, smoothing, previewing, and scoped batch editing.
 - Do **not** rename the internal namespaces/project unless there is a specific reason. The visible branding can stay separate from internal identifiers.
 
@@ -375,6 +380,20 @@ Important behavior:
 - Unsaved changes indicator/warning remains important.
 
 ## 14. Packaging and installer
+
+### Noncommercial license packaging
+- The current source is offered under PolyForm Noncommercial 1.0.0,
+  rather than the former MIT License.
+- Do not remove the repository's `LICENSE` or `NOTICE`. The WPF
+  project copies both into publish output; `Build-Release.ps1` verifies
+  their presence, so both portable and installed packages include them.
+- The installer displays the license during setup through
+  `Installer/KmlScopedEditor.iss`.
+- Existing MIT grants for historical versions cannot be revoked by
+  relicensing future distributions. This change applies only to the
+  project material whose copyright can lawfully be licensed here.
+- Preserve third-party dependencies' separate licensing and notices.
+
 
 ### Current development version (not yet released)
 - **1.3.0**
