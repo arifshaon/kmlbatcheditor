@@ -895,6 +895,12 @@ public partial class LineEditorWindow
         string? SourceLineId,
         IReadOnlyList<KmlCoordinate> Coordinates);
 
+    private sealed record ClipGuideVersion(
+        Guid Id,
+        bool IsClosed,
+        string? SourceLineId,
+        IReadOnlyList<KmlCoordinate> Coordinates);
+
     private sealed record ClipPreviewState(
         ClipMode Mode,
         Point? KeepPoint,
@@ -928,25 +934,5 @@ public partial class LineEditorWindow
             new XDocument(),
             "no eligible lines",
             false);
-    }
-
-} =
-            new(
-                0,
-                0,
-                0,
-                new LineEditorClipPreviewOverlay(
-                    Rect.Empty,
-                    Array.Empty<
-                        IReadOnlyList<Point>>(),
-                    false,
-                    Array.Empty<
-                        IReadOnlyList<Point>>(),
-                    Array.Empty<
-                        IReadOnlyList<Point>>()),
-                new Dictionary<
-                    Guid,
-                    List<Point>>(),
-                null);
     }
 }
