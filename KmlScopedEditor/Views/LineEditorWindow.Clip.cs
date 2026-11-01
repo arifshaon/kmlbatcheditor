@@ -610,18 +610,17 @@ public partial class LineEditorWindow
                             ? CutTargetMarkerAttribute
                             : null);
 
-            var bounds =
-                previewGeometry.WorldBounds;
+            var allBoundaryPoints =
+                closedLoops
+                    .SelectMany(
+                        loop => loop)
+                    .ToList();
 
-            foreach (var loop in
-                     closedLoops)
-            {
-                bounds =
-                    KmlBoundaryClipService
-                        .BuildClipBounds(
-                            bounds,
-                            loop);
-            }
+            var bounds =
+                KmlBoundaryClipService
+                    .BuildClipBounds(
+                        previewGeometry.WorldBounds,
+                        allBoundaryPoints);
 
             overlay =
                 new LineEditorClipPreviewOverlay(
