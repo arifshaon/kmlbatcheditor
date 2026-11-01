@@ -2,6 +2,18 @@ name: Build Windows release
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "KmlScopedEditor/**"
+      - "Installer/**"
+      - "Build-Release.ps1"
+      - "Build-Installer.cmd"
+      - "Build-Portable.cmd"
+      - "README.md"
+      - "PACKAGING.md"
+      - ".github/workflows/windows-release.yml"
   push:
     branches:
       - main
