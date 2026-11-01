@@ -270,6 +270,7 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
@@ -293,6 +294,17 @@
                             ToolTip="Draw another split path. Enter or double-click finishes the drawing; only Apply split performs the split." />
 
                     <Button Grid.Column="2"
+                            x:Name="CloseLoopButton"
+                            Focusable="False"
+                            Content="○ Close loop"
+                            Height="30"
+                            MinWidth="104"
+                            Margin="0,0,6,0"
+                            IsEnabled="False"
+                            ToolTip="Close the current drawing by snapping its last point exactly onto its first point."
+                            Click="OnCloseLoopClick" />
+
+                    <Button Grid.Column="3"
                             Focusable="False"
                             x:Name="UseSelectedLineButton"
                             Content="Use selected line"
@@ -302,7 +314,7 @@
                             ToolTip="Copy the selected map line and use it as another pending split line."
                             Click="OnUseSelectedAsSplitLineClick" />
 
-                    <Button Grid.Column="3"
+                    <Button Grid.Column="4"
                             x:Name="RemovePendingSplitLineButton"
                             Focusable="False"
                             Content="✕ Remove pending line(s)"
@@ -313,7 +325,7 @@
                             ToolTip="Remove the current pending split line(s) without changing the map."
                             Click="OnRemovePendingSplitLineClick" />
 
-                    <Border Grid.Column="4"
+                    <Border Grid.Column="5"
                             Background="#F3EAFB"
                             CornerRadius="12"
                             Padding="9,4"
@@ -325,7 +337,7 @@
                                    FontSize="11" />
                     </Border>
 
-                    <Border Grid.Column="5"
+                    <Border Grid.Column="6"
                             Background="#FFF3E8"
                             CornerRadius="12"
                             Padding="9,4"
@@ -338,16 +350,18 @@
                                    FontWeight="SemiBold" />
                     </Border>
 
-                    <StackPanel Grid.Column="6"
+                    <StackPanel Grid.Column="7"
                                 Orientation="Horizontal"
                                 VerticalAlignment="Center">
                         <CheckBox x:Name="OnlySplitSelectedCheckBox"
-                                  Content="Only split the selected lines"
+                                  Content="Limit to selected lines when selected"
+                                  IsChecked="True"
                                   VerticalAlignment="Center"
+                                  ToolTip="When lines are selected, limit split and clip operations to them. With no selection, all lines are eligible."
                                   Checked="OnOnlySplitSelectedChanged"
                                   Unchecked="OnOnlySplitSelectedChanged" />
                         <TextBlock x:Name="SelectedSplitScopeText"
-                                   Text="(none selected)"
+                                   Text="No lines selected — the split will cross all lines."
                                    Foreground="#7A8494"
                                    FontSize="11"
                                    Margin="5,1,0,0"
@@ -355,7 +369,7 @@
                                    TextWrapping="Wrap" />
                     </StackPanel>
 
-                    <Button Grid.Column="7"
+                    <Button Grid.Column="8"
                             Focusable="False"
                             x:Name="ApplySplitButton"
                             Content="⚒ Apply split"
@@ -367,6 +381,87 @@
                             Click="OnApplySplitClick"
                             ToolTip="Apply all pending split lines. Finishing a drawing does not apply it." />
                 </Grid>
+
+                <Border x:Name="ClipActionsPanel"
+                        Visibility="Collapsed"
+                        Margin="0,8,0,0"
+                        Padding="10,8"
+                        Background="#FFF8F2"
+                        BorderBrush="#F2C89F"
+                        BorderThickness="1"
+                        CornerRadius="5">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0"
+                                   Text="Clip boundary:"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0" />
+
+                        <Button Grid.Column="1"
+                                Content="Keep inside"
+                                Height="29"
+                                MinWidth="92"
+                                Margin="0,0,6,0"
+                                ToolTip="Preview deleting everything outside one or more closed boundary loops."
+                                Click="OnClipKeepInsideClick" />
+
+                        <Button Grid.Column="2"
+                                Content="Keep outside"
+                                Height="29"
+                                MinWidth="98"
+                                Margin="0,0,6,0"
+                                ToolTip="Preview deleting everything inside one or more closed boundary loops."
+                                Click="OnClipKeepOutsideClick" />
+
+                        <Button Grid.Column="3"
+                                Content="Choose side"
+                                Height="29"
+                                MinWidth="96"
+                                Margin="0,0,10,0"
+                                ToolTip="For one open boundary, click the map on the side you want to keep."
+                                Click="OnClipChooseSideClick" />
+
+                        <Button Grid.Column="4"
+                                x:Name="ApplyClipButton"
+                                Content="Apply clip"
+                                Height="29"
+                                MinWidth="92"
+                                Margin="0,0,6,0"
+                                IsEnabled="False"
+                                Background="#B84A3A"
+                                Foreground="White"
+                                FontWeight="SemiBold"
+                                ToolTip="Apply the previewed clip: split crossed lines and delete all geometry on the unwanted side."
+                                Click="OnApplyClipClick" />
+
+                        <Button Grid.Column="5"
+                                x:Name="CancelClipPreviewButton"
+                                Content="Cancel preview"
+                                Height="29"
+                                MinWidth="102"
+                                Margin="0,0,10,0"
+                                IsEnabled="False"
+                                ToolTip="Cancel the clip preview without changing geometry."
+                                Click="OnCancelClipPreviewClick" />
+
+                        <TextBlock Grid.Column="6"
+                                   x:Name="ClipPreviewSummaryText"
+                                   Text="Closed loop: keep inside/outside. Open line: choose a side."
+                                   Foreground="#7A4A2E"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="Wrap" />
+                    </Grid>
+                </Border>
 
                 <Grid x:Name="Step3ActionsPanel"
                       Visibility="Collapsed">
