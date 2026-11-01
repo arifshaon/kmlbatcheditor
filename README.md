@@ -8,6 +8,25 @@ The application is built with **C#**, **.NET 8**, and **WPF**.
 
 For the current implementation decisions, packaging state, Line Editor behavior, and important constraints, see **[PROJECT_RESOURCE.md](PROJECT_RESOURCE.md)**.
 
+## License — noncommercial use only
+
+**Copyright © 2026 Arif Shaon.** The current project source, original assets,
+documentation, packaging scripts, and future distributions of this licensed
+code are provided under the
+**[PolyForm Noncommercial License 1.0.0](LICENSE)**.
+You may use, study, change, and share the software for permitted noncommercial
+purposes under that license. **Commercial use is not authorized** under this
+license; obtain separate permission from the copyright holder for commercial use.
+
+This is **source-available software, not an OSI-approved open-source license**.
+The license also permits specified educational, charitable, public research,
+government, and other qualifying organizations to use the software, as defined
+in its terms. See the complete [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+**Existing MIT rights are not revoked:** versions and copies previously
+distributed under the MIT License remain subject to those earlier grants.
+Third-party components (if any) retain their own licenses.
+
 ---
 
 ## What the application does
