@@ -9,11 +9,15 @@ dotnet build KmlScopedEditor/KmlScopedEditor.csproj -c Release
 dotnet run --project KmlScopedEditor.RegressionTests/KmlScopedEditor.RegressionTests.csproj -c Release
 ```
 
-The geometry runner covers closed rings, union of loops, sub-metre edges,
-open divider regions, source scope, point/polygon preservation, splitting
-length conservation, true segment crossings, a **3 m wide loop crossed by a
-line with 2 m vertex spacing**, selection near the boundary, and a
-2,000-vertex boundary against 1,500 lines. The performance target on the
+The geometry runner covers open and closed divider regions, a 0.1 m
+boundary edge, source scope, point/polygon preservation, and true segment
+crossings. Crucially, regression cases run the **real SplitWithStroke**
+implementation first and verify that fresh closed/open split pieces show
+**zero false crossings** and selected-only splitting of **5 of 18** lines
+leaves exactly **13 genuine crossings**. The 3 m loop crossed by a line with
+2 m vertex spacing remains detectable. Repair-offer tracking is tested across
+repeated clicks, failed/declined repairs, geometry revisions and guide
+sequences. The benchmark uses a 2,000-vertex boundary against 1,500 lines. The performance target on the
 reference Windows machine is under **500 ms**; the test reports elapsed
 milliseconds, not an assertion about arbitrary hardware.
 
@@ -38,7 +42,9 @@ milliseconds, not an assertion about arbitrary hardware.
    If accepted, only flagged crossing lines split, the selection is repeated,
    no prompt loop occurs, and the latest applied guide sequence is unchanged.
 7. Undo deletes first, then the extra repair split while staying in Step 3,
-   then the original split while returning to Step 2.
+   then the original split while returning to Step 2. A crossing repair
+   declined or found ineffective must **not** repeatedly prompt on each
+   subsequent click for the same geometry/guide revision.
 8. Verify Step 3 Select side stays active on ordinary clicks and Delete, and
    exits on toggle, Escape, Pan, step change, Apply split, Undo, Done, Cancel
    and opening Simplify. No stale dashed overlay is left after exit.
