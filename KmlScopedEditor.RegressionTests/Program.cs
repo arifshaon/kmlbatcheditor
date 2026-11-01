@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Windows;
 using System.Xml.Linq;
 using KmlScopedEditor.Services;
@@ -47,7 +48,7 @@ internal static class Program
                     new XElement(Kml + "LineString",
                         new XElement(Kml + "coordinates", string.Join(" ",
                             line.Points.Select(p =>
-                                $"{p.Lon:R},{p.Lat:R}")))))))));
+                                $"{p.Lon.ToString("R", CultureInfo.InvariantCulture)},{p.Lat.ToString("R", CultureInfo.InvariantCulture)}")))))))));
         return new KmlLineGeometryService(document);
     }
 
@@ -188,6 +189,21 @@ internal static class Program
             geometry.Features, new[] { loop }, true);
         Require(inside.KeptLines.Count > 0 && inside.DeletedLines.Count > 0,
             "Split results should have pieces on both sides.");
+        var insideSet = inside.KeptLines.ToHashSet();
+        var lower = geometry.Project(new KmlCoordinate(0, 0, null)).X;
+        var upper = geometry.Project(new KmlCoordinate(.001, 0, null)).X;
+        var tolerance = KmlBoundaryClipService.WorldUnitsFromMetres(1.01d);
+        foreach (var feature in geometry.Features
+                     .Where(f => insideSet.Contains(f.LineStringElement)))
+        {
+            foreach (var segment in feature.WorldPoints.Zip(
+                         feature.WorldPoints.Skip(1),
+                         (a, b) => new Point((a.X + b.X) / 2d,
+                                            (a.Y + b.Y) / 2d)))
+                Require(segment.X >= lower - tolerance &&
+                        segment.X <= upper + tolerance,
+                    "An inside-kept segment midpoint lies on the wrong side.");
+        }
         Require(Math.Abs(Length(geometry.Features) - initialLength) <
             KmlBoundaryClipService.WorldUnitsFromMetres(.01),
             "Split should conserve line length within 1 cm.");
