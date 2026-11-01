@@ -102,7 +102,11 @@ public partial class LineEditorWindow : Window
         EditorSurface.EditableGuideChanged += OnEditableGuideChanged;
         PreviewKeyDown += OnPreviewKeyDown;
         Closed += (_, _) =>
+        {
             CancelSimplifyPreviewComputation();
+            _clipPreviewGeneration++;
+            _clipPreviewInProgress = false;
+        };
 
         Loaded += (_, _) =>
         {
