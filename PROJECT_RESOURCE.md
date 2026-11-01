@@ -232,7 +232,7 @@ This rule applies consistently to Split and Clip.
 - Success message follows:
   - `Clipped to boundary: X line(s) split, Y piece(s) kept, Z deleted.`
 
-## 8. Ring opening / hairpin handling
+## 7. Ring opening / hairpin handling
 
 A previous narrow-ring opening could still be detected as closed because the endpoint gap was smaller than geometry tolerance.
 
