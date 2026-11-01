@@ -250,9 +250,11 @@ public static class KmlBoundaryClipService
 
         var boundarySegments =
             validLoops
-                .SelectMany(
-                    BuildSegments)
+                .SelectMany(BuildSegments)
                 .ToList();
+        var polygons = validLoops
+            .Select(loop => new PreparedPolygon(loop))
+            .ToList();
 
         return Classify(
             features,
@@ -260,11 +262,7 @@ public static class KmlBoundaryClipService
             featurePoint =>
             {
                 var insideAny =
-                    validLoops.Any(
-                        loop =>
-                            PointInPolygonOrOnBoundary(
-                                featurePoint,
-                                loop));
+                    polygons.Any(polygon => polygon.Contains(featurePoint));
 
                 return keepInside
                     ? insideAny
@@ -310,15 +308,10 @@ public static class KmlBoundaryClipService
             return false;
         }
 
-        var inA =
-            PointInPolygonOrOnBoundary(
-                keepPoint,
-                boundary.RegionA);
-
-        var inB =
-            PointInPolygonOrOnBoundary(
-                keepPoint,
-                boundary.RegionB);
+        var regionA = new PreparedPolygon(boundary.RegionA);
+        var regionB = new PreparedPolygon(boundary.RegionB);
+        var inA = regionA.Contains(keepPoint);
+        var inB = regionB.Contains(keepPoint);
 
         if (inA == inB)
         {
@@ -341,12 +334,8 @@ public static class KmlBoundaryClipService
                 boundarySegments,
                 point =>
                     keepA
-                        ? PointInPolygonOrOnBoundary(
-                            point,
-                            boundary.RegionA)
-                        : PointInPolygonOrOnBoundary(
-                            point,
-                            boundary.RegionB),
+                        ? regionA.Contains(point)
+                        : regionB.Contains(point),
                 targetMarkerAttribute,
                 boundaryToleranceMetres);
 
@@ -368,8 +357,8 @@ public static class KmlBoundaryClipService
             new List<XElement>();
 
         var toleranceWorld =
-            WorldUnitsFromMetres(
-                boundaryToleranceMetres);
+            WorldUnitsFromMetres(boundaryToleranceMetres);
+        var distanceIndex = new BoundarySegmentIndex(boundarySegments);
 
         foreach (var feature in features)
         {
@@ -391,7 +380,7 @@ public static class KmlBoundaryClipService
             var representative =
                 FindFarthestRepresentativePoint(
                     feature.WorldPoints,
-                    boundarySegments,
+                    distanceIndex,
                     out var farthestDistance);
 
             // A line/piece that lies effectively on the boundary is retained
@@ -419,60 +408,56 @@ public static class KmlBoundaryClipService
             deleted);
     }
 
-    private static Point
-        FindFarthestRepresentativePoint(
-            IReadOnlyList<Point> line,
-            IReadOnlyList<(Point A, Point B)>
-                boundarySegments,
-            out double farthestDistance)
+    private static Point FindFarthestRepresentativePoint(
+        IReadOnlyList<Point> line,
+        BoundarySegmentIndex boundary,
+        out double farthestDistance)
     {
-        var bestPoint =
-            line[0];
+        // A successfully split piece stays on one side of the divider.
+        // Prefer an obviously off-boundary vertex/segment midpoint;
+        // retain the full-distance fallback for pieces close to the divider.
+        var farThreshold = WorldUnitsFromMetres(5d);
+        var best = line[0];
         var bestDistance = -1d;
 
-        void Consider(Point candidate)
+        for (var i = 0; i < line.Count; i++)
         {
-            var distance =
-                PointToSegmentsDistance(
-                    candidate,
-                    boundarySegments);
-
-            if (distance >
-                bestDistance)
+            var point = line[i];
+            if (!boundary.WithinDistance(point, farThreshold))
             {
-                bestDistance =
-                    distance;
-                bestPoint =
-                    candidate;
+                farthestDistance = farThreshold;
+                return point;
             }
-        }
 
-        for (var index = 0;
-             index < line.Count;
-             index++)
-        {
-            Consider(line[index]);
-
-            if (index >=
-                line.Count - 1)
+            var distance = boundary.Distance(point);
+            if (distance > bestDistance)
             {
+                best = point;
+                bestDistance = distance;
+            }
+
+            if (i == line.Count - 1)
                 continue;
+
+            var middle = new Point(
+                (point.X + line[i + 1].X) / 2d,
+                (point.Y + line[i + 1].Y) / 2d);
+            if (!boundary.WithinDistance(middle, farThreshold))
+            {
+                farthestDistance = farThreshold;
+                return middle;
             }
 
-            Consider(
-                new Point(
-                    (line[index].X +
-                     line[index + 1].X) /
-                    2d,
-                    (line[index].Y +
-                     line[index + 1].Y) /
-                    2d));
+            distance = boundary.Distance(middle);
+            if (distance > bestDistance)
+            {
+                best = middle;
+                bestDistance = distance;
+            }
         }
 
-        farthestDistance =
-            bestDistance;
-
-        return bestPoint;
+        farthestDistance = bestDistance;
+        return best;
     }
 
     private static List<Point>
@@ -691,81 +676,44 @@ public static class KmlBoundaryClipService
         return true;
     }
 
-    private static List<Point>
-        RectangleBoundaryPathClockwise(
-            Point from,
-            Point to,
-            Rect rect)
+    private static List<Point> RectangleBoundaryPathClockwise(
+        Point from, Point to, Rect rect)
     {
-        var perimeter =
-            2d *
-            (rect.Width +
-             rect.Height);
+        var perimeter = 2d * (rect.Width + rect.Height);
+        var fromPosition = RectanglePerimeterPosition(from, rect);
+        var toPosition = RectanglePerimeterPosition(to, rect);
+        const double epsilon = 1e-12d;
 
-        var fromPosition =
-            RectanglePerimeterPosition(
-                from,
-                rect);
+        if (toPosition <= fromPosition + epsilon)
+            toPosition += perimeter;
 
-        var toPosition =
-            RectanglePerimeterPosition(
-                to,
-                rect);
-
-        if (toPosition <=
-            fromPosition +
-            0.000000000001d)
+        // 0 and perimeter are the very same corner. Unwrap corner
+        // positions FIRST, then sort them by distance along this walk.
+        var corners = new[]
         {
-            toPosition +=
-                perimeter;
-        }
+            0d,
+            rect.Width,
+            rect.Width + rect.Height,
+            (2d * rect.Width) + rect.Height
+        };
 
-        var cornerPositions =
-            new[]
-            {
-                0d,
-                rect.Width,
-                rect.Width +
-                    rect.Height,
-                (2d * rect.Width) +
-                    rect.Height,
-                perimeter
-            };
+        var interiorCorners = corners
+            .Select(position =>
+                position <= fromPosition + epsilon
+                    ? position + perimeter
+                    : position)
+            .Where(position =>
+                position > fromPosition + epsilon &&
+                position < toPosition - epsilon)
+            .Distinct()
+            .OrderBy(position => position);
 
-        var result =
-            new List<Point>
-            {
-                from
-            };
-
-        foreach (var corner in
-                 cornerPositions)
-        {
-            var candidate =
-                corner;
-
-            while (candidate <=
-                   fromPosition +
-                   0.000000000001d)
-            {
-                candidate +=
-                    perimeter;
-            }
-
-            if (candidate <
-                toPosition -
-                0.000000000001d)
-            {
-                result.Add(
-                    PointAtPerimeterPosition(
-                        candidate %
-                        perimeter,
-                        rect));
-            }
-        }
+        var result = new List<Point> { from };
+        foreach (var corner in interiorCorners)
+            result.Add(PointAtPerimeterPosition(corner % perimeter, rect));
 
         result.Add(to);
-        return result;
+        return RemoveAdjacentDuplicates(result);
     }
 
     private static double
@@ -1002,131 +950,248 @@ public static class KmlBoundaryClipService
              projection).Length;
     }
 
-    private static bool
-        PointInPolygonOrOnBoundary(
-            Point point,
-            IReadOnlyList<Point> polygon)
+    // Indexed even-odd point-in-polygon. A zero-length closing edge
+    // never makes the entire map count as on the boundary.
+    private sealed class PreparedPolygon
     {
-        var inside = false;
+        private readonly List<(Point A, Point B)>[] _buckets;
+        private readonly double _minimumY;
+        private readonly double _bucketHeight;
+        private readonly int _bucketCount;
+        private readonly Rect _bounds;
 
-        for (int index = 0,
-                 previous =
-                     polygon.Count - 1;
-             index < polygon.Count;
-             previous = index++)
+        public PreparedPolygon(IReadOnlyList<Point> polygon)
         {
-            var a =
-                polygon[previous];
-            var b =
-                polygon[index];
-
-            if (PointOnSegment(
-                    point,
-                    a,
-                    b))
+            var edges = BuildSegments(polygon).ToList();
+            if (polygon.Count >= 2 &&
+                (polygon[0] - polygon[^1]).LengthSquared >
+                    PointEpsilon * PointEpsilon)
             {
-                return true;
+                edges.Add((polygon[^1], polygon[0]));
             }
 
-            var crosses =
-                (a.Y > point.Y) !=
-                (b.Y > point.Y);
+            _bounds = Rect.Empty;
+            foreach (var point in polygon)
+            {
+                if (_bounds.IsEmpty)
+                    _bounds = new Rect(point, point);
+                else
+                    _bounds.Union(point);
+            }
 
-            if (!crosses)
-                continue;
+            _minimumY = _bounds.IsEmpty ? 0d : _bounds.Top;
+            _bucketCount = Math.Clamp(edges.Count / 4, 8, 512);
+            _bucketHeight = Math.Max(
+                _bounds.IsEmpty ? 0d : _bounds.Height / _bucketCount,
+                1e-12d);
+            _buckets = Enumerable.Range(0, _bucketCount)
+                .Select(_ => new List<(Point A, Point B)>())
+                .ToArray();
 
-            var xAtY =
-                ((b.X - a.X) *
-                 (point.Y - a.Y) /
-                 (b.Y - a.Y)) +
-                a.X;
-
-            if (point.X < xAtY)
-                inside = !inside;
+            foreach (var edge in edges)
+            {
+                var lo = Bucket(Math.Min(edge.A.Y, edge.B.Y));
+                var hi = Bucket(Math.Max(edge.A.Y, edge.B.Y));
+                for (var i = lo; i <= hi; i++)
+                    _buckets[i].Add(edge);
+            }
         }
 
-        return inside;
-    }
+        private int Bucket(double y) =>
+            Math.Clamp((int)((y - _minimumY) / _bucketHeight),
+                0, _bucketCount - 1);
 
-    private static bool
-        PointOnSegment(
-            Point point,
-            Point a,
-            Point b)
-    {
-        const double epsilon =
-            0.0000000001d;
-
-        var ab =
-            b - a;
-        var ap =
-            point - a;
-
-        if (Math.Abs(
-                Cross(ab, ap)) >
-            epsilon)
+        public bool Contains(Point point)
         {
-            return false;
+            if (_bounds.IsEmpty ||
+                point.X < _bounds.Left - PointEpsilon ||
+                point.X > _bounds.Right + PointEpsilon ||
+                point.Y < _bounds.Top - PointEpsilon ||
+                point.Y > _bounds.Bottom + PointEpsilon)
+            {
+                return false;
+            }
+
+            var inside = false;
+            foreach (var (a, b) in _buckets[Bucket(point.Y)])
+            {
+                if (PointOnSegment(point, a, b))
+                    return true;
+
+                if ((a.Y > point.Y) == (b.Y > point.Y))
+                    continue;
+
+                var xAtY = a.X + (b.X - a.X) *
+                    (point.Y - a.Y) / (b.Y - a.Y);
+                if (point.X < xAtY)
+                    inside = !inside;
+            }
+
+            return inside;
         }
-
-        var dot =
-            (ap.X * ab.X) +
-            (ap.Y * ab.Y);
-
-        if (dot < -epsilon)
-            return false;
-
-        var lengthSquared =
-            (ab.X * ab.X) +
-            (ab.Y * ab.Y);
-
-        return dot <=
-            lengthSquared +
-            epsilon;
     }
 
-    private static bool
-        SegmentsIntersect(
-            Point a,
-            Point b,
-            Point c,
-            Point d)
+    // Approximately one millimetre in projected world coordinates.
+    // This geometric predicate tolerance is intentionally independent
+    // of the one-metre retention band in Classify().
+    private const double PointEpsilon = 1d / MetresPerWorldUnit / 1000d;
+
+    private static bool PointOnSegment(Point point, Point a, Point b) =>
+        PointToSegmentDistance(point, a, b) <= PointEpsilon;
+
+    private static bool SegmentsIntersect(
+        Point a, Point b, Point c, Point d)
     {
-        const double epsilon =
-            0.0000000001d;
+        var ab = b - a;
+        var cd = d - c;
+        var abLength = ab.Length;
+        var cdLength = cd.Length;
 
-        var ab =
-            b - a;
-        var cd =
-            d - c;
-        var ac =
-            c - a;
+        if (abLength <= PointEpsilon)
+            return PointOnSegment(a, c, d);
+        if (cdLength <= PointEpsilon)
+            return PointOnSegment(c, a, b);
 
-        var denominator =
-            Cross(ab, cd);
-
+        var denominator = Cross(ab, cd);
         if (Math.Abs(denominator) <=
-            epsilon)
+            1e-12d * abLength * cdLength)
         {
-            return
-                PointOnSegment(a, c, d) ||
-                PointOnSegment(b, c, d) ||
-                PointOnSegment(c, a, b) ||
-                PointOnSegment(d, a, b);
+            return PointOnSegment(a, c, d) ||
+                   PointOnSegment(b, c, d) ||
+                   PointOnSegment(c, a, b) ||
+                   PointOnSegment(d, a, b);
         }
 
-        var t =
-            Cross(ac, cd) /
-            denominator;
+        var ac = c - a;
+        var t = Cross(ac, cd) / denominator;
+        var u = Cross(ac, ab) / denominator;
 
-        var u =
-            Cross(ac, ab) /
-            denominator;
+        var tEpsilon = PointEpsilon / abLength;
+        var uEpsilon = PointEpsilon / cdLength;
+        return t >= -tEpsilon && t <= 1d + tEpsilon &&
+               u >= -uEpsilon && u <= 1d + uEpsilon;
+    }
 
-        return t >= -epsilon &&
-               t <= 1d + epsilon &&
-               u >= -epsilon &&
-               u <= 1d + epsilon;
+    // Binary bounding-box tree: nearest-distance and within-radius queries
+    // prune segments that cannot affect the answer. Unlike a fixed-size
+    // grid, long segments do not populate thousands of cells.
+    private sealed class BoundarySegmentIndex
+    {
+        private sealed class Node
+        {
+            public Rect Bounds { get; init; }
+            public Node? Left { get; init; }
+            public Node? Right { get; init; }
+            public (Point A, Point B)[]? Segments { get; init; }
+        }
+
+        private readonly Node? _root;
+
+        public BoundarySegmentIndex(
+            IReadOnlyList<(Point A, Point B)> segments)
+        {
+            _root = segments.Count == 0
+                ? null
+                : Build(segments.ToArray());
+        }
+
+        private static Node Build((Point A, Point B)[] segments)
+        {
+            var minX = segments.Min(s => Math.Min(s.A.X, s.B.X));
+            var maxX = segments.Max(s => Math.Max(s.A.X, s.B.X));
+            var minY = segments.Min(s => Math.Min(s.A.Y, s.B.Y));
+            var maxY = segments.Max(s => Math.Max(s.A.Y, s.B.Y));
+            var bounds = new Rect(
+                new Point(minX, minY), new Point(maxX, maxY));
+
+            if (segments.Length <= 12)
+                return new Node { Bounds = bounds, Segments = segments };
+
+            if (bounds.Width >= bounds.Height)
+                Array.Sort(segments, (a, b) =>
+                    (a.A.X + a.B.X).CompareTo(b.A.X + b.B.X));
+            else
+                Array.Sort(segments, (a, b) =>
+                    (a.A.Y + a.B.Y).CompareTo(b.A.Y + b.B.Y));
+
+            var middle = segments.Length / 2;
+            return new Node
+            {
+                Bounds = bounds,
+                Left = Build(segments[..middle]),
+                Right = Build(segments[middle..])
+            };
+        }
+
+        private static double BoxDistanceSquared(Point point, Rect bounds)
+        {
+            var dx = Math.Max(0d, Math.Max(
+                bounds.Left - point.X, point.X - bounds.Right));
+            var dy = Math.Max(0d, Math.Max(
+                bounds.Top - point.Y, point.Y - bounds.Bottom));
+            return dx * dx + dy * dy;
+        }
+
+        public bool WithinDistance(Point point, double distance)
+        {
+            var squared = distance * distance;
+            return _root is not null && AnyWithin(_root, point, squared);
+        }
+
+        private static bool AnyWithin(Node node, Point point, double limit)
+        {
+            if (BoxDistanceSquared(point, node.Bounds) > limit)
+                return false;
+            if (node.Segments is not null)
+                return node.Segments.Any(s =>
+                {
+                    var d = PointToSegmentDistance(point, s.A, s.B);
+                    return d * d <= limit;
+                });
+            return (node.Left is not null && AnyWithin(node.Left, point, limit)) ||
+                   (node.Right is not null && AnyWithin(node.Right, point, limit));
+        }
+
+        public double Distance(Point point)
+        {
+            var bestSquared = double.PositiveInfinity;
+            if (_root is not null)
+                Nearest(_root, point, ref bestSquared);
+            return Math.Sqrt(bestSquared);
+        }
+
+        private static void Nearest(
+            Node node, Point point, ref double bestSquared)
+        {
+            if (BoxDistanceSquared(point, node.Bounds) > bestSquared)
+                return;
+
+            if (node.Segments is not null)
+            {
+                foreach (var (a, b) in node.Segments)
+                {
+                    var distance = PointToSegmentDistance(point, a, b);
+                    bestSquared = Math.Min(bestSquared, distance * distance);
+                }
+                return;
+            }
+
+            if (node.Left is null || node.Right is null)
+                return;
+
+            var left = BoxDistanceSquared(point, node.Left.Bounds);
+            var right = BoxDistanceSquared(point, node.Right.Bounds);
+            if (left < right)
+            {
+                Nearest(node.Left, point, ref bestSquared);
+                Nearest(node.Right, point, ref bestSquared);
+            }
+            else
+            {
+                Nearest(node.Right, point, ref bestSquared);
+                Nearest(node.Left, point, ref bestSquared);
+            }
+        }
     }
 
     private static double Cross(
