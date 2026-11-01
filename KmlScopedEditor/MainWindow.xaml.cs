@@ -63,17 +63,8 @@ public partial class MainWindow : System.Windows.Window
 
         if (!accepted)
         {
-            // Never persist cancelled geometry/history, but remember the
-            // user's scope preference even when the editor closes unchanged.
-            _lineEditorSessionState = _lineEditorSessionState is null
-                ? sessionState with
-                {
-                    AppliedGuides = Array.Empty<LineEditorSessionGuideState>()
-                }
-                : _lineEditorSessionState with
-                {
-                    LimitToSelectedLines = sessionState.LimitToSelectedLines
-                };
+            // A cancelled or unchanged editor must not save any pending
+            // Split selection state or discard the previous applied history.
             return;
         }
 
