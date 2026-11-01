@@ -21,6 +21,10 @@ internal static class Program
         Run(nameof(SideSelectionBoundaryPoints), SideSelectionBoundaryPoints);
         Run(nameof(SideSelectionOpenComplement), SideSelectionOpenComplement);
         Run(nameof(SideSelectionShortEdges), SideSelectionShortEdges);
+        Run(nameof(SideSelectionAfterRealClosedSplit), SideSelectionAfterRealClosedSplit);
+        Run(nameof(SideSelectionAfterRealOpenSplit), SideSelectionAfterRealOpenSplit);
+        Run(nameof(SideSelectionAfterLimitedRealSplit), SideSelectionAfterLimitedRealSplit);
+        Run(nameof(SideRepairPromptRememberedUntilRevisionChanges), SideRepairPromptRememberedUntilRevisionChanges);
         Run(nameof(SideSelectionLargeIndexBenchmark), SideSelectionLargeIndexBenchmark);
         Run(nameof(SelfCrossingLoopIsDetected), SelfCrossingLoopIsDetected);
         Run(nameof(SelectedScopeDoesNotTouchOthers), SelectedScopeDoesNotTouchOthers);
@@ -241,6 +245,131 @@ internal static class Program
             out var result), "Click inside short-edge loop refused.");
         Require(Names(geometry, result.ClickedSide).SetEquals(new[] { "inside" }),
             "0.1 m boundary edge corrupted selection.");
+    }
+
+    // Every classification in these tests runs against the actual output
+    // of KmlLineGeometryService.SplitWithStroke, not untouched input lines.
+    // Split-created vertices can fall just off the boundary through rounding.
+    private static void SideSelectionAfterRealClosedSplit()
+    {
+        var geometry = Geometry(
+            ("horizontal", new[] { (-.002, .0005), (.003, .0005) }),
+            ("vertical", new[] { (.0005, -.002), (.0005, .003) }),
+            ("inside", new[] { (.0002, .0002), (.0003, .0003) }),
+            ("outside", new[] { (.003, .003), (.004, .004) }));
+        var loop = Loop(geometry,
+            (0, 0), (.001, 0), (.001, .001), (0, .001), (0, 0));
+
+        var split = geometry.SplitWithStroke(loop);
+        Require(split.LinesSplit >= 2,
+            "Expected the closed guide to split the real crossing lines.");
+
+        Require(SelectSide(geometry, new[] { loop }, null,
+            geometry.Project(new KmlCoordinate(.0005, .0004, null)),
+            out var inside), "Closed inside click failed after real split.");
+        Require(inside.Crossing.Count == 0,
+            $"Real closed split left {inside.Crossing.Count} false crossings.");
+
+        Require(SelectSide(geometry, new[] { loop }, null,
+            geometry.Project(new KmlCoordinate(.003, .003, null)),
+            out var outside), "Closed outside click failed after real split.");
+        Require(outside.Crossing.Count == 0,
+            "Real closed split must have zero crossings on both sides.");
+        Require(inside.ClickedSide.Count == outside.OtherSide.Count &&
+                outside.ClickedSide.Count == inside.OtherSide.Count,
+            "Split closed sides must be complementary.");
+    }
+
+    private static void SideSelectionAfterRealOpenSplit()
+    {
+        var geometry = Geometry(
+            ("vertical-a", new[] { (-.0005, -.001), (-.0005, .001) }),
+            ("vertical-b", new[] { (.0005, -.001), (.0005, .001) }),
+            ("above", new[] { (-.0003, .0004), (.0003, .0004) }),
+            ("below", new[] { (-.0003, -.0004), (.0003, -.0004) }));
+        var guide = Loop(geometry, (-.002, 0), (.002, 0));
+
+        var split = geometry.SplitWithStroke(guide);
+        Require(split.LinesSplit >= 2,
+            "Expected open guide to split two real lines.");
+        Require(KmlBoundaryClipService.TryPrepareOpenBoundary(
+            guide, geometry.WorldBounds,
+            KmlBoundaryClipService.WorldUnitsFromMetres(10d),
+            out var prepared, out var error), error);
+
+        Require(SelectSide(geometry, Array.Empty<IReadOnlyList<Point>>(),
+            prepared, geometry.Project(new KmlCoordinate(0, .0006, null)),
+            out var above), "Open above click failed after real split.");
+        Require(above.Crossing.Count == 0,
+            $"Real open split left {above.Crossing.Count} false crossings.");
+        Require(SelectSide(geometry, Array.Empty<IReadOnlyList<Point>>(),
+            prepared, geometry.Project(new KmlCoordinate(0, -.0006, null)),
+            out var below), "Open below click failed after real split.");
+        Require(below.Crossing.Count == 0,
+            "Real open split must have zero crossings on both sides.");
+        Require(above.ClickedSide.Count == below.OtherSide.Count &&
+                below.ClickedSide.Count == above.OtherSide.Count,
+            "Real open split sides must be complementary.");
+    }
+
+    private static void SideSelectionAfterLimitedRealSplit()
+    {
+        var lines = Enumerable.Range(0, 18)
+            .Select(index => (
+                $"line-{index}",
+                new[] {
+                    (-.001, (index - 9) * .00012),
+                    (.001, (index - 9) * .00012)
+                }))
+            .ToArray();
+        var geometry = Geometry(lines);
+        var marker = XName.Get("selected-split", "urn:regression");
+        foreach (var feature in geometry.Features.Take(5))
+            feature.LineStringElement.SetAttributeValue(marker, "true");
+
+        var guide = Loop(geometry, (0, -.003), (0, .003));
+        var split = geometry.SplitWithStroke(guide, marker);
+        Require(split.LinesSplit == 5,
+            "Selected-only split should affect exactly 5 of 18 lines.");
+
+        Require(KmlBoundaryClipService.TryPrepareOpenBoundary(
+            guide, geometry.WorldBounds,
+            KmlBoundaryClipService.WorldUnitsFromMetres(10d),
+            out var prepared, out var error), error);
+        Require(SelectSide(geometry, Array.Empty<IReadOnlyList<Point>>(),
+            prepared, geometry.Project(new KmlCoordinate(-.0005, .0004, null)),
+            out var result), "Selected-only side selection failed.");
+
+        Require(result.Crossing.Count == 13,
+            $"Expected the 13 unsplit lines to cross; found {result.Crossing.Count}.");
+    }
+
+    private static void SideRepairPromptRememberedUntilRevisionChanges()
+    {
+        var tracker = new SideRepairPromptTracker();
+        var a = new XElement("line");
+        var b = new XElement("line");
+        var c = new XElement("line");
+
+        Require(tracker.TakeNewCrossings(42, 3, new[] { a, b }).Count == 2,
+            "First crossing offer must include both lines.");
+        Require(tracker.TakeNewCrossings(42, 3, new[] { a, b }).Count == 0,
+            "Declined crossing offer must not repeat on another click.");
+        var newCrossings = tracker.TakeNewCrossings(42, 3, new[] { a, c });
+        Require(newCrossings.Count == 1 &&
+                ReferenceEquals(newCrossings[0], c),
+            "Only newly discovered crossings should be offered.");
+
+        tracker.RememberUnresolved(43, 3, new[] { b, c });
+        Require(tracker.TakeNewCrossings(43, 3, new[] { b, c }).Count == 0,
+            "Remaining crossings after repair must not trigger another prompt.");
+        Require(tracker.TakeNewCrossings(44, 3, new[] { b }).Count == 1,
+            "A later geometry revision should allow new repair decisions.");
+        Require(tracker.TakeNewCrossings(44, 4, new[] { b }).Count == 1,
+            "A different applied-guide sequence must invalidate offers.");
+        tracker.Clear();
+        Require(tracker.TakeNewCrossings(44, 4, new[] { b }).Count == 1,
+            "Exiting Select side mode should clear offers.");
     }
 
     private static void SideSelectionLargeIndexBenchmark()
