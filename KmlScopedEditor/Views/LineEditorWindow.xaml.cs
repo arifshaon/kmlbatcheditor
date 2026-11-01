@@ -128,6 +128,9 @@ public partial class LineEditorWindow : Window
 
         _hideAppliedSplitHistory =
             sessionState.HideAppliedSplitHistory;
+        OnlySplitSelectedCheckBox.IsChecked =
+            sessionState.LimitToSelectedLines;
+
         if (!string.IsNullOrWhiteSpace(
                 sessionState.AppliedHistoryColor))
         {
@@ -213,7 +216,8 @@ public partial class LineEditorWindow : Window
             appliedGuides,
             _hideAppliedSplitHistory,
             _appliedHistoryColor.ToString(),
-            _appliedHistoryThickness);
+            _appliedHistoryThickness,
+            OnlySplitSelectedCheckBox.IsChecked == true);
     }
 
     private void InitializeAppliedHistoryAppearanceControls()
@@ -2847,15 +2851,15 @@ public partial class LineEditorWindow : Window
         UseSelectedLineButton.IsEnabled =
             validSelected.Count == 1;
 
-        // Restore version 1.2's Step 2 scope behaviour.
-        OnlySplitSelectedCheckBox.IsEnabled = validSelected.Count > 0;
-        if (validSelected.Count == 0 &&
-            OnlySplitSelectedCheckBox.IsChecked == true)
-            OnlySplitSelectedCheckBox.IsChecked = false;
+        // Version 1.3: selected-only is the default preference, but an
+        // empty selection must still fall back to splitting all lines.
+        // Never untick the user's preference simply because selection
+        // changes or is cleared between workflow steps.
+        OnlySplitSelectedCheckBox.IsEnabled = true;
 
         SelectedSplitScopeText.Text =
             validSelected.Count == 0
-                ? "(none selected)"
+                ? "No lines selected — Apply split will split all eligible lines."
                 : OnlySplitSelectedCheckBox.IsChecked == true
                     ? $"{validSelected.Count:N0} selected — split limited to selection"
                     : $"{validSelected.Count:N0} lines selected — the split will still cross all lines. Tick to limit it.";
@@ -3606,4 +3610,5 @@ public sealed record LineEditorSessionState(
     IReadOnlyList<LineEditorSessionGuideState> AppliedGuides,
     bool HideAppliedSplitHistory,
     string AppliedHistoryColor,
-    double AppliedHistoryThickness);
+    double AppliedHistoryThickness,
+    bool LimitToSelectedLines = true);
