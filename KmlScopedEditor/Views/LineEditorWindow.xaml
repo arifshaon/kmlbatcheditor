@@ -607,12 +607,12 @@
                             <RadioButton x:Name="SimplifyAllRadioButton"
                                          GroupName="SimplifyScope"
                                          Content="All lines"
-                                         IsChecked="True"
                                          Checked="OnSimplifySettingsChanged"
                                          Margin="0,0,8,0" />
                             <RadioButton x:Name="SimplifySelectedRadioButton"
                                          GroupName="SimplifyScope"
                                          Content="Only selected lines (0)"
+                                         IsChecked="True"
                                          Checked="OnSimplifySettingsChanged" />
                         </StackPanel>
 
