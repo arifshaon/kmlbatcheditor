@@ -301,7 +301,7 @@
                             MinWidth="104"
                             Margin="0,0,6,0"
                             IsEnabled="False"
-                            ToolTip="Close the current drawing by snapping its last point exactly onto its first point."
+                            ToolTip="Close the current drawing or one pending open boundary by joining its endpoints."
                             Click="OnCloseLoopClick" />
 
                     <Button Grid.Column="3"
@@ -357,7 +357,7 @@
                                   Content="Limit to selected lines when selected"
                                   IsChecked="True"
                                   VerticalAlignment="Center"
-                                  ToolTip="When lines are selected, limit split and clip operations to them. With no selection, all lines are eligible."
+                                  ToolTip="Clip affects only selected lines when checked, and refuses if none are selected. Split continues to use all lines when the selection is empty."
                                   Checked="OnOnlySplitSelectedChanged"
                                   Unchecked="OnOnlySplitSelectedChanged" />
                         <TextBlock x:Name="SelectedSplitScopeText"
@@ -412,7 +412,7 @@
                                 Height="29"
                                 MinWidth="92"
                                 Margin="0,0,6,0"
-                                ToolTip="Preview deleting everything outside one or more closed boundary loops."
+                                ToolTip="Preview removing LineStrings outside the closed boundary loops. Other geometry is unaffected."
                                 Click="OnClipKeepInsideClick" />
 
                         <Button Grid.Column="2"
@@ -420,7 +420,7 @@
                                 Height="29"
                                 MinWidth="98"
                                 Margin="0,0,6,0"
-                                ToolTip="Preview deleting everything inside one or more closed boundary loops."
+                                ToolTip="Preview removing LineStrings inside the closed boundary loops. Other geometry is unaffected."
                                 Click="OnClipKeepOutsideClick" />
 
                         <Button Grid.Column="3"
@@ -441,7 +441,7 @@
                                 Background="#B84A3A"
                                 Foreground="White"
                                 FontWeight="SemiBold"
-                                ToolTip="Apply the previewed clip: split crossed lines and delete all geometry on the unwanted side."
+                                ToolTip="Apply the previewed clip: split crossed lines and delete lines on the unwanted side. Points, polygons and overlays are unaffected."
                                 Click="OnApplyClipClick" />
 
                         <Button Grid.Column="5"
@@ -456,7 +456,7 @@
 
                         <TextBlock Grid.Column="6"
                                    x:Name="ClipPreviewSummaryText"
-                                   Text="Closed loop: keep inside/outside. Open line: choose a side."
+                                   Text="Clip removes lines only. Closed loop: keep inside/outside. Open line: choose a side."
                                    Foreground="#7A4A2E"
                                    VerticalAlignment="Center"
                                    TextWrapping="Wrap" />
