@@ -167,12 +167,12 @@ The Line Editor Step 2 now supports clipping editable line geometry using either
 
 ### User behavior
 - **Closed boundary**
-  - **Keep inside** previews/deletes everything outside the boundary.
-  - **Keep outside** previews/deletes everything inside the boundary.
+  - **Keep inside** previews/deletes eligible LineStrings outside the boundary.
+  - **Keep outside** previews/deletes eligible LineStrings inside the boundary.
 - **Open boundary**
   - **Choose side** asks the user to click clearly on the side to keep.
   - The software extends both boundary ends beyond the geometry extent before splitting/classification.
-- Crossed lines are split first, then all eligible resulting pieces and untouched whole lines are classified. This is deliberate: Clip means “delete everything on the unwanted side”, not merely delete pieces that happened to be split.
+- Crossed lines are split first; eligible line pieces and untouched eligible whole lines are classified. Clip removes **LineStrings only**, never Points, Polygons, or overlays.
 - Clip always previews before destructive changes:
   - deletion area shaded;
   - open-line extensions shown dashed;
@@ -185,7 +185,7 @@ The Line Editor Step 2 now supports clipping editable line geometry using either
 - `KmlCutGuide` has `IsClosed`.
 - Closure is propagated through pending-guide undo and Line Editor session history.
 - A line is treated as closed when it has a valid ring and its first/last coordinates are within about 0.5 m; closed geometry is normalized so the last coordinate exactly equals the first.
-- **Close loop** is available while drawing and snaps the final coordinate exactly to the first.
+- **Close loop** works while drawing and for a single pending open guide. A refused non-dividing open clip guide offers to join its endpoints; the pending-guide change is undoable, with validation for degenerate loops.
 - Closed-loop editing preserves closure and does not expose the duplicated final coordinate as a separate logical handle.
 - A valid closed loop cannot be reduced below three distinct vertices.
 - **Use selected line** recognizes a selected closed contour as a closed boundary.
@@ -200,14 +200,15 @@ The Line Editor Step 2 now supports clipping editable line geometry using either
 - An open boundary cannot be combined with another open or closed pending boundary for Clip.
 - Endpoint direction is sampled from roughly 10 screen pixels back along the path rather than relying on a potentially jittery final hand-drawn segment.
 - The prepared divider is extended to a bounds rectangle outside the editable geometry.
-- A self-intersecting or otherwise invalid divider is refused with a simple “doesn’t divide the map” message.
-- The 10-pixel-equivalent sampling distance is frozen into the preview state so zooming between Preview and Apply cannot change the clip result.
+- A self-intersecting or otherwise invalid open divider is refused. The user can opt to close a non-dividing open guide, then use Keep inside/Keep outside.
+- The preview stores the exact resulting document, so zooming between Preview and Apply cannot recalculate a different clip.
 
 ### Classification
-- Geometry uses a fixed metric boundary-coincidence tolerance of **1 metre**, not a zoom-dependent tolerance.
-- For each piece, vertices and segment midpoints are tested and the candidate farthest from the boundary is used for side classification.
-- If even that farthest candidate is within the boundary tolerance, the piece is considered boundary-aligned and is kept.
-- Closed boundaries use even-odd point-in-polygon logic.
+- Geometry uses a **1 metre boundary-retention band** and a separate ~1 mm point-on-segment predicate tolerance.
+- Degenerate edges are treated as points rather than marking every point as on-boundary.
+- Per-piece classification uses an indexed boundary-distance search: the first candidate clearly farther than 5 m decides the side; pieces near the boundary retain a farthest-candidate check. Pieces entirely within 1 m of the boundary are kept.
+- Closed boundaries use indexed even-odd point-in-polygon logic; self-crossing loops show an explicit warning.
+- Rectangle perimeter corner positions are unwrapped and sorted to construct untwisted open-side regions.
 - Open boundaries divide an enclosing rectangle into two regions; the user click chooses which region is retained.
 
 ### Selection scope
@@ -216,21 +217,23 @@ The Step 2 checkbox is now:
 - checked by default.
 
 Semantics:
-- checked + no selected lines = all lines are eligible;
-- checked + one or more selected lines = operation limited to those selected lines;
-- unchecked = all lines are eligible even if some are selected.
-
-This rule applies consistently to Split and Clip.
+- **Clip:** checked + zero selected lines = refuse safely; checked + selected lines = only the selected eligible lines; unchecked = all eligible lines.
+- **Split:** retains its existing no-selection fallback to all lines.
+- Clip's preview always states the effective scope, excluding protected boundary source lines.
+- The checked/unchecked preference is retained when reopening the editor on the same document.
 
 ### Preview and transaction safety
 - Clip preview is calculated on a cloned document using the same real split/classification logic rather than estimating only intersections.
-- Temporary target markers are inherited by split clones and remain until classification/deletion has finished.
-- Helper lines created by **Use selected line** are removed as part of the same transaction.
-- Apply captures one `UndoActionKind.Clip` snapshot before destructive changes.
-- Split + classification + deletion + helper removal are one transaction; failures restore the pre-clip document.
+- Every eligible clip target is marked explicitly, including when the scope is all lines. Lines used as source boundaries are protected and excluded from splitting/classification, not deleted.
+- Apply Split still removes helper sources; Clip deliberately does not.
+- A completed preview contains the **exact result document** and its scope/geometry/guide revision; stale previews cannot be applied.
+- Apply captures one `UndoActionKind.Clip` snapshot and commits the prepared result without repeating split/classification. A failed transaction restores the pre-clip snapshot.
+- Target markers are removed from the prepared document before Apply.
 - A single Ctrl+Z reverses the whole clip, returns to Step 2, and reports **Clip undone.**
 - Success message follows:
   - `Clipped to boundary: X line(s) split, Y piece(s) kept, Z deleted.`
+
+Regression checks and Windows GUI acceptance steps are in [CLIP_REGRESSION_TESTS.md](CLIP_REGRESSION_TESTS.md).
 
 ## 7. Ring opening / hairpin handling
 
