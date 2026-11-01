@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Windows;
 using System.Xml.Linq;
 using KmlScopedEditor.Services;
+using KmlScopedEditor.Views;
 
 using Point = System.Windows.Point;
 
@@ -28,6 +29,7 @@ internal static class Program
         Run(nameof(SideSelectionLargeIndexBenchmark), SideSelectionLargeIndexBenchmark);
         Run(nameof(SelfCrossingLoopIsDetected), SelfCrossingLoopIsDetected);
         Run(nameof(SelectedScopeDoesNotTouchOthers), SelectedScopeDoesNotTouchOthers);
+        Run(nameof(SplitDefaultsToSelectedButUsesAllIfNoneSelected), SplitDefaultsToSelectedButUsesAllIfNoneSelected);
         Run(nameof(PointsAndPolygonsSurviveLineDeletion), PointsAndPolygonsSurviveLineDeletion);
         Console.WriteLine($"PASS: {_passed} regression checks.");
     }
@@ -100,6 +102,32 @@ internal static class Program
             .LineStringElement.ToString(SaveOptions.DisableFormatting);
         Require(stillUntouched == before,
             "Unselected line changed after scoped split.");
+    }
+
+    private static void SplitDefaultsToSelectedButUsesAllIfNoneSelected()
+    {
+        var initialSession = new LineEditorSessionState(
+            Array.Empty<LineEditorSessionGuideState>(),
+            false, "#FF8E84A8", 2d);
+        Require(initialSession.LimitToSelectedLines,
+            "Version 1.3 must default to split selected lines.");
+        Require(!(initialSession with { LimitToSelectedLines = false })
+                .LimitToSelectedLines,
+            "Users must still be able to choose splitting all lines.");
+
+        // The fallback deliberately passes no target marker when the
+        // selection is empty, regardless of the checked preference.
+        var geometry = Geometry(
+            ("first", new[] { (-.001, -.0005), (.001, -.0005) }),
+            ("second", new[] { (-.001, .0005), (.001, .0005) }));
+        var cut = Loop(geometry, (0, -.002), (0, .002));
+        var selectedTargets = Array.Empty<XElement>();
+        var marker = XName.Get("scope-target", "urn:regression");
+        var targetAttribute = initialSession.LimitToSelectedLines &&
+            selectedTargets.Length > 0 ? marker : null;
+        var split = geometry.SplitWithStroke(cut, targetAttribute);
+        Require(split.LinesSplit == 2,
+            "With zero selected lines Apply split must still affect all eligible lines.");
     }
 
     private static void PointsAndPolygonsSurviveLineDeletion()
