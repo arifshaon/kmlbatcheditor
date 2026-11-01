@@ -161,7 +161,78 @@ Important correctness rule:
 
 Output must not retain temporary editor markers.
 
-## 6. Ring opening / hairpin handling
+## 6. Clip to boundary
+
+The Line Editor Step 2 now supports clipping editable line geometry using either an **open** or **closed** pending boundary.
+
+### User behavior
+- **Closed boundary**
+  - **Keep inside** previews/deletes everything outside the boundary.
+  - **Keep outside** previews/deletes everything inside the boundary.
+- **Open boundary**
+  - **Choose side** asks the user to click clearly on the side to keep.
+  - The software extends both boundary ends beyond the geometry extent before splitting/classification.
+- Crossed lines are split first, then all eligible resulting pieces and untouched whole lines are classified. This is deliberate: Clip means “delete everything on the unwanted side”, not merely delete pieces that happened to be split.
+- Clip always previews before destructive changes:
+  - deletion area shaded;
+  - open-line extensions shown dashed;
+  - kept/deleted counts shown;
+  - **Apply clip** performs the operation;
+  - **Cancel preview** changes nothing.
+- After Apply, the clip boundary becomes applied split history and the editor advances to Step 3 for optional cleanup.
+
+### Closed boundaries
+- `KmlCutGuide` has `IsClosed`.
+- Closure is propagated through pending-guide undo and Line Editor session history.
+- A line is treated as closed when it has a valid ring and its first/last coordinates are within about 0.5 m; closed geometry is normalized so the last coordinate exactly equals the first.
+- **Close loop** is available while drawing and snaps the final coordinate exactly to the first.
+- Closed-loop editing preserves closure and does not expose the duplicated final coordinate as a separate logical handle.
+- A valid closed loop cannot be reduced below three distinct vertices.
+- **Use selected line** recognizes a selected closed contour as a closed boundary.
+- Imported Google Earth `Polygon/outerBoundaryIs/LinearRing` is supported as a closed boundary.
+- Polygon inner rings/holes are intentionally not imported as independent clip loops in this version. Treating holes as union loops would invert their semantics.
+- Several closed boundaries are allowed:
+  - Keep inside = inside **any** loop;
+  - Keep outside = outside **all** loops.
+
+### Open boundaries
+- Clip uses **one open boundary at a time**.
+- An open boundary cannot be combined with another open or closed pending boundary for Clip.
+- Endpoint direction is sampled from roughly 10 screen pixels back along the path rather than relying on a potentially jittery final hand-drawn segment.
+- The prepared divider is extended to a bounds rectangle outside the editable geometry.
+- A self-intersecting or otherwise invalid divider is refused with a simple “doesn’t divide the map” message.
+- The 10-pixel-equivalent sampling distance is frozen into the preview state so zooming between Preview and Apply cannot change the clip result.
+
+### Classification
+- Geometry uses a fixed metric boundary-coincidence tolerance of **1 metre**, not a zoom-dependent tolerance.
+- For each piece, vertices and segment midpoints are tested and the candidate farthest from the boundary is used for side classification.
+- If even that farthest candidate is within the boundary tolerance, the piece is considered boundary-aligned and is kept.
+- Closed boundaries use even-odd point-in-polygon logic.
+- Open boundaries divide an enclosing rectangle into two regions; the user click chooses which region is retained.
+
+### Selection scope
+The Step 2 checkbox is now:
+- **Limit to selected lines when selected**
+- checked by default.
+
+Semantics:
+- checked + no selected lines = all lines are eligible;
+- checked + one or more selected lines = operation limited to those selected lines;
+- unchecked = all lines are eligible even if some are selected.
+
+This rule applies consistently to Split and Clip.
+
+### Preview and transaction safety
+- Clip preview is calculated on a cloned document using the same real split/classification logic rather than estimating only intersections.
+- Temporary target markers are inherited by split clones and remain until classification/deletion has finished.
+- Helper lines created by **Use selected line** are removed as part of the same transaction.
+- Apply captures one `UndoActionKind.Clip` snapshot before destructive changes.
+- Split + classification + deletion + helper removal are one transaction; failures restore the pre-clip document.
+- A single Ctrl+Z reverses the whole clip, returns to Step 2, and reports **Clip undone.**
+- Success message follows:
+  - `Clipped to boundary: X line(s) split, Y piece(s) kept, Z deleted.`
+
+## 8. Ring opening / hairpin handling
 
 A previous narrow-ring opening could still be detected as closed because the endpoint gap was smaller than geometry tolerance.
 
@@ -170,7 +241,7 @@ Current rule:
 - the editor may trim farther along the line until that minimum separation is reached.
 - if an open result cannot be guaranteed safely, fail rather than producing a falsely “open” ring.
 
-## 7. Simplify / Smooth feature
+## 8. Simplify / Smooth feature
 
 This is one of the main v1.2.0 additions.
 
@@ -242,7 +313,7 @@ A regression case used during development:
 - no-op fast path exists when Simplify is Off and Smooth is off.
 - Exact performance on very large real files remains something to test rather than assume.
 
-## 8. Undo behavior
+## 9. Undo behavior
 
 Undo is chronological across different action types.
 
@@ -265,7 +336,7 @@ Simplify undo:
 
 Do not revert to separate stack behavior that can undo an older document action before a newer pending-guide edit.
 
-## 9. Selection and lasso behavior
+## 10. Selection and lasso behavior
 
 - Click toggles line/piece selection.
 - Double-click is protected from accidental toggle behavior.
@@ -275,7 +346,7 @@ Do not revert to separate stack behavior that can undo an older document action 
 - Step 3 deletion removes selected resulting pieces.
 - Step 2 Delete/Backspace must never delete underlying KML geometry.
 
-## 10. Geometry and document preservation
+## 11. Geometry and document preservation
 
 General intent:
 - edit only the requested geometry/style scope;
@@ -285,7 +356,7 @@ General intent:
 - rebuild spatial indexes/bounds after batch coordinate replacement;
 - preserve selection using element identity where feasible.
 
-## 11. Main-window style editing
+## 12. Main-window style editing
 
 The application supports scoped placemark style editing for:
 - Lines
@@ -309,7 +380,7 @@ Important behavior:
 - custom icon files can be bundled into KMZ output;
 - built-in current/proposed preview and Google Earth preview are available.
 
-## 12. Save semantics
+## 13. Save semantics
 
 - Main-window edits modify the working in-memory document.
 - Line Editor **Done** returns geometry changes to that working document.
@@ -317,7 +388,7 @@ Important behavior:
 - **Save As** is the explicit write-to-disk action.
 - Unsaved changes indicator/warning remains important.
 
-## 13. Packaging and installer
+## 14. Packaging and installer
 
 ### Current version
 - **1.2.0**
@@ -372,7 +443,7 @@ The application itself can still publish successfully without Inno Setup; only S
 - Testers may see Windows SmartScreen / **Unknown publisher** warnings.
 - Public distribution should eventually use a trusted code-signing certificate.
 
-## 14. GitHub Actions Windows build
+## 15. GitHub Actions Windows build
 
 Workflow:
 - `.github/workflows/windows-release.yml`
@@ -391,7 +462,7 @@ A successful Windows Actions run confirmed that the v1.2.0 source and installer 
 Note:
 - GitHub Actions artifacts are downloaded as ZIP archives, even when the artifact contains a single installer EXE.
 
-## 15. Repository artifacts
+## 16. Repository artifacts
 
 The repository has historically contained generated artifacts under `artifacts/`.
 
@@ -401,7 +472,7 @@ Be careful distinguishing:
 
 For tester distribution, prefer the freshly built v1.2.0 installer, not an old committed v1.1.0 binary.
 
-## 16. Tester-facing guidance
+## 17. Tester-facing guidance
 
 Current tester focus should include:
 - splash screen appears correctly;
@@ -422,7 +493,7 @@ Current tester focus should include:
 
 A short Word tester guide has also been produced for v1.2.0, focused on the Simplify/Smooth workflow.
 
-## 17. Known constraints / things not to assume
+## 18. Known constraints / things not to assume
 
 - Do not treat Visual Studio `XDG0008` designer errors as the root cause when a real C# compile/resource error is present; they often cascade after compilation fails.
 - Because `UseWindowsForms=true` and `UseWPF=true`, ambiguous framework type names are possible.
@@ -433,7 +504,7 @@ A short Word tester guide has also been produced for v1.2.0, focused on the Simp
 - Topology difference matching is count/group based rather than a full geometric one-to-one persistence model.
 - Windows on ARM would require a separate `win-arm64` package; current release targets `win-x64`.
 
-## 18. Core source files
+## 19. Core source files
 
 - `KmlScopedEditor/MainWindow.xaml`
 - `KmlScopedEditor/MainWindow.xaml.cs`
@@ -455,7 +526,7 @@ A short Word tester guide has also been produced for v1.2.0, focused on the Simp
 - `Build-Installer.cmd`
 - `Build-Portable.cmd`
 
-## 19. Product-direction principles
+## 20. Product-direction principles
 
 When making future changes:
 - prefer simple, explicit user actions over hidden automatic behavior;
