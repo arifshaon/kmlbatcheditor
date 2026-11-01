@@ -1,6 +1,6 @@
 #define MyAppName "Simple KML Editor"
 #ifndef MyAppVersion
-  #define MyAppVersion "1.2.0"
+  #define MyAppVersion "1.3.0"
 #endif
 #define MyAppExeName "KmlScopedEditor.exe"
 #define MyAppPublisher "Arif Shaon"
