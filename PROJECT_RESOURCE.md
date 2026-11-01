@@ -384,10 +384,10 @@ Project file:
 - `FileVersion 1.3.0.0`
 - `AssemblyVersion 1.3.0.0`
 
-The artifacts described below with 1.2.0 in their filenames are
-**historical version 1.2 packages**, not validated version 1.3 releases.
-`Build-Release.ps1` reads the version from the project file and will
-name newly built version 1.3.0 packages accordingly.
+Version 1.3.0 is the current release target. The packaging scripts
+read the version from the project file and name the new installer and
+portable ZIP accordingly. Historical version 1.2.0 packages are not
+version 1.3 release artifacts.
 
 ### Local build outputs
 `Build-Release.ps1` produces:
@@ -395,9 +395,9 @@ name newly built version 1.3.0 packages accordingly.
 - Published EXE:
   - `artifacts\publish\win-x64\KmlScopedEditor.exe`
 - Portable ZIP:
-  - `artifacts\portable\Simple-KML-Editor-Portable-1.2.0-win-x64.zip`
+  - `artifacts\portable\Simple-KML-Editor-Portable-1.3.0-win-x64.zip`
 - Installer:
-  - `artifacts\installer\Simple-KML-Editor-Setup-1.2.0.exe`
+  - `artifacts\installer\Simple-KML-Editor-Setup-1.3.0.exe`
 
 ### Build commands
 - `Build-Portable.cmd`
@@ -427,7 +427,7 @@ The application itself can still publish successfully without Inno Setup; only S
 - The permanent installer `AppId` is:
   - `{7F5C89B1-E9E9-438F-AF80-5057DD72C1F0}`
 - **Do not change this AppId.**
-- It is deliberately retained so v1.2.0 upgrades earlier KML Scoped Editor installations instead of creating a second installed product.
+- It is deliberately retained so v1.3.0 upgrades existing v1.2.0 installations without creating a second installed product.
 
 ### Signing
 - Installer/application are currently unsigned.
@@ -445,10 +445,10 @@ It:
 - installs Inno Setup;
 - executes `Build-Release.ps1 -Installer`;
 - uploads:
-  - `Simple-KML-Editor-Setup-1.2.0`
-  - `Simple-KML-Editor-Portable-1.2.0-win-x64`
+  - `Simple-KML-Editor-Setup-1.3.0`
+  - `Simple-KML-Editor-Portable-1.3.0-win-x64`
 
-A successful Windows Actions run confirmed that the v1.2.0 source and installer process compile successfully on Windows.
+Windows release packaging must produce version 1.3.0 artifacts and pass the installer build before the new version is distributed.
 
 Note:
 - GitHub Actions artifacts are downloaded as ZIP archives, even when the artifact contains a single installer EXE.
@@ -461,7 +461,7 @@ Be careful distinguishing:
 - **committed historical artifacts** already present in the repo; and
 - **new locally/generated build outputs**, which may exist only on the build machine or as GitHub Actions artifacts.
 
-For version 1.3 testers, use only a newly built and verified version 1.3.0 installer; the listed version 1.2.0 installers and committed artifacts are historical and should not be represented as version 1.3.
+For version 1.3 testers, use only a newly built and verified version 1.3.0 installer. Previous version 1.2.0 packages remain historical artifacts.
 
 ## 17. Tester-facing guidance
 
