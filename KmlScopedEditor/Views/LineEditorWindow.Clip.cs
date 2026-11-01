@@ -25,8 +25,13 @@ public partial class LineEditorWindow
     {
         if (_draftCutPoints.Count < 3)
         {
-            UpdateStatus(
-                "Draw at least three boundary points before closing the loop.");
+            var pendingOpen = _guides
+                .Where(guide => !guide.Applied && !guide.Guide.IsClosed)
+                .ToList();
+            if (pendingOpen.Count == 1 && ClosePendingClipGuide(pendingOpen[0]))
+                UpdateStatus("Pending boundary closed. Choose Keep inside or Keep outside.");
+            else
+                UpdateStatus("Draw at least three points, or use one pending open boundary.");
             return;
         }
 
@@ -261,7 +266,7 @@ public partial class LineEditorWindow
 
         ApplyClipButton.IsEnabled =
             _clipPreviewState is not null &&
-            _clipPreviewState.DeletedPieces > 0;
+            _clipPreviewState.Plan.DeletedPieces > 0;
 
         CancelClipPreviewButton.IsEnabled =
             _clipPreviewState is not null ||
@@ -269,8 +274,8 @@ public partial class LineEditorWindow
 
         if (_clipPreviewState is not null)
         {
-            ClipPreviewSummaryText.Text =
-                $"Will delete {_clipPreviewState.DeletedPieces:N0} piece(s), keep {_clipPreviewState.KeptPieces:N0}.";
+            var plan = _clipPreviewState.Plan;
+            ClipPreviewSummaryText.Text = FormatClipSummary(plan);
             return;
         }
 
@@ -383,17 +388,23 @@ public partial class LineEditorWindow
         {
             CancelClipPreviewInternal(
                 updateStatus: false);
-            UpdateStatus(error);
+            if (pending.Count == 1 &&
+                !pending[0].Guide.IsClosed &&
+                error.Contains("doesn’t divide", StringComparison.Ordinal))
+                OfferToCloseRefusedClipGuide(pending[0]);
+            else
+                UpdateStatus(error);
             return;
         }
 
-        _clipPreviewState =
-            new ClipPreviewState(
-                mode,
-                keepPoint,
-                directionSampleDistance,
-                plan.KeptPieces,
-                plan.DeletedPieces);
+        _clipPreviewState = new ClipPreviewState(
+            mode,
+            keepPoint,
+            plan,
+            _geometryRevision,
+            OnlySplitSelectedCheckBox.IsChecked == true,
+            GetValidSelectedLines().ToHashSet(),
+            CaptureClipGuides(pending));
 
         EditorSurface.SetClipPreview(
             plan.Overlay);
@@ -404,10 +415,7 @@ public partial class LineEditorWindow
         CancelClipPreviewButton.IsEnabled =
             true;
 
-        ClipPreviewSummaryText.Text =
-            plan.DeletedPieces == 0
-                ? $"Nothing is on the delete side; {plan.KeptPieces:N0} piece(s) would be kept."
-                : $"Will delete {plan.DeletedPieces:N0} piece(s), keep {plan.KeptPieces:N0}.";
+        ClipPreviewSummaryText.Text = FormatClipSummary(plan);
 
         UpdateStatus(
             plan.DeletedPieces == 0
@@ -459,10 +467,28 @@ public partial class LineEditorWindow
         var sourceSelected =
             GetValidSelectedLines();
 
-        var limitToSelection =
-            OnlySplitSelectedCheckBox.IsChecked ==
-                true &&
-            sourceSelected.Count > 0;
+        var limitToSelection = OnlySplitSelectedCheckBox.IsChecked == true;
+        if (limitToSelection && sourceSelected.Count == 0)
+        {
+            error = "Clip is limited to selected lines, but no lines are selected. Select lines or turn the limit off.";
+            return false;
+        }
+
+        var protectedSourceIds = pending
+            .Where(guide => guide.RemoveMatchingSourceBeforeCut &&
+                !string.IsNullOrWhiteSpace(guide.SourceLineId))
+            .Select(guide => guide.SourceLineId!)
+            .ToHashSet(StringComparer.Ordinal);
+        var scopedTargets = _geometry.Features.Count(feature =>
+            !protectedSourceIds.Contains(
+                feature.LineStringElement.Attribute(SourceGuideMarkerAttribute)?.Value ?? "") &&
+            (!limitToSelection ||
+                sourceSelected.Contains(feature.LineStringElement)));
+        if (scopedTargets == 0)
+        {
+            error = "There are no eligible lines to clip. The boundary itself is protected.";
+            return false;
+        }
 
         var clone =
             new XDocument(
@@ -471,16 +497,16 @@ public partial class LineEditorWindow
         MarkCloneTargets(
             clone,
             sourceSelected,
-            limitToSelection);
+            limitToSelection,
+            protectedSourceIds);
 
         var previewGeometry =
             new KmlLineGeometryService(
                 clone,
                 _projectionScale);
 
-        RemoveHelperLinesFromGeometry(
-            previewGeometry,
-            pending);
+        // Clip preserves source lines used as boundaries; Apply split retains
+        // its existing source-helper deletion behaviour.
 
         var closedLoops =
             pending
@@ -549,9 +575,7 @@ public partial class LineEditorWindow
                 previewGeometry
                     .SplitWithStroke(
                         stroke,
-                        limitToSelection
-                            ? CutTargetMarkerAttribute
-                            : null);
+                        CutTargetMarkerAttribute);
 
             totalLinesSplit +=
                 result.LinesSplit;
@@ -574,9 +598,7 @@ public partial class LineEditorWindow
                         previewGeometry.Features,
                         openBoundary,
                         keepPoint!.Value,
-                        limitToSelection
-                            ? CutTargetMarkerAttribute
-                            : null,
+                        CutTargetMarkerAttribute,
                         out classification,
                         out var keepRegionA,
                         out error))
@@ -611,9 +633,7 @@ public partial class LineEditorWindow
                         previewGeometry.Features,
                         closedLoops,
                         keepInside,
-                        limitToSelection
-                            ? CutTargetMarkerAttribute
-                            : null);
+                        CutTargetMarkerAttribute);
 
             var allBoundaryPoints =
                 closedLoops
@@ -638,16 +658,26 @@ public partial class LineEditorWindow
                         IReadOnlyList<Point>>());
         }
 
-        plan =
-            new ClipPlan(
-                totalLinesSplit,
-                classification
-                    .KeptLines.Count,
-                classification
-                    .DeletedLines.Count,
-                overlay,
-                cutPointsByGuide,
-                openBoundary);
+        // Store the complete prepared document, so Apply need not recalculate.
+        var deletedCount = classification.DeletedLines.Count;
+        previewGeometry.DeleteLines(classification.DeletedLines);
+        foreach (var line in clone.Descendants(KmlNs + "LineString"))
+            line.Attribute(CutTargetMarkerAttribute)?.Remove();
+
+        var crossingLoop = closedLoops.Any(
+            KmlBoundaryClipService.LoopSelfIntersects);
+        plan = new ClipPlan(
+            totalLinesSplit,
+            classification.KeptLines.Count,
+            deletedCount,
+            overlay,
+            cutPointsByGuide,
+            openBoundary,
+            clone,
+            limitToSelection
+                ? $"limited to {scopedTargets:N0} selected line(s)"
+                : "all eligible lines",
+            crossingLoop);
 
         return true;
     }
@@ -747,9 +777,7 @@ public partial class LineEditorWindow
                     _geometry
                         .SplitWithStroke(
                             stroke,
-                            limitToSelection
-                                ? CutTargetMarkerAttribute
-                                : null);
+                            CutTargetMarkerAttribute);
 
                 totalLinesSplit +=
                     result.LinesSplit;
@@ -769,9 +797,7 @@ public partial class LineEditorWindow
                             _geometry.Features,
                             openBoundary,
                             keepPoint!.Value,
-                            limitToSelection
-                                ? CutTargetMarkerAttribute
-                                : null,
+                            CutTargetMarkerAttribute,
                             out classification,
                             out _,
                             out error))
@@ -798,9 +824,7 @@ public partial class LineEditorWindow
                             loops,
                             mode ==
                                 ClipMode.KeepInside,
-                            limitToSelection
-                                ? CutTargetMarkerAttribute
-                                : null);
+                            CutTargetMarkerAttribute);
             }
 
             var deleted =
