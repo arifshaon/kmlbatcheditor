@@ -8,7 +8,7 @@ This file is the canonical project handover/resource for the **Simple KML Editor
 
 - Visible product name: **Simple KML Editor**.
 - Internal project/repository names remain **KmlScopedEditor** / `kmlbatcheditor`.
-- Current application version: **1.2.0**.
+- Current source/application version on the version 1.3 development branch: **1.3.0** (not yet released).
 - Developer/publisher: **Arif Shaon**.
 - Repository: **https://github.com/arifshaon/kmlbatcheditor**.
 - Main purpose: edit KML/KMZ placemark styles and line geometry, including splitting, deleting, simplifying, smoothing, previewing, and scoped batch editing.
@@ -163,12 +163,18 @@ Output must not retain temporary editor markers.
 
 ## 6. Select side (Step 3)
 
-Version 1.2's **Step 2 Apply split** behavior is retained. The later Clip panel has
-been removed from Step 2. Do not use the Clip workflow for splitting or
-deleting. Step 2 remains import/draw/use selected line, Apply split and
-optional Close loop for pending open guides. The original selection-scope
-semantics remain: the checkbox is unchecked by default, it is disabled
-without a selection, and no selection means Apply split crosses all lines.
+Version 1.3 keeps the established **Step 2 Apply split** workflow: import,
+draw or use a selected line as a guide, optionally Close loop, then Apply
+split. The later Clip panel has been removed; Select side belongs to Step 3.
+
+**New version 1.3 selection-scope default:** **Only split the selected lines**
+is checked by default. When one or more lines are selected, Apply split
+targets those lines only. When no lines are selected, Apply split still
+targets **all eligible lines**, without clearing the checked preference.
+The checkbox stays enabled and the current scope is explained in the UI.
+Users may uncheck it to split all lines even when some are selected.
+The scope preference is preserved across editor sessions for the same
+document, including when the editor closes without keeping geometry changes.
 
 ### Step 3: select a side, then delete if desired
 
@@ -200,10 +206,11 @@ without a selection, and no selection means Apply split crosses all lines.
 
 ### Simplify / smooth scope
 
-Simplify/smooth continues to work in Step 1 and Step 3, but now defaults to
-**Only selected lines** rather than All lines. With no selected lines,
-simplification does **not** silently affect the whole map; the user must
-select lines or deliberately choose All lines.
+Simplify/smooth continues to work in Step 1 and Step 3 with **the original
+version 1.2 default of All lines**. Users may explicitly select
+**Only selected lines**. As in version 1.2, opening Simplify/smooth with an
+empty selection resets a previously selected-only scope to All lines.
+The panel never applies changes without the user choosing Apply.
 
 The full regression instructions are in
 [CLIP_REGRESSION_TESTS.md](CLIP_REGRESSION_TESTS.md), retained as a filename
@@ -367,13 +374,18 @@ Important behavior:
 
 ## 14. Packaging and installer
 
-### Current version
-- **1.2.0**
+### Current development version (not yet released)
+- **1.3.0**
 
 Project file:
-- `Version 1.2.0`
-- `FileVersion 1.2.0.0`
-- `AssemblyVersion 1.2.0.0`
+- `Version 1.3.0`
+- `FileVersion 1.3.0.0`
+- `AssemblyVersion 1.3.0.0`
+
+The artifacts described below with 1.2.0 in their filenames are
+**historical version 1.2 packages**, not validated version 1.3 releases.
+`Build-Release.ps1` reads the version from the project file and will
+name newly built version 1.3.0 packages accordingly.
 
 ### Local build outputs
 `Build-Release.ps1` produces:
@@ -447,7 +459,7 @@ Be careful distinguishing:
 - **committed historical artifacts** already present in the repo; and
 - **new locally/generated build outputs**, which may exist only on the build machine or as GitHub Actions artifacts.
 
-For tester distribution, prefer the freshly built v1.2.0 installer, not an old committed v1.1.0 binary.
+For version 1.3 testers, use only a newly built and verified version 1.3.0 installer; the listed version 1.2.0 installers and committed artifacts are historical and should not be represented as version 1.3.
 
 ## 17. Tester-facing guidance
 
