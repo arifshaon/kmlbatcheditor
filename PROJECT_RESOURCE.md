@@ -223,7 +223,7 @@ Semantics:
 - The checked/unchecked preference is retained when reopening the editor on the same document.
 
 ### Preview and transaction safety
-- Clip preview is calculated on a cloned document using the same real split/classification logic rather than estimating only intersections.
+- Clip preview runs expensive split/classification on a background worker using an independent cloned document and copied guide coordinates. UI/WPF state remains on the UI thread; cancelled or stale worker results are ignored.
 - Every eligible clip target is marked explicitly, including when the scope is all lines. Lines used as source boundaries are protected and excluded from splitting/classification, not deleted.
 - Apply Split still removes helper sources; Clip deliberately does not.
 - A completed preview contains the **exact result document** and its scope/geometry/guide revision; stale previews cannot be applied.
