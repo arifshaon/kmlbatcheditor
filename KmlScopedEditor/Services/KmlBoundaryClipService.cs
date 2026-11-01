@@ -233,6 +233,177 @@ public static class KmlBoundaryClipService
         return true;
     }
 
+    // Select Side only identifies eligible LineStrings. It never deletes geometry.
+    // The caller may reuse the prepared boundary across clicks and rebuild it
+    // when document geometry or the last applied split changes.
+    public sealed record SideSelectionResult(
+        IReadOnlyList<XElement> ClickedSide,
+        IReadOnlyList<XElement> OtherSide,
+        IReadOnlyList<XElement> OnBoundary,
+        IReadOnlyList<XElement> Crossing);
+
+    public static bool TrySelectSide(
+        IEnumerable<KmlLineFeature> features,
+        IReadOnlyList<IReadOnlyList<Point>> closedLoops,
+        PreparedOpenBoundary? openBoundary,
+        Point clickPoint,
+        out SideSelectionResult result,
+        out string error)
+    {
+        var boundary = new PreparedSideBoundary(closedLoops, openBoundary);
+        return boundary.TrySelect(features, clickPoint, out result, out error);
+    }
+
+    public sealed class PreparedSideBoundary
+    {
+        private readonly IReadOnlyList<PreparedPolygon> _polygons;
+        private readonly PreparedPolygon? _regionA;
+        private readonly PreparedPolygon? _regionB;
+        private readonly BoundarySegmentIndex _segments;
+        private readonly bool _isOpen;
+
+        public PreparedSideBoundary(
+            IReadOnlyList<IReadOnlyList<Point>> closedLoops,
+            PreparedOpenBoundary? openBoundary)
+        {
+            _isOpen = openBoundary is not null;
+            _polygons = closedLoops
+                .Where(loop => loop.Count >= 4)
+                .Select(loop => new PreparedPolygon(loop))
+                .ToList();
+            _regionA = openBoundary is null
+                ? null : new PreparedPolygon(openBoundary.RegionA);
+            _regionB = openBoundary is null
+                ? null : new PreparedPolygon(openBoundary.RegionB);
+            var segments = openBoundary is not null
+                ? BuildSegments(openBoundary.ExtendedPath).ToList()
+                : closedLoops.SelectMany(BuildSegments).ToList();
+            _segments = new BoundarySegmentIndex(segments);
+        }
+
+        private bool IsInSideA(Point point) =>
+            _isOpen
+                ? _regionA!.Contains(point)
+                : _polygons.Any(polygon => polygon.Contains(point));
+
+        public bool TrySelect(
+            IEnumerable<KmlLineFeature> features,
+            Point clickPoint,
+            out SideSelectionResult result,
+            out string error)
+        {
+            var clicked = new List<XElement>();
+            var other = new List<XElement>();
+            var onBoundary = new List<XElement>();
+            var crossing = new List<XElement>();
+            result = new SideSelectionResult(clicked, other, onBoundary, crossing);
+            error = string.Empty;
+
+            if (_segments.WithinDistance(
+                clickPoint, WorldUnitsFromMetres(BoundaryToleranceMetres)))
+            {
+                error = "Click more than 1 m from the split boundary.";
+                return false;
+            }
+
+            if (_isOpen && _regionA!.Contains(clickPoint) ==
+                _regionB!.Contains(clickPoint))
+            {
+                error = "Click clearly on one side of the split line.";
+                return false;
+            }
+
+            var clickA = IsInSideA(clickPoint);
+            var retentionBand = WorldUnitsFromMetres(BoundaryToleranceMetres);
+            foreach (var feature in features)
+            {
+                var points = feature.WorldPoints;
+                if (points.Count < 2)
+                    continue;
+
+                // Check actual intersections first. Vertex/midpoint-only
+                // classification misses a segment through a narrow 3 m loop.
+                var cutsBoundary = false;
+                for (var i = 1; i < points.Count && !cutsBoundary; i++)
+                {
+                    var a = points[i - 1];
+                    var b = points[i];
+                    var positions = _segments.IntersectionParameters(a, b);
+                    if (positions.Count == 0)
+                        continue;
+
+                    // Test successive open intervals between intersections.
+                    // A vertex touch or tangent does not change side.
+                    var previousSide = IsInSideA(a + (b - a) *
+                        (positions[0] / 2d));
+                    foreach (var t in positions)
+                    {
+                        var next = positions.FirstOrDefault(x => x > t + 1e-12d);
+                        if (next <= t)
+                            next = 1d;
+                        var followingSide = IsInSideA(a + (b - a) *
+                            ((t + next) / 2d));
+                        if (followingSide != previousSide)
+                        {
+                            cutsBoundary = true;
+                            break;
+                        }
+                        previousSide = followingSide;
+                    }
+                }
+
+                var sideSeen = false;
+                var sideA = false;
+                if (!cutsBoundary)
+                {
+                    for (var i = 0; i < points.Count && !cutsBoundary; i++)
+                    {
+                        var point = points[i];
+                        if (!_segments.WithinDistance(point, retentionBand))
+                        {
+                            var candidate = IsInSideA(point);
+                            if (sideSeen && candidate != sideA)
+                                cutsBoundary = true;
+                            else
+                            {
+                                sideSeen = true;
+                                sideA = candidate;
+                            }
+                        }
+
+                        if (i == points.Count - 1)
+                            continue;
+                        var midpoint = new Point(
+                            (point.X + points[i + 1].X) / 2d,
+                            (point.Y + points[i + 1].Y) / 2d);
+                        if (!_segments.WithinDistance(midpoint, retentionBand))
+                        {
+                            var candidate = IsInSideA(midpoint);
+                            if (sideSeen && candidate != sideA)
+                                cutsBoundary = true;
+                            else
+                            {
+                                sideSeen = true;
+                                sideA = candidate;
+                            }
+                        }
+                    }
+                }
+
+                if (cutsBoundary)
+                    crossing.Add(feature.LineStringElement);
+                else if (!sideSeen)
+                    onBoundary.Add(feature.LineStringElement);
+                else if (sideA == clickA)
+                    clicked.Add(feature.LineStringElement);
+                else
+                    other.Add(feature.LineStringElement);
+            }
+
+            return true;
+        }
+    }
+
     public static ClipClassificationResult
         ClassifyClosed(
             IEnumerable<KmlLineFeature> features,
@@ -1156,6 +1327,72 @@ public static class KmlBoundaryClipService
             var dy = Math.Max(0d, Math.Max(
                 bounds.Top - point.Y, point.Y - bounds.Bottom));
             return dx * dx + dy * dy;
+        }
+
+        // Collect non-collinear intersections of a feature segment with
+        // boundary segments. The bounding-box hierarchy avoids O(n*m) scans.
+        public IReadOnlyList<double> IntersectionParameters(Point a, Point b)
+        {
+            if (_root is null)
+                return Array.Empty<double>();
+            var minX = Math.Min(a.X, b.X);
+            var maxX = Math.Max(a.X, b.X);
+            var minY = Math.Min(a.Y, b.Y);
+            var maxY = Math.Max(a.Y, b.Y);
+            var positions = new List<double>();
+            Collect(_root);
+            positions.Sort();
+            var deduplicated = new List<double>();
+            foreach (var t in positions)
+                if (deduplicated.Count == 0 ||
+                    t - deduplicated[^1] > 1e-10d)
+                    deduplicated.Add(t);
+            return deduplicated;
+
+            void Collect(Node node)
+            {
+                if (node.Bounds.Right < minX - PointEpsilon ||
+                    node.Bounds.Left > maxX + PointEpsilon ||
+                    node.Bounds.Bottom < minY - PointEpsilon ||
+                    node.Bounds.Top > maxY + PointEpsilon)
+                    return;
+
+                if (node.Segments is not null)
+                {
+                    foreach (var (c, d) in node.Segments)
+                    {
+                        if (TryIntersection(a, b, c, d, out var t))
+                            positions.Add(t);
+                    }
+                    return;
+                }
+
+                if (node.Left is not null)
+                    Collect(node.Left);
+                if (node.Right is not null)
+                    Collect(node.Right);
+            }
+        }
+
+        private static bool TryIntersection(
+            Point a, Point b, Point c, Point d, out double t)
+        {
+            t = 0d;
+            var ab = b - a;
+            var cd = d - c;
+            var denominator = Cross(ab, cd);
+            if (ab.Length <= PointEpsilon || cd.Length <= PointEpsilon ||
+                Math.Abs(denominator) <= 1e-12d * ab.Length * cd.Length)
+                return false; // collinear overlap/tangency is not a cut
+            var ac = c - a;
+            var u = Cross(ac, ab) / denominator;
+            var target = Cross(ac, cd) / denominator;
+            // Only interior hits on the feature need a repair split.
+            if (target <= 1e-10d || target >= 1d - 1e-10d ||
+                u < -1e-10d || u > 1d + 1e-10d)
+                return false;
+            t = target;
+            return true;
         }
 
         public bool WithinDistance(Point point, double distance)
