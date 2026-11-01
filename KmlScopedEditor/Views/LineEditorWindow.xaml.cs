@@ -161,7 +161,8 @@ public partial class LineEditorWindow : Window
             var guide =
                 new KmlCutGuide(
                     item.Name,
-                    item.GuideCoordinates.ToList());
+                    item.GuideCoordinates.ToList(),
+                    item.IsClosed);
 
             var state =
                 new CutGuideState(
@@ -199,6 +200,7 @@ public partial class LineEditorWindow : Window
                     new LineEditorSessionGuideState(
                         guide.Guide.Name,
                         guide.Guide.Coordinates.ToList(),
+                        guide.Guide.IsClosed,
                         guide.AppliedSequence,
                         guide.AppliedCutPoints
                             .Select(_geometry.Unproject)
@@ -477,6 +479,15 @@ public partial class LineEditorWindow : Window
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
+        ClipActionsPanel.Visibility =
+            _workflowStep == 2
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        if (_workflowStep != 2)
+            CancelClipPreviewInternal(
+                updateStatus: false);
+
         Step3ActionsPanel.Visibility =
             _workflowStep == 3
                 ? Visibility.Visible
@@ -555,12 +566,17 @@ public partial class LineEditorWindow : Window
         if (_draftCutPoints.Count < 2)
             return null;
 
+        var draftIsClosed =
+            IsWorldLoopClosed(
+                _draftCutPoints);
+
         var guide =
             new KmlCutGuide(
                 "Split line",
                 _draftCutPoints
                     .Select(_geometry.Unproject)
-                    .ToList());
+                    .ToList(),
+                draftIsClosed);
 
         var state =
             new CutGuideState(
@@ -593,6 +609,7 @@ public partial class LineEditorWindow : Window
                     new PendingGuideSnapshot(
                         guide.Guide.Name,
                         guide.Guide.Coordinates.ToList(),
+                        guide.Guide.IsClosed,
                         guide.RemoveMatchingSourceBeforeCut,
                         guide.SourceLineId))
                 .ToList());
@@ -638,7 +655,8 @@ public partial class LineEditorWindow : Window
                 new CutGuideState(
                     new KmlCutGuide(
                         snapshot.Name,
-                        snapshot.Coordinates.ToList()),
+                        snapshot.Coordinates.ToList(),
+                        snapshot.IsClosed),
                     snapshot.RemoveMatchingSourceBeforeCut,
                     snapshot.SourceLineId));
         }
@@ -848,6 +866,14 @@ public partial class LineEditorWindow : Window
         object? sender,
         LineEditorClickEventArgs e)
     {
+        if (_clipSidePickActive &&
+            e.Tool == LineEditorTool.Split)
+        {
+            HandleClipSideClick(
+                e.WorldPoint);
+            return;
+        }
+
         if (e.Tool == LineEditorTool.Split)
         {
             if (_draftCutPoints.Count == 0)
@@ -1328,7 +1354,7 @@ public partial class LineEditorWindow : Window
         if (importedStates.Count == 0)
         {
             UpdateStatus(
-                "No LineString paths were found in the selected split-line file.");
+                "No LineString or Polygon boundary paths were found in the selected file.");
             return;
         }
 
@@ -1422,9 +1448,14 @@ public partial class LineEditorWindow : Window
             return;
         }
 
+        var selectedIsClosed =
+            IsCoordinateLoopClosed(
+                feature.Coordinates);
+
         var guide = new KmlCutGuide(
             feature.Name,
-            feature.Coordinates.ToList());
+            feature.Coordinates.ToList(),
+            selectedIsClosed);
 
         var sourceLineId =
             EnsureSourceGuideId(
@@ -1564,10 +1595,17 @@ public partial class LineEditorWindow : Window
         UpdatePendingGuidePreview();
         UpdateCutScopeDisplay();
 
+        CancelClipPreviewInternal(
+            updateStatus: false);
+
+        var selectedCount =
+            GetValidSelectedLines().Count;
+
         UpdateStatus(
-            OnlySplitSelectedCheckBox.IsChecked == true
-                ? "Split scope limited to the currently selected lines."
-                : "Split scope is unrestricted; any crossed line can be split.");
+            OnlySplitSelectedCheckBox.IsChecked == true &&
+            selectedCount > 0
+                ? $"Split/clip scope limited to {selectedCount:N0} selected line(s)."
+                : "No active selection limit; split/clip operations can affect all lines.");
     }
 
     private void ApplyCurrentSplit()
@@ -1625,14 +1663,6 @@ public partial class LineEditorWindow : Window
         var selectedTargets = GetValidSelectedLines();
         var limitToSelection =
             OnlySplitSelectedCheckBox.IsChecked == true;
-
-        if (limitToSelection &&
-            selectedTargets.Count == 0)
-        {
-            UpdateStatus(
-                "Only split the selected lines is ticked, but no lines are selected.");
-            return;
-        }
 
         var snapshot =
             CaptureUndoState(
@@ -2014,7 +2044,9 @@ public partial class LineEditorWindow : Window
 
         _selected.Clear();
 
-        if (state.Kind == UndoActionKind.Split)
+        if (state.Kind is
+            UndoActionKind.Split or
+            UndoActionKind.Clip)
         {
             _step3InstructionOverride = null;
             SetWorkflowStep(2);
@@ -2035,6 +2067,8 @@ public partial class LineEditorWindow : Window
                     restoredPendingSplit
                         ? "Split undone — the split line is ready to apply again."
                         : "Split undone.",
+                UndoActionKind.Clip =>
+                    "Clip undone.",
                 UndoActionKind.Simplify =>
                     "Simplify undone.",
                 _ =>
@@ -2684,6 +2718,8 @@ public partial class LineEditorWindow : Window
 
     private void UpdatePendingGuidePreview()
     {
+        CancelClipPreviewInternal(
+            updateStatus: false);
         UpdateLiveSplitPreview();
     }
 
@@ -2749,7 +2785,7 @@ public partial class LineEditorWindow : Window
         var valid = GetValidSelectedLines();
 
         return valid.Count == 0
-            ? new HashSet<XElement>()
+            ? null
             : valid.ToHashSet();
     }
 
@@ -2776,21 +2812,14 @@ public partial class LineEditorWindow : Window
         UseSelectedLineButton.IsEnabled =
             validSelected.Count == 1;
 
-        OnlySplitSelectedCheckBox.IsEnabled =
-            validSelected.Count > 0;
-
-        if (validSelected.Count == 0 &&
-            OnlySplitSelectedCheckBox.IsChecked == true)
-        {
-            OnlySplitSelectedCheckBox.IsChecked = false;
-        }
+        OnlySplitSelectedCheckBox.IsEnabled = true;
 
         SelectedSplitScopeText.Text =
             validSelected.Count == 0
-                ? "(none selected)"
+                ? "No lines selected — the split will cross all lines."
                 : OnlySplitSelectedCheckBox.IsChecked == true
-                    ? $"{validSelected.Count:N0} selected — split limited to selection"
-                    : $"{validSelected.Count:N0} lines selected — the split will still cross all lines. Tick to limit it.";
+                    ? $"{validSelected.Count:N0} selected — split limited to selection."
+                    : $"{validSelected.Count:N0} selected — selection limit is off, so the split will cross all lines.";
 
         EditorSurface.SetSelectionSoft(
             _workflowStep == 2 &&
@@ -2800,17 +2829,27 @@ public partial class LineEditorWindow : Window
         var pendingGuides =
             _guides.Count(guide => !guide.Applied);
 
+        var singlePendingGuide =
+            pendingGuides == 1
+                ? _guides.First(
+                    guide => !guide.Applied)
+                : null;
+
         SplitLineSummaryText.Text =
             _draftCutPoints.Count >= 2
-                ? $"new line · {_draftCutPoints.Count:N0} points"
-                : pendingGuides > 0
-                    ? pendingGuides == 1
-                        ? "split line ready"
-                        : $"split line ready · {pendingGuides:N0} paths"
-                    : "No split line yet";
+                ? $"{(IsWorldLoopClosed(_draftCutPoints) ? "closed loop" : "open line")} · {_draftCutPoints.Count:N0} points"
+                : singlePendingGuide is not null
+                    ? $"{(singlePendingGuide.Guide.IsClosed ? "closed loop" : "open line")} · {singlePendingGuide.Guide.Coordinates.Count:N0} points"
+                    : pendingGuides > 1
+                        ? $"{pendingGuides:N0} pending boundaries"
+                        : "No split line yet";
 
         RemovePendingSplitLineButton.IsEnabled =
             pendingGuides > 0;
+
+        CloseLoopButton.IsEnabled =
+            _workflowStep == 2 &&
+            _draftCutPoints.Count >= 3;
 
         ApplySplitButton.IsEnabled =
             _draftCutPoints.Count >= 2 ||
@@ -2845,6 +2884,7 @@ public partial class LineEditorWindow : Window
 
         UpdateScopeText();
         UpdateSimplifySelectionState();
+        UpdateClipControlState();
     }
 
     private string ToolHintForCurrentTool()
@@ -3054,7 +3094,9 @@ public partial class LineEditorWindow : Window
             _workflowStep == 2 &&
             editingGuide is not null
                 ? ProjectGuide(editingGuide.Guide)
-                : null);
+                : null,
+            _workflowStep == 2 &&
+            editingGuide?.Guide.IsClosed == true);
     }
 
     private Rect GetDisplayBounds(
@@ -3146,7 +3188,8 @@ public partial class LineEditorWindow : Window
         SetTool(LineEditorTool.Split);
 
         EditorSurface.SetEditableGuide(
-            ProjectGuide(guide.Guide));
+            ProjectGuide(guide.Guide),
+            guide.Guide.IsClosed);
 
     }
 
@@ -3183,9 +3226,17 @@ public partial class LineEditorWindow : Window
                     altitude));
         }
 
+        if (state.Guide.IsClosed &&
+            coordinates.Count >= 3)
+        {
+            coordinates[^1] =
+                coordinates[0];
+        }
+
         state.Guide = new KmlCutGuide(
             state.Guide.Name,
-            coordinates);
+            coordinates,
+            state.Guide.IsClosed);
     }
 
     private void AddVertexToEditingGuide(
@@ -3347,6 +3398,8 @@ public partial class LineEditorWindow : Window
                 {
                     UndoActionKind.Split =>
                         "Undo the last applied split (Ctrl+Z)",
+                    UndoActionKind.Clip =>
+                        "Undo the last clip operation (Ctrl+Z)",
                     UndoActionKind.Simplify =>
                         "Undo the last simplify operation (Ctrl+Z)",
                     _ =>
@@ -3438,6 +3491,7 @@ public partial class LineEditorWindow : Window
     private enum UndoActionKind
     {
         Split,
+        Clip,
         Deletion,
         Simplify
     }
@@ -3458,6 +3512,7 @@ public partial class LineEditorWindow : Window
     private sealed record PendingGuideSnapshot(
         string Name,
         IReadOnlyList<KmlCoordinate> Coordinates,
+        bool IsClosed,
         bool RemoveMatchingSourceBeforeCut,
         string? SourceLineId);
 
@@ -3469,6 +3524,7 @@ public partial class LineEditorWindow : Window
 public sealed record LineEditorSessionGuideState(
     string Name,
     IReadOnlyList<KmlCoordinate> GuideCoordinates,
+    bool IsClosed,
     int AppliedSequence,
     IReadOnlyList<KmlCoordinate> CutPoints);
 
