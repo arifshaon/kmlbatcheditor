@@ -220,7 +220,7 @@ public partial class LineEditorWindow
         if (!allowRepairPrompt || result.Crossing.Count == 0)
             return;
 
-        var choice = MessageBox.Show(this,
+        var choice = System.Windows.MessageBox.Show(this,
             $"{result.Crossing.Count:N0} line(s) cross the split line but weren't split. " +
             "Split them now along the split line, extended to the map edge?",
             "Split crossing lines", MessageBoxButton.YesNo,
