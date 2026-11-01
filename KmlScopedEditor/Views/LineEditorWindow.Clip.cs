@@ -216,6 +216,8 @@ public partial class LineEditorWindow
     private void CancelClipPreviewInternal(
         bool updateStatus)
     {
+        _clipPreviewGeneration++;
+        _clipPreviewInProgress = false;
         var hadPreview =
             _clipPreviewState is not null ||
             _clipSidePickActive;
@@ -265,6 +267,14 @@ public partial class LineEditorWindow
             CancelClipPreviewButton is null ||
             ClipPreviewSummaryText is null)
         {
+            return;
+        }
+
+        if (_clipPreviewInProgress)
+        {
+            ApplyClipButton.IsEnabled = false;
+            CancelClipPreviewButton.IsEnabled = true;
+            ClipPreviewSummaryText.Text = "Calculating clip preview...";
             return;
         }
 
@@ -384,6 +394,7 @@ public partial class LineEditorWindow
         if (!TryCaptureClipWork(pending, mode, keepPoint,
                 out var work, out var captureError))
         {
+            CancelClipPreviewInternal(updateStatus: false);
             UpdateStatus(captureError);
             return;
         }
@@ -922,6 +933,13 @@ public partial class LineEditorWindow
             }
         }
     }
+
+    private sealed record ClipWorkSnapshot(
+        XDocument Document,
+        double ProjectionScale,
+        IReadOnlyList<ClipGuideVersion> Guides,
+        bool LimitToSelection,
+        int TargetCount);
 
     private sealed record ClipGuideVersion(
         Guid Id,
