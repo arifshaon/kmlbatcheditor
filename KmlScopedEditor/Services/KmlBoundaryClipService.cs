@@ -184,6 +184,7 @@ public static class KmlBoundaryClipService
                 startExit,
                 endExit,
                 bounds)
+            .AsEnumerable()
             .Reverse()
             .ToList();
 
@@ -327,6 +328,7 @@ public static class KmlBoundaryClipService
         }
 
         keepRegionA = inA;
+        var keepA = inA;
 
         var boundarySegments =
             BuildSegments(
@@ -338,7 +340,7 @@ public static class KmlBoundaryClipService
                 features,
                 boundarySegments,
                 point =>
-                    keepRegionA
+                    keepA
                         ? PointInPolygonOrOnBoundary(
                             point,
                             boundary.RegionA)
@@ -426,7 +428,7 @@ public static class KmlBoundaryClipService
     {
         var bestPoint =
             line[0];
-        farthestDistance = -1d;
+        var bestDistance = -1d;
 
         void Consider(Point candidate)
         {
@@ -436,9 +438,9 @@ public static class KmlBoundaryClipService
                     boundarySegments);
 
             if (distance >
-                farthestDistance)
+                bestDistance)
             {
-                farthestDistance =
+                bestDistance =
                     distance;
                 bestPoint =
                     candidate;
@@ -466,6 +468,9 @@ public static class KmlBoundaryClipService
                      line[index + 1].Y) /
                     2d));
         }
+
+        farthestDistance =
+            bestDistance;
 
         return bestPoint;
     }
