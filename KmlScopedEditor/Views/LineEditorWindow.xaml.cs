@@ -125,6 +125,8 @@ public partial class LineEditorWindow : Window
 
         _hideAppliedSplitHistory =
             sessionState.HideAppliedSplitHistory;
+        OnlySplitSelectedCheckBox.IsChecked =
+            sessionState.LimitToSelectedLines;
 
         if (!string.IsNullOrWhiteSpace(
                 sessionState.AppliedHistoryColor))
@@ -211,7 +213,8 @@ public partial class LineEditorWindow : Window
             appliedGuides,
             _hideAppliedSplitHistory,
             _appliedHistoryColor.ToString(),
-            _appliedHistoryThickness);
+            _appliedHistoryThickness,
+            OnlySplitSelectedCheckBox.IsChecked == true);
     }
 
     private void InitializeAppliedHistoryAppearanceControls()
@@ -2864,7 +2867,9 @@ public partial class LineEditorWindow : Window
 
         SelectedSplitScopeText.Text =
             validSelected.Count == 0
-                ? "No lines selected — the split will cross all lines."
+                ? OnlySplitSelectedCheckBox.IsChecked == true
+                    ? "No lines selected — Clip requires a selection; Split can still target all lines."
+                    : "No lines selected — split and clip can target all lines."
                 : OnlySplitSelectedCheckBox.IsChecked == true
                     ? $"{validSelected.Count:N0} selected — split limited to selection."
                     : $"{validSelected.Count:N0} selected — selection limit is off, so the split will cross all lines.";
@@ -2910,7 +2915,12 @@ public partial class LineEditorWindow : Window
 
         CloseLoopButton.IsEnabled =
             _workflowStep == 2 &&
-            _draftCutPoints.Count >= 3;
+            (_draftCutPoints.Count >= 3 ||
+             (_draftCutPoints.Count == 0 &&
+              pendingGuides == 1 &&
+              singlePendingGuide is not null &&
+              !singlePendingGuide.Guide.IsClosed &&
+              singlePendingGuide.Guide.Coordinates.Count >= 3));
 
         ApplySplitButton.IsEnabled =
             _draftCutPoints.Count >= 2 ||
@@ -3610,4 +3620,5 @@ public sealed record LineEditorSessionState(
     IReadOnlyList<LineEditorSessionGuideState> AppliedGuides,
     bool HideAppliedSplitHistory,
     string AppliedHistoryColor,
-    double AppliedHistoryThickness);
+    double AppliedHistoryThickness,
+    bool LimitToSelectedLines = true);
