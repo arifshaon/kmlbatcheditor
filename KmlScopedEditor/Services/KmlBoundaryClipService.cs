@@ -819,39 +819,60 @@ public static class KmlBoundaryClipService
     public static bool LoopSelfIntersects(IReadOnlyList<Point> loop) =>
         PolylineSelfIntersects(loop);
 
-    private static bool
-        PolylineSelfIntersects(
-            IReadOnlyList<Point> points)
+    private static bool PolylineSelfIntersects(IReadOnlyList<Point> points)
     {
-        for (var first = 0;
-             first < points.Count - 1;
-             first++)
-        {
-            for (var second =
-                     first + 2;
-                 second <
-                 points.Count - 1;
-                 second++)
+        if (points.Count < 4)
+            return false;
+
+        var isClosed = (points[0] - points[^1]).Length <= PointEpsilon;
+        var lastIndex = points.Count - 2;
+        var segments = Enumerable.Range(0, points.Count - 1)
+            .Select(i => new
             {
-                if (first == 0 &&
-                    second ==
-                    points.Count - 2 &&
-                    (points[0] -
-                     points[^1]).Length <=
-                    0.000000000001d)
+                Index = i,
+                A = points[i],
+                B = points[i + 1],
+                MinX = Math.Min(points[i].X, points[i + 1].X),
+                MaxX = Math.Max(points[i].X, points[i + 1].X),
+                MinY = Math.Min(points[i].Y, points[i + 1].Y),
+                MaxY = Math.Max(points[i].Y, points[i + 1].Y)
+            })
+            .OrderBy(item => item.MinX)
+            .ToList();
+
+        // Sweep along X instead of testing every segment against every
+        // other segment. The active set retains only boxes whose X ranges
+        // overlap. Most ordinary 2,000+ vertex contours are near-linear.
+        var active = new List<int>();
+        for (var i = 0; i < segments.Count; i++)
+        {
+            var current = segments[i];
+            active.RemoveAll(index =>
+                segments[index].MaxX < current.MinX - PointEpsilon);
+
+            foreach (var index in active)
+            {
+                var earlier = segments[index];
+                if (Math.Abs(earlier.Index - current.Index) <= 1 ||
+                    (isClosed &&
+                     ((earlier.Index == 0 && current.Index == lastIndex) ||
+                      (current.Index == 0 && earlier.Index == lastIndex))))
+                {
+                    continue;
+                }
+
+                if (earlier.MaxY < current.MinY - PointEpsilon ||
+                    current.MaxY < earlier.MinY - PointEpsilon)
                 {
                     continue;
                 }
 
                 if (SegmentsIntersect(
-                        points[first],
-                        points[first + 1],
-                        points[second],
-                        points[second + 1]))
-                {
+                    earlier.A, earlier.B, current.A, current.B))
                     return true;
-                }
             }
+
+            active.Add(i);
         }
 
         return false;
