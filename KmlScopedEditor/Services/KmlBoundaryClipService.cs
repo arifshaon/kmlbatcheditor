@@ -97,8 +97,8 @@ public static class KmlBoundaryClipService
 
         var sampleDistance = Math.Clamp(
             directionSampleDistance,
-            Math.Max(totalLength * 0.01d, double.Epsilon),
-            Math.Max(totalLength * 0.35d, double.Epsilon));
+            Math.Max(totalLength * 0.000001d, double.Epsilon),
+            Math.Max(totalLength * 0.45d, double.Epsilon));
 
         var startSample =
             PointAtDistanceFromStart(
