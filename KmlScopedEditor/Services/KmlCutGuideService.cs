@@ -6,14 +6,16 @@ using System.Xml.Linq;
 namespace KmlScopedEditor.Services;
 
 /// <summary>
-/// Loads one or more KML LineString paths from a KML/KMZ file for use as
-/// temporary cut guides. Guide geometry is kept separate from the edited
-/// document and is never written into the output.
+/// Loads one or more KML LineString/Polygon boundaries from a KML/KMZ file for
+/// use as temporary split or clip guides. Guide geometry is kept separate from
+/// the edited document and is never written into the output.
 /// </summary>
 public sealed class KmlCutGuideService
 {
     private static readonly XNamespace KmlNs =
         "http://www.opengis.net/kml/2.2";
+
+    private const double ClosedToleranceMetres = 0.5d;
 
     public IReadOnlyList<KmlCutGuide> Load(string sourcePath)
     {
@@ -27,7 +29,7 @@ public sealed class KmlCutGuideService
             : extension.Equals(".kmz", StringComparison.OrdinalIgnoreCase)
                 ? LoadKmz(sourcePath)
                 : throw new NotSupportedException(
-                    "Only .kml and .kmz Google Earth files are supported as cut guides.");
+                    "Only .kml and .kmz Google Earth files are supported as split/clip guides.");
 
         var guides = new List<KmlCutGuide>();
 
@@ -46,10 +48,43 @@ public sealed class KmlCutGuideService
                 .FirstOrDefault();
 
             var name = placemark?.Element(KmlNs + "name")?.Value?.Trim();
+            var isClosed = IsClosedWithinTolerance(coordinates);
 
             guides.Add(new KmlCutGuide(
                 string.IsNullOrWhiteSpace(name) ? "Cut line" : name,
-                coordinates));
+                NormalizeClosedCoordinates(coordinates, isClosed),
+                isClosed));
+        }
+
+        // Google Earth polygons are useful natural clip boundaries. For this
+        // version only the outer ring is imported. Inner rings/holes are not
+        // converted into independent loops because that would invert their
+        // polygon semantics when multiple closed boundaries are treated as a
+        // union.
+        foreach (var polygon in document.Descendants(KmlNs + "Polygon"))
+        {
+            var ring = polygon
+                .Element(KmlNs + "outerBoundaryIs")
+                ?.Element(KmlNs + "LinearRing");
+
+            var coordinatesElement = ring?.Element(KmlNs + "coordinates");
+            if (coordinatesElement is null)
+                continue;
+
+            var coordinates = ParseCoordinates(coordinatesElement.Value);
+            if (coordinates.Count < 3)
+                continue;
+
+            var placemark = polygon
+                .Ancestors(KmlNs + "Placemark")
+                .FirstOrDefault();
+
+            var name = placemark?.Element(KmlNs + "name")?.Value?.Trim();
+
+            guides.Add(new KmlCutGuide(
+                string.IsNullOrWhiteSpace(name) ? "Polygon boundary" : name,
+                NormalizeClosedCoordinates(coordinates, isClosed: true),
+                true));
         }
 
         return guides;
@@ -122,8 +157,67 @@ public sealed class KmlCutGuideService
 
         return points;
     }
+
+    private static bool IsClosedWithinTolerance(
+        IReadOnlyList<KmlCoordinate> coordinates)
+    {
+        if (coordinates.Count < 3)
+            return false;
+
+        return DistanceMetres(
+            coordinates[0],
+            coordinates[^1]) <=
+            ClosedToleranceMetres;
+    }
+
+    private static IReadOnlyList<KmlCoordinate> NormalizeClosedCoordinates(
+        IReadOnlyList<KmlCoordinate> coordinates,
+        bool isClosed)
+    {
+        var normalized = coordinates.ToList();
+
+        if (!isClosed || normalized.Count < 3)
+            return normalized;
+
+        if (DistanceMetres(
+                normalized[0],
+                normalized[^1]) <=
+            ClosedToleranceMetres)
+        {
+            normalized[^1] = normalized[0];
+        }
+        else
+        {
+            normalized.Add(normalized[0]);
+        }
+
+        return normalized;
+    }
+
+    private static double DistanceMetres(
+        KmlCoordinate a,
+        KmlCoordinate b)
+    {
+        var meanLatitude =
+            ((a.Latitude + b.Latitude) / 2d) *
+            Math.PI / 180d;
+
+        var dx =
+            (b.Longitude - a.Longitude) *
+            Math.Cos(meanLatitude) *
+            111320d;
+
+        var dy =
+            (b.Latitude - a.Latitude) *
+            111320d;
+
+        return Math.Sqrt(
+            (dx * dx) +
+            (dy * dy));
+    }
 }
 
 public sealed record KmlCutGuide(
     string Name,
-    IReadOnlyList<KmlCoordinate> Coordinates);
+    IReadOnlyList<KmlCoordinate> Coordinates,
+    bool IsClosed = false);
