@@ -739,7 +739,7 @@ public partial class LineEditorWindow : Window
             1 =>
                 "Optional cleanup before splitting. Select whole lines you do not want, then Delete selected.",
             2 =>
-                "Nothing needs to be selected. Import a split line or draw one; orange dots show where lines will be split.",
+                "Import or draw a split/clip boundary. Clip removes lines only. If selected-only is checked, select target lines before Clip.",
             _ =>
                 _step3InstructionOverride ??
                 "Cleanup after splitting. Select the new split pieces you do not want, then Delete selected."
@@ -2967,7 +2967,7 @@ public partial class LineEditorWindow : Window
             LineEditorTool.Select =>
                 "V Select · click toggles · drag crosses lines · Ctrl+drag lasso adds · Lasso controls can add/remove · Delete removes selected · right-drag pan",
             _ =>
-                "Split · import or draw lines · click a pending line to edit · Enter finishes drawing · only Apply split performs the split · Delete removes pending split lines, never map lines · right-drag pans"
+                "Split / Clip · import or draw a boundary · Enter finishes drawing · Apply split changes lines · Clip removes lines only · Delete removes pending guides, never map lines · right-drag pans"
         };
     }
 
