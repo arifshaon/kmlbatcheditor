@@ -161,7 +161,7 @@ public sealed class KmlCutGuideService
     private static bool IsClosedWithinTolerance(
         IReadOnlyList<KmlCoordinate> coordinates)
     {
-        if (coordinates.Count < 3)
+        if (coordinates.Count < 4)
             return false;
 
         return DistanceMetres(
