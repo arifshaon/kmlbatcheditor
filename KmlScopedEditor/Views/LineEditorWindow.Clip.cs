@@ -895,12 +895,6 @@ public partial class LineEditorWindow
         string? SourceLineId,
         IReadOnlyList<KmlCoordinate> Coordinates);
 
-    private sealed record ClipGuideVersion(
-        Guid Id,
-        bool IsClosed,
-        string? SourceLineId,
-        IReadOnlyList<KmlCoordinate> Coordinates);
-
     private sealed record ClipPreviewState(
         ClipMode Mode,
         Point? KeepPoint,
