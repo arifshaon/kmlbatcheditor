@@ -1,6 +1,44 @@
 # Changelog
 
-## Unreleased
+## 1.3.0 — validation update (2026-11-04)
+
+### Fixed
+
+- **Simplify tolerance preset selection:** WPF's editable ComboBox can raise `SelectionChanged` before updating its `Text`. The handler now defers preview recalculation until the selected tolerance is available. This fixes the prior one-selection-behind behavior (for example, choosing 5 m could previously calculate a 1 m preview).
+- **Safe Simplify Apply:** Apply refuses to commit a preview if the current tolerance, smoothing option, selected-only scope, target-line selection, or geometry revision differs from those used for the preview. Instead, it requests recalculation.
+- The smoothing-only warning also updates after the selected tolerance has been resolved.
+
+### Verified with supplied KMZ files (2026-11-04)
+
+The original `winchester contour(1).kmz` and three edited KMZ outputs were compared:
+
+| File | LineStrings | Line vertices |
+| --- | ---: | ---: |
+| Original | 152 | 132,621 |
+| `winchester contour_edited_1.kmz` (1 m) | 176 | 12,921 |
+| `winchester contour_edited_5.kmz` (5 m) | 176 | 5,371 |
+| `winchester contour_edited_10.kmz` (10 m) | 176 | 3,583 |
+
+- Increasing the chosen tolerance consistently reduces the number of retained vertices, confirming the expected distinction between the three outputs.
+- The earlier geometry comparison of retained, matched contours reported maximum deviations from the original of approximately **0.9997 m**, **4.9979 m**, and **9.9948 m**, respectively, consistent with the requested tolerances.
+- **Comparison caveat:** the original has 152 placemarks/152 LineStrings; each edited output has 132 placemarks/176 LineStrings. These outputs also contain line splitting/removal, so overall vertex reduction is **not** a controlled all-lines-only Simplify benchmark; deviation measurements apply to matched retained geometry, not deleted portions.
+- Decision: keep the fix in `main`; no rollback indicated by these supplied outputs.
+
+### Other 1.3.0 changes
+
+- Step 2 defaults **Only split the selected lines** to checked, with an all-eligible-lines fallback when nothing is selected. The choice is remembered for the current document.
+- Step 3 **Select side** replaces the old Clip workflow, with optional crossing repairs and chronological Undo. Open-divider display extensions stop at the map extent; classification retains the full prepared divider.
+- **Simplify / smooth** continues to default to **All lines**, matching version 1.2.
+- Windows x64 installer and portable-package builds use the 1.3.0 version and preserve the previous installer upgrade identity.
+- Current source is offered under **PolyForm Noncommercial License 1.0.0**; earlier MIT grants for already-distributed copies remain unaffected.
+
+### Verification and release state
+
+- The Simplify fix passed the Windows CI build (0 errors, 0 warnings), **16/16 existing regression checks**, and installer packaging checks before merge ([PR #5](https://github.com/arifshaon/kmlbatcheditor/pull/5)).
+- The three KMZ files provide real-output confirmation beyond the existing synthetic regression tests. They are user-provided test inputs, **not committed repository assets**.
+- Version 1.3.0 is in `main`; this entry does not represent a separately published GitHub Release or tag.
+
+## Earlier development notes (previously marked Unreleased)
 
 ### Workflow redesign
 
@@ -13,7 +51,7 @@
 - Moved Style Diagnostics into a collapsed **Inspect selected item** section.
 - Rebuilt Line Editor around **Remove unwanted lines → Split → Remove pieces**.
 - Added one **Apply split** action for imported and drawn split paths; Enter uses the same action.
-- Split selection scope is now explicit: existing selections are ignored unless **Only split the selected lines** is ticked.
+- Split selection scope was made explicit during development; version 1.3.0 now defaults **Only split the selected lines** to checked, with an all-lines fallback when nothing is selected.
 - Added on-map zoom controls, a legend, clearer **Cancel — discard** / **Done — keep changes** actions, and automatic advance to cleanup after a successful split.
 
 
