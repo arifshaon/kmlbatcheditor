@@ -1,6 +1,6 @@
 # Simple KML Editor — Project Resource
 
-_Last updated: 1 November 2026_
+_Last updated: 4 November 2026_
 
 This file is the canonical project handover/resource for the **Simple KML Editor** project. It records the important product decisions, implemented behavior, packaging choices, and known constraints so future changes do not accidentally undo deliberate decisions.
 
@@ -8,7 +8,7 @@ This file is the canonical project handover/resource for the **Simple KML Editor
 
 - Visible product name: **Simple KML Editor**.
 - Internal project/repository names remain **KmlScopedEditor** / `kmlbatcheditor`.
-- Current source/application version on the version 1.3 development branch: **1.3.0** (not yet released).
+- Current source/application version in **main**: **1.3.0** (a separate formal GitHub Release/tag has not been published).
 - Developer/publisher: **Arif Shaon**.
 - Repository: **https://github.com/arifshaon/kmlbatcheditor**.
 - Licensing of the current source: **PolyForm Noncommercial License 1.0.0**,
@@ -277,6 +277,8 @@ Panel includes:
 - Preview runs asynchronously with debounce/cancellation/versioning.
 - Preview must not modify geometry.
 - Apply uses the exact preview coordinates rather than recalculating a different result.
+- **Version 1.3 fix (4 November 2026):** an editable WPF tolerance ComboBox raises `SelectionChanged` before updating `Text`. Defer tolerance-selection handling via the dispatcher before recalculating the preview or smooth-only warning.
+- Apply must confirm the preview's tolerance, Smooth option, selected-only scope, actual target-line set, and geometry revision still match the current settings. If any differ, recalculate instead of applying stale coordinates. Keep this safety check even if the ComboBox event handling changes.
 - No stale preview should remain visible while a recalculation is pending.
 - Base geometry is faded while the proposed geometry is drawn separately.
 
@@ -298,6 +300,24 @@ A regression case used during development:
 - 1 m simplification → 0 new crossings
 - 3 m → 0
 - 5 m → 2
+
+### Real-file acceptance checks — 4 November 2026
+- The source file `winchester contour(1).kmz` contains 152 LineStrings
+  with 132,621 coordinates.
+- User-supplied edited KMZ results yielded 12,921 vertices at 1 m,
+  5,371 at 5 m and 3,583 at 10 m, each with 176 LineStrings.
+- A prior comparison of matched retained contours reported peak
+  deviations from the original of about 0.9997 m, 4.9979 m and
+  9.9948 m, respectively.
+- The source and edited files have different structure (152 original
+  placemarks versus 132 edited placemarks, with line pieces split).
+  These tests support correct preset selection and retained-contour
+  geometry, not a whole-document all-lines-only performance claim.
+- The stale-preview fix is merged into `main` (PR #5). See
+  [CHANGELOG.md](CHANGELOG.md) for the acceptance summary.
+- A dedicated WPF ComboBox UI regression test is still desirable;
+  the existing synthetic regression runner does not exercise its
+  event ordering.
 
 ### Performance
 - geometry/spatial indexing and cached baseline topology are used to avoid obvious repeated work;
