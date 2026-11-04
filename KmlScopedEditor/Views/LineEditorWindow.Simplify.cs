@@ -22,6 +22,10 @@ public partial class LineEditorWindow
     private LineSimplificationPreview?
         _currentSimplifyPreview;
 
+    // Settings and target lines the current preview was calculated with.
+    private SimplifyPreviewSettings?
+        _currentSimplifyPreviewSettings;
+
     private long _geometryRevision;
     private int _simplifyPreviewRequest;
     private bool _simplifyPanelInitializing;
@@ -77,6 +81,24 @@ public partial class LineEditorWindow
             return;
         }
 
+        // An editable ComboBox raises SelectionChanged before it updates its
+        // Text, so reading the tolerance now would return the previous value.
+        // Let WPF finish the selection first.
+        if (ReferenceEquals(
+                sender,
+                SimplifyToleranceComboBox))
+        {
+            Dispatcher.BeginInvoke(
+                new Action(() =>
+                {
+                    UpdateSmoothOnlyWarning();
+                    ScheduleSimplifyPreview();
+                }),
+                System.Windows.Threading.DispatcherPriority.Background);
+
+            return;
+        }
+
         UpdateSmoothOnlyWarning();
         ScheduleSimplifyPreview();
     }
@@ -123,6 +145,21 @@ public partial class LineEditorWindow
         {
             UpdateStatus(
                 "The simplify preview is out of date. Recalculating it before Apply.");
+
+            ScheduleSimplifyPreview();
+            return;
+        }
+
+        // Never apply a preview calculated with settings or target lines
+        // other than the ones the panel shows now.
+        if (_currentSimplifyPreviewSettings is null ||
+            !TryGetCurrentSimplifySettings(
+                out var currentSettings) ||
+            !_currentSimplifyPreviewSettings.Matches(
+                currentSettings))
+        {
+            UpdateStatus(
+                "The simplify settings changed since this preview. Recalculating it before Apply.");
 
             ScheduleSimplifyPreview();
             return;
@@ -366,6 +403,14 @@ public partial class LineEditorWindow
             var features =
                 _geometry.Features;
 
+            var settings =
+                new SimplifyPreviewSettings(
+                    toleranceMetres,
+                    smooth,
+                    selectedOnly,
+                    GetSimplifyTargets(
+                        selectedOnly));
+
             var inputs =
                 new List<
                     LineSimplificationInput>(
@@ -419,6 +464,8 @@ public partial class LineEditorWindow
 
             _currentSimplifyPreview =
                 preview;
+            _currentSimplifyPreviewSettings =
+                settings;
 
             DisplaySimplifyPreview(
                 preview);
@@ -530,6 +577,62 @@ public partial class LineEditorWindow
 
         ApplySimplifyButton.IsEnabled =
             preview.ChangedLineCount > 0;
+    }
+
+    private bool TryGetCurrentSimplifySettings(
+        out SimplifyPreviewSettings settings)
+    {
+        settings = null!;
+
+        if (!TryGetSimplifyTolerance(
+                out var toleranceMetres,
+                out _))
+        {
+            return false;
+        }
+
+        var selectedOnly =
+            SimplifySelectedRadioButton
+                .IsChecked == true;
+
+        settings =
+            new SimplifyPreviewSettings(
+                toleranceMetres,
+                SimplifySmoothCheckBox
+                    .IsChecked == true,
+                selectedOnly,
+                GetSimplifyTargets(
+                    selectedOnly));
+
+        return true;
+    }
+
+    // The lines a selected-only preview targets; empty when all lines are
+    // targeted. Built the same way as the preview's inputs.
+    private HashSet<XElement> GetSimplifyTargets(
+        bool selectedOnly) =>
+        selectedOnly
+            ? _geometry.Features
+                .Select(feature =>
+                    feature.LineStringElement)
+                .Where(_selected.Contains)
+                .ToHashSet()
+            : new HashSet<XElement>();
+
+    private sealed record SimplifyPreviewSettings(
+        double ToleranceMetres,
+        bool Smooth,
+        bool SelectedOnly,
+        IReadOnlySet<XElement> Targets)
+    {
+        public bool Matches(
+            SimplifyPreviewSettings other) =>
+            ToleranceMetres.Equals(
+                other.ToleranceMetres) &&
+            Smooth == other.Smooth &&
+            SelectedOnly == other.SelectedOnly &&
+            Targets.SetEquals(
+                other.Targets);
     }
 
     private bool TryGetSimplifyTolerance(
