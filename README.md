@@ -6,7 +6,7 @@ Simple KML Editor lets you select placemarks by tree item, placemark name, icon 
 
 The application is built with **C#**, **.NET 8**, and **WPF**.
 
-For the current implementation decisions, packaging state, Line Editor behavior, and important constraints, see **[PROJECT_RESOURCE.md](PROJECT_RESOURCE.md)**.
+For the current implementation decisions, packaging state, Line Editor behavior, and important constraints, see **[PROJECT_RESOURCE.md](PROJECT_RESOURCE.md)**. Version history and the verified 1 m / 5 m / 10 m Simplify test results are in **[CHANGELOG.md](CHANGELOG.md)**.
 
 ## License — noncommercial use only
 
