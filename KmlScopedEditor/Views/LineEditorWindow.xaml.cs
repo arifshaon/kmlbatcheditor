@@ -1635,7 +1635,7 @@ public partial class LineEditorWindow : Window
             OnlySplitSelectedCheckBox.IsChecked == true &&
             selectedCount > 0
                 ? $"Split scope limited to {selectedCount:N0} selected line(s)."
-                : "No active selection limit; the split will cross all lines.");
+                : "An all-lines split will require confirmation before Apply.");
     }
 
     private void ApplyCurrentSplit()
@@ -3003,7 +3003,7 @@ public partial class LineEditorWindow : Window
 
         SelectedSplitScopeText.Text =
             validSelected.Count == 0
-                ? "No lines selected — Apply split will split all eligible lines."
+                ? "No lines selected — Apply split will ask before splitting all crossed lines."
                 : OnlySplitSelectedCheckBox.IsChecked == true
                     ? $"{validSelected.Count:N0} selected — split limited to selection"
                     : $"{validSelected.Count:N0} lines selected — the split will still cross all lines. Tick to limit it.";
