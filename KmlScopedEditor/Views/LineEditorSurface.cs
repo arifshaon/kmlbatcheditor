@@ -1833,7 +1833,9 @@ public sealed class LineEditorSurface : FrameworkElement
             return _normalPen;
 
         var width = GetLineScreenWidth(element);
-        if (Math.Abs(width - 1.1d) < 0.00001d)
+        // Visually equate KML width 1 (the standard thin contour) with
+        // the legacy 1.1 px fallback when width is unspecified.
+        if (width <= 1.1d)
             return _normalPen;
 
         if (_weightPens.TryGetValue(width, out var pen))
