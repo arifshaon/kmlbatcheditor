@@ -494,7 +494,7 @@
                                       Width="82"
                                       Height="28"
                                       IsEditable="True"
-                                      SelectedIndex="2"
+                                      SelectedIndex="3"
                                       SelectionChanged="OnSimplifySettingsChanged"
                                       KeyUp="OnSimplifyToleranceKeyUp"
                                       ToolTip="Choose a preset tolerance in metres, or type a custom value.">
