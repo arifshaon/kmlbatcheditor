@@ -1159,6 +1159,20 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(PreviewPlacemarkPosition));
     }
 
+    private bool CanPreviewStyleFor(XElement placemark)
+    {
+        if (_documentContext is null)
+            return false;
+
+        var resolver = _documentContext.StyleResolver;
+        var resolved = resolver.Resolve(
+            placemark, placemark.Element(KmlNs + "styleUrl")?.Value);
+
+        return !resolved.MustSkip &&
+            (resolved.Status != StyleReferenceStatus.StyleMap ||
+             resolver.ValidateStyleMap(resolved.Selector!).IsResolved);
+    }
+
     private void BuildPlacemarkVisualPreview()
     {
         if (_documentContext is null ||
@@ -1168,6 +1182,22 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             ClearPlacemarkVisualPreview();
             return;
+        }
+
+        // Do not show a fictitious proposed appearance for a placemark that
+        // Apply will skip. Navigate only through safely editable entries.
+        if (!CanPreviewStyleFor(_currentSelection[_previewPlacemarkIndex]))
+        {
+            var eligibleIndex = Enumerable.Range(0, _currentSelection.Count)
+                .FirstOrDefault(index =>
+                    CanPreviewStyleFor(_currentSelection[index]), -1);
+            if (eligibleIndex < 0)
+            {
+                ClearPlacemarkVisualPreview();
+                return;
+            }
+
+            _previewPlacemarkIndex = eligibleIndex;
         }
 
         try
@@ -1196,12 +1226,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         if (!HasPlacemarkVisualPreview || _currentSelection.Count == 0)
             return;
 
-        var nextIndex = Math.Clamp(
-            _previewPlacemarkIndex + offset,
-            0,
-            _currentSelection.Count - 1);
+        var nextIndex = _previewPlacemarkIndex + offset;
+        while (nextIndex >= 0 &&
+               nextIndex < _currentSelection.Count &&
+               !CanPreviewStyleFor(_currentSelection[nextIndex]))
+        {
+            nextIndex += offset;
+        }
 
-        if (nextIndex == _previewPlacemarkIndex)
+        if (nextIndex < 0 || nextIndex >= _currentSelection.Count)
             return;
 
         _previewPlacemarkIndex = nextIndex;
