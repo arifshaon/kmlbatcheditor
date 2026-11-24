@@ -1504,6 +1504,7 @@ public partial class LineEditorWindow : Window
         // This selection identified the helper line. Clearing it prevents the
         // helper from also becoming the split target scope.
         _selected.Clear();
+        _selectionCarriedFromSplit = false;
         EditorSurface.SetSelection(_selected);
 
         RefreshSurface();
