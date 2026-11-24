@@ -27,6 +27,7 @@ This is a test candidate, **not merged into `main`**. Application version remain
 | External `styles.kml#id` / URL fragment | External references shown as **skipped**, even when a local `#id` exists | Original external references stay unchanged |
 | StyleMap pair with an external/ambiguous reference or a cycle | The affected placemark is **skipped** | No partial StyleMap rewrites or new inline overrides |
 | ID collision with an existing Folder/Placemark ID | Safe local style still editable | Generated clone ID does not duplicate any existing ID |
+| Reference to a Style nested inside a Placemark or StyleMap Pair | Referenced embedded style is **skipped** | No invalid sibling-style insertion or unexpected rewrite |
 | Mixed safe + unsafe selection | Eligible and skipped counts and example names shown | Only eligible placemarks are changed; skipped entries are untouched |
 
 Check both **Style Diagnostics** and **Icon image / Icon variant** inventories
