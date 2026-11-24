@@ -166,8 +166,19 @@ public sealed class KmlStyleReferenceResolver
             parent.Name == KmlNs + "Document");
 
     private static StyleReferenceResult Resolved(
-        XElement selector, string? reference, bool recovered) =>
-        new(selector.Name == KmlNs + "Style"
+        XElement selector, string? reference, bool recovered)
+    {
+        // Inline Styles on Placemarks or inside StyleMap Pairs must not be
+        // cloned by inserting a sibling Style at that location. Shared style
+        // declarations in Documents and Folders can safely be cloned there.
+        if (selector.Parent?.Name != KmlNs + "Document" &&
+            selector.Parent?.Name != KmlNs + "Folder")
+        {
+            return new(StyleReferenceStatus.Ambiguous, null, reference,
+                "Style selector is embedded inside a feature or Pair and cannot safely be cloned.");
+        }
+
+        return new(selector.Name == KmlNs + "Style"
                 ? StyleReferenceStatus.Style
                 : StyleReferenceStatus.StyleMap,
             selector,
@@ -176,6 +187,7 @@ public sealed class KmlStyleReferenceResolver
                 ? "Duplicate ID resolved uniquely within the enclosing Document."
                 : null,
             recovered);
+    }
 }
 
 public enum StyleReferenceStatus
