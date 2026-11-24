@@ -5,6 +5,7 @@ using Button = System.Windows.Controls.Button;
 using StackPanel = System.Windows.Controls.StackPanel;
 using Orientation = System.Windows.Controls.Orientation;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
+using Brushes = System.Windows.Media.Brushes;
 
 namespace KmlScopedEditor.Views;
 
