@@ -18,7 +18,9 @@ Use a copy of the test KML/KMZ and save to a different filename.
 
 1. Open a contour map with different `LineStyle/width` values (e.g. 1, 1.5, 2, 3).
 2. **Show line weights** is checked by default. A width-2 contour should appear
-   visibly bolder than width-1 across zoom levels.
+   visibly bolder than width-1 across zoom levels. Lines with an explicit KML
+   width of 1 and lines with no width should look equally thin (the legacy
+   1.1 px editor pen).
 3. Check that selection, hover, split lines and simplify preview remain visible
    on top of the thickest (up to 6 px) contours.
 4. Uncheck **Show line weights**: all ordinary lines return to uniform grey.
@@ -33,8 +35,10 @@ Use a copy of the test KML/KMZ and save to a different filename.
 1. Tick **Only split the selected lines** and select a group; Apply split
    should run without an extra prompt and affect only selected crossed lines.
 2. Untick it while 5 lines are selected; Apply split should show three choices:
-   **Split only the 5 selected lines** (default), **Split all M crossed lines**,
-   and **Cancel**. Choosing selected-only should tick the checkbox.
+   **Split only the 5 selected lines (N crossed)** (default),
+   **Split all M crossed lines**, and **Cancel**. N must be the number of
+   selected lines actually crossed, and M the number of distinct crossed
+   source lines. Choosing selected-only should tick the checkbox.
 3. With no selection, Apply split should show **Split all M crossed lines** and
    **Cancel**, with Cancel the default.
 4. Cancel should leave a drawn or imported pending split line unchanged, and
@@ -43,6 +47,9 @@ Use a copy of the test KML/KMZ and save to a different filename.
    pending guides, sequential splits may produce more pieces.
 6. If the checkbox stays unticked when the Line Editor is reopened, the
    confirmation must still appear.
+7. Draw or import a guide crossing **no lines**: Apply split should report
+   no intersections without opening an all-0-lines dialog or modifying the
+   draft/pending guide.
 
 ## REQ-4 — Preserve selection across splits
 
@@ -53,7 +60,9 @@ Use a copy of the test KML/KMZ and save to a different filename.
 3. Verify unselected lines and unselected generated pieces stay unselected.
 4. After splitting, in Step 3 press **Delete selected pieces**: a warning must
    show the number being deleted, with **No / Cancel** as the default. Cancel
-   must not change geometry or selection.
+   must not change geometry or selection. Return to **Step 1** and press
+   **Delete selected lines** with the inherited selection still active: the
+   same warning must appear rather than silently deleting everything.
 5. Clear selection explicitly, choose only the pieces intended for removal,
    and verify ordinary deletion continues normally.
 6. Undo a split: verify both coordinates and the previously selected lines
@@ -61,6 +70,12 @@ Use a copy of the test KML/KMZ and save to a different filename.
    as well.
 7. Check helper lines removed by **Use selected line** do not appear in the
    carried selection.
+8. After a split, return to Step 2 and replace the selection with a single
+   deliberate click. The old inherited-selection warning should clear; a
+   subsequent ordinary deletion must not report the old carried-over group.
+9. After a split, **Invert** is an explicit selection change: it clears the
+   inherited-selection warning. Confirm that Invert followed by Delete works
+   as normal, and watch the selected count before deleting.
 
 ## Regression and performance
 
