@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased — safe KML style resolution (test candidate)
+
+- Resolve local `#style` references through one shared resolver in the editor,
+  Style Diagnostics, and icon inventories.
+- Valid globally unique style IDs resolve normally. For invalid merged KML with
+  duplicate IDs, use the nearest enclosing Document only when it provides
+  exactly one candidate; otherwise skip the ambiguous placemark.
+- Do not reinterpret `styles.kml#id`, URL fragments or other external
+  style references as local IDs. Skip the affected placemark and report it
+  in Preview instead of silently redirecting its style.
+- Check every StyleMap pair, including nested maps. Cyclic, missing, ambiguous
+  and external pair references block edits to the affected placemark.
+- Clone caches now use the actual XML Style/StyleMap element, not its ID string.
+  New clone IDs are reserved against **every** existing KML object ID,
+  including Folder and Placemark IDs and inline-style IDs.
+- Preview reports editable/skipped placemark counts, duplicate ID warnings,
+  document-local recovery counts, and examples of skipped placemarks. Apply
+  independently rechecks references and leaves unsafe items untouched.
+- Preserve unticked Line, Icon and Label values, and keep out-of-scope
+  placemarks unchanged.
+- Added real-engine style regression tests for normal and nested Styles/
+  StyleMaps, external references, duplicate and cyclic IDs, collision-safe
+  clones, and icon inventory consistency.
+- Manual tester procedure: [STYLE_RESOLUTION_TESTS.md](STYLE_RESOLUTION_TESTS.md).
+- **Status:** testing branch / draft PR #6; not yet merged into `main`.
+
 ## 1.3.0 — validation update (2026-11-04)
 
 ### Fixed
