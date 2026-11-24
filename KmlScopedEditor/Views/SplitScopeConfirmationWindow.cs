@@ -25,7 +25,8 @@ internal sealed class SplitScopeConfirmationWindow : Window
     public SplitScopeDecision Decision { get; private set; } =
         SplitScopeDecision.Cancel;
 
-    public SplitScopeConfirmationWindow(int selectedCount, int crossedCount)
+    public SplitScopeConfirmationWindow(
+        int selectedCount, int selectedCrossedCount, int crossedCount)
     {
         Title = "Confirm split scope";
         Width = 555;
@@ -54,9 +55,10 @@ internal sealed class SplitScopeConfirmationWindow : Window
         root.Children.Add(new TextBlock
         {
             Text = selectedCount > 0
-                ? $"{selectedCount:N0} lines are selected, but Apply split would affect up to " +
-                  $"{crossedCount:N0} currently crossed line(s) across all pending guides. " +
-                  "Choose which lines to split:"
+                ? $"{selectedCount:N0} lines are selected; " +
+                  $"{selectedCrossedCount:N0} of those are crossed by the guide(s). " +
+                  $"An all-lines split would affect {crossedCount:N0} currently crossed " +
+                  "source line(s). Choose which scope to apply:"
                 : $"The pending split guide(s) currently cross {crossedCount:N0} distinct line(s). " +
                   "You can cancel, select the intended lines, and apply again.",
             TextWrapping = TextWrapping.Wrap,
@@ -72,7 +74,8 @@ internal sealed class SplitScopeConfirmationWindow : Window
         if (selectedCount > 0)
         {
             var selectedButton = MakeButton(
-                $"Split only the {selectedCount:N0} selected lines",
+                $"Split only the {selectedCount:N0} selected lines " +
+                $"({selectedCrossedCount:N0} crossed)",
                 isDefault: true);
             selectedButton.Click += (_, _) =>
                 Choose(SplitScopeDecision.SelectedOnly);
