@@ -684,14 +684,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         StatusText = preview.CanApply
-            ? $"Preview ready for {preview.PlacemarkCount:N0} placemarks in {FormatElapsed(stopwatch.Elapsed)}."
+            ? $"Preview ready for {preview.EditablePlacemarkCount:N0} editable placemarks in {FormatElapsed(stopwatch.Elapsed)}."
             : preview.ValidationMessage;
 
         ShowNotification(
             preview.CanApply
-                ? $"Preview ready for {preview.PlacemarkCount:N0} placemarks."
+                ? $"Preview ready for {preview.EditablePlacemarkCount:N0} editable placemarks; {preview.SkippedPlacemarkCount:N0} skipped."
                 : preview.ValidationMessage,
-            preview.CanApply
+            preview.CanApply && preview.SkippedPlacemarkCount == 0
                 ? NotificationKind.Success
                 : NotificationKind.Warning);
     }
@@ -780,13 +780,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _iconVariantInventory = iconVariants;
         RefreshVisibleIconOptions();
 
-        HasUnsavedChanges = true;
+        HasUnsavedChanges |= result.PlacemarksChanged > 0;
         UpdateSelectedStyle();
         ResetCalculatedSelection();
 
         BatchEditMessage = result.Summary;
         StatusText =
-            $"Changed {result.PlacemarksChanged:N0} placemarks in " +
+            $"Changed {result.PlacemarksChanged:N0} placemarks; " +
+            $"{result.SkippedPlacemarkCount:N0} skipped in " +
             $"{FormatElapsed(stopwatch.Elapsed)}. Use Save As to create the output file.";
 
         var iconMessage = EditSettings.ChangeIconImage && _documentContext.IsKmz
@@ -794,8 +795,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             : string.Empty;
 
         ShowNotification(
-            $"{result.PlacemarksChanged:N0} placemarks updated successfully.{iconMessage}",
-            NotificationKind.Success);
+            $"{result.PlacemarksChanged:N0} placemarks updated; " +
+            $"{result.SkippedPlacemarkCount:N0} unsafe references skipped.{iconMessage}",
+            result.SkippedPlacemarkCount > 0
+                ? NotificationKind.Warning
+                : NotificationKind.Success);
     }
 
     private void BrowseForIconFile()
@@ -1091,9 +1095,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         EditPreview = preview;
-        BatchEditMessage = preview.CanApply
-            ? preview.Summary
-            : preview.ValidationMessage;
+        BatchEditMessage = preview.Summary;
 
         if (preview.CanApply)
         {
