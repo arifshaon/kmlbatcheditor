@@ -1,5 +1,6 @@
 using System.IO;
 using System.Xml.Linq;
+using KmlScopedEditor.Services;
 
 namespace KmlScopedEditor.Models;
 
@@ -9,6 +10,7 @@ public sealed class KmlDocumentContext : IDisposable
         "http://www.opengis.net/kml/2.2";
 
     private bool _disposed;
+    private KmlStyleReferenceResolver? _styleResolver;
 
     /// <summary>
     /// The KML or KMZ file chosen by the user.
@@ -57,8 +59,14 @@ public sealed class KmlDocumentContext : IDisposable
 
     public string PackageTypeDisplay => IsKmz ? "KMZ" : "KML";
 
+    // Shared resolution semantics for batch changes, diagnostics and icon
+    // inventories. Rebuilt after structural/style edits update the document.
+    public KmlStyleReferenceResolver StyleResolver =>
+        _styleResolver ??= new KmlStyleReferenceResolver(this);
+
     public void RebuildStyleIndexes()
     {
+        _styleResolver = null;
         StylesById.Clear();
         StyleMapsById.Clear();
 
