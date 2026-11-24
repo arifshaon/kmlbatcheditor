@@ -357,11 +357,11 @@
                                   Content="Only split the selected lines"
                                   IsChecked="True"
                                   VerticalAlignment="Center"
-                                  ToolTip="Checked by default: split only selected lines. When no lines are selected, Apply split still splits all eligible lines."
+                                  ToolTip="Checked by default: split only selected lines. If nothing is selected, Apply split asks before splitting all crossed lines."
                                   Checked="OnOnlySplitSelectedChanged"
                                   Unchecked="OnOnlySplitSelectedChanged" />
                         <TextBlock x:Name="SelectedSplitScopeText"
-                                   Text="No lines selected — the split will cross all lines."
+                                   Text="No lines selected — Apply split will ask before affecting all crossed lines."
                                    Foreground="#7A8494"
                                    FontSize="11"
                                    Margin="5,1,0,0"
