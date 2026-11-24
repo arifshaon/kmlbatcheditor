@@ -46,6 +46,8 @@ internal static class Program
         Run(nameof(MixedValidAndExternalReferencesArePartiallyAppliedSafely), MixedValidAndExternalReferencesArePartiallyAppliedSafely);
         Run(nameof(ClonedInlineMapIdsRemainUnique), ClonedInlineMapIdsRemainUnique);
         Run(nameof(ReferencedEmbeddedInlineStyleIsSafelySkipped), ReferencedEmbeddedInlineStyleIsSafelySkipped);
+        Run(nameof(InlineStyleWithLocalStyleUrlPreservesUntickedValues), InlineStyleWithLocalStyleUrlPreservesUntickedValues);
+        Run(nameof(FolderSharedStyleRemainsEditable), FolderSharedStyleRemainsEditable);
         Console.WriteLine($"PASS: {_passed} regression checks.");
     }
 
@@ -385,6 +387,47 @@ internal static class Program
         var result = edit.Apply(new[] { target }, ctx, ColorOnly());
         Require(result.PlacemarksChanged == 0 && target.ToString() == before,
             "Embedded style references must not cause invalid sibling Style insertion.");
+    }
+
+    private static void InlineStyleWithLocalStyleUrlPreservesUntickedValues()
+    {
+        var placemark = StyledPlacemark("mixed-style", "#shared");
+        placemark.Add(new XElement(Kml + "Style",
+            new XElement(Kml + "LineStyle",
+                new XElement(Kml + "width", "7.25"),
+                new XElement(Kml + "color", "ff003366"))));
+        using var ctx = StyleContext(new XDocument(new XElement(Kml + "kml",
+            new XElement(Kml + "Document",
+                SharedStyle("shared", "2.5"), placemark))));
+        var settings = ColorOnly();
+        var edit = new KmlBatchEditService();
+        var before = new KmlStyleInspector().Inspect(placemark, ctx);
+        Require(before.LineWidth == "7.25" && before.IconScale == "0.3",
+            "Mixed inline/reference style not interpreted correctly before editing.");
+        var result = edit.Apply(new[] { placemark }, ctx, settings);
+        var after = new KmlStyleInspector().Inspect(placemark, ctx);
+        Require(result.PlacemarksChanged == 1 && result.InlineStylesUpdated == 1 &&
+            (string?)placemark.Element(Kml + "styleUrl") == "#shared" &&
+            after.LineWidth == "7.25" &&
+            after.IconScale == "0.3" && after.LabelScale == "0.6" &&
+            after.LineColor != before.LineColor,
+            "Mixed inline/reference styling changed an unticked value.");
+    }
+
+    private static void FolderSharedStyleRemainsEditable()
+    {
+        var target = StyledPlacemark("nested-target", "#folderStyle");
+        using var ctx = StyleContext(new XDocument(new XElement(Kml + "kml",
+            new XElement(Kml + "Document",
+                new XElement(Kml + "Folder",
+                    SharedStyle("folderStyle", "4.75"), target)))));
+        var edit = new KmlBatchEditService();
+        Require(edit.Preview(new[] { target }, ctx, ColorOnly()).CanApply,
+            "Unique shared style within a Folder should be editable.");
+        var result = edit.Apply(new[] { target }, ctx, ColorOnly());
+        Require(result.PlacemarksChanged == 1 &&
+            new KmlStyleInspector().Inspect(target, ctx).LineWidth == "4.75",
+            "Folder style resolution lost line width after the clone.");
     }
 
     private static void Require(bool value, string message)
