@@ -46,11 +46,18 @@ public sealed class KmlBatchEditService
             };
         }
 
+        var resolver = context.StyleResolver;
         var inlineCount = 0;
         var newInlineCount = 0;
-        var unresolvedCount = 0;
-        var sharedStyleIds = new HashSet<string>(StringComparer.Ordinal);
-        var styleMapIds = new HashSet<string>(StringComparer.Ordinal);
+        var skippedCount = 0;
+        var externalCount = 0;
+        var ambiguousCount = 0;
+        var cyclicCount = 0;
+        var missingCount = 0;
+        var recoveredCount = 0;
+        var skippedNames = new List<string>();
+        var sharedStyles = new HashSet<XElement>();
+        var styleMaps = new HashSet<XElement>();
 
         for (var index = 0; index < placemarks.Count; index++)
         {
@@ -65,45 +72,79 @@ public sealed class KmlBatchEditService
                     (index + 1) / (double)Math.Max(placemarks.Count, 1) * 100d));
             }
 
+            var resolution = ResolvePlacemarkReference(placemark, resolver);
+            if (resolution.MustSkip)
+            {
+                skippedCount++;
+                switch (resolution.Status)
+                {
+                    case StyleReferenceStatus.External: externalCount++; break;
+                    case StyleReferenceStatus.Ambiguous: ambiguousCount++; break;
+                    case StyleReferenceStatus.Cyclic: cyclicCount++; break;
+                    default: missingCount++; break;
+                }
+
+                if (skippedNames.Count < 8)
+                {
+                    skippedNames.Add(
+                        placemark.Element(KmlNs + "name")?.Value?.Trim() ??
+                        $"Placemark #{index + 1}");
+                }
+
+                continue;
+            }
+
+            if (resolution.RecoveredDuplicate)
+                recoveredCount++;
+
             if (placemark.Element(KmlNs + "Style") is not null)
-            {
                 inlineCount++;
-                continue;
-            }
-
-            var styleUrl = CleanValue(
-                placemark.Element(KmlNs + "styleUrl")?.Value);
-
-            if (styleUrl is null)
-            {
-                newInlineCount++;
-                continue;
-            }
-
-            var styleId = ExtractLocalId(styleUrl);
-
-            if (styleId is not null && context.StylesById.ContainsKey(styleId))
-                sharedStyleIds.Add(styleId);
-            else if (styleId is not null && context.StyleMapsById.ContainsKey(styleId))
-                styleMapIds.Add(styleId);
+            else if (resolution.Status == StyleReferenceStatus.Style)
+                sharedStyles.Add(resolution.Selector!);
+            else if (resolution.Status == StyleReferenceStatus.StyleMap)
+                styleMaps.Add(resolution.Selector!);
             else
-            {
-                unresolvedCount++;
                 newInlineCount++;
-            }
         }
 
+        var editableCount = placemarks.Count - skippedCount;
         return new KmlBatchEditPreview
         {
-            CanApply = true,
+            CanApply = editableCount > 0,
+            ValidationMessage = editableCount > 0 ? string.Empty :
+                "No selected placemarks have safely editable local styles.",
             PlacemarkCount = placemarks.Count,
+            EditablePlacemarkCount = editableCount,
+            SkippedPlacemarkCount = skippedCount,
+            ExternalStyleReferenceCount = externalCount,
+            AmbiguousStyleReferenceCount = ambiguousCount,
+            CyclicStyleReferenceCount = cyclicCount,
+            MissingStyleReferenceCount = missingCount,
+            RecoveredDuplicateReferenceCount = recoveredCount,
+            DuplicateIdCount = resolver.DuplicateIds.Count,
+            SkippedPlacemarkNames = skippedNames,
             InlineStyleCount = inlineCount,
-            SharedStyleCount = sharedStyleIds.Count,
-            StyleMapCount = styleMapIds.Count,
+            SharedStyleCount = sharedStyles.Count,
+            StyleMapCount = styleMaps.Count,
             NewInlineStyleCount = newInlineCount,
-            UnresolvedStyleCount = unresolvedCount,
             ChangeSummary = BuildChangeSummary(changes)
         };
+    }
+
+    private static StyleReferenceResult ResolvePlacemarkReference(
+        XElement placemark, KmlStyleReferenceResolver resolver)
+    {
+        var resolution = resolver.Resolve(
+            placemark, placemark.Element(KmlNs + "styleUrl")?.Value);
+
+        if (resolution.Status == StyleReferenceStatus.StyleMap)
+        {
+            var validation = resolver.ValidateStyleMap(resolution.Selector!);
+            if (!validation.IsResolved)
+                return validation;
+        }
+
+        return resolution;
     }
 
     public KmlBatchEditResult Apply(
