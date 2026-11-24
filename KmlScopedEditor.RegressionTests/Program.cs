@@ -451,9 +451,11 @@ internal static class Program
             geometry.Project(new KmlCoordinate(0, 0.002, null))
         };
         var result = geometry.SplitWithStroke(stroke, marker);
+        var pieces = result.Replacements is not null &&
+            result.Replacements.TryGetValue(first, out var replacements)
+                ? replacements
+                : Array.Empty<XElement>();
         Require(result.LinesSplit == 1 &&
-            result.Replacements is not null &&
-            result.Replacements.TryGetValue(first, out var pieces) &&
             pieces.Count == 2 &&
             first.Document is null &&
             second.Document is not null,
