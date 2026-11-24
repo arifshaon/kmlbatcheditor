@@ -2021,6 +2021,24 @@ public partial class LineEditorWindow : Window
             return;
         }
 
+        if (_workflowStep == 3 && _selectionCarriedFromSplit)
+        {
+            var confirmation = MessageBox.Show(
+                this,
+                $"Delete all {_selected.Count:N0} selected line/piece(s)? " +
+                "This selection includes lines or pieces carried over from the split. " +
+                "Choose No to clear or adjust the selection first.",
+                "Confirm deletion of inherited selection",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
+            if (confirmation != MessageBoxResult.Yes)
+            {
+                UpdateStatus("Deletion cancelled. The inherited selection is still present.");
+                return;
+            }
+        }
+
         var snapshot =
             CaptureUndoState(
                 UndoActionKind.Deletion);
@@ -2038,6 +2056,7 @@ public partial class LineEditorWindow : Window
         PushDocumentUndo(snapshot);
         MarkGeometryChanged();
         _selected.Clear();
+        _selectionCarriedFromSplit = false;
 
         RefreshSurface();
         UpdateCutScopeDisplay();
@@ -2052,6 +2071,7 @@ public partial class LineEditorWindow : Window
         RoutedEventArgs e)
     {
         _selected.Clear();
+        _selectionCarriedFromSplit = false;
         EditorSurface.SetSelection(_selected);
 
         if (_draftCutPoints.Count > 0)
@@ -2066,6 +2086,7 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        _selectionCarriedFromSplit = false;
         var inverted = _geometry.Features
             .Where(feature =>
                 !_selected.Contains(
@@ -2177,6 +2198,13 @@ public partial class LineEditorWindow : Window
         }
 
         _selected.Clear();
+        var linesAfterUndo = _workingDocument.Descendants(KmlNs + "LineString").ToList();
+        foreach (var index in state.SelectedLineIndexes)
+        {
+            if (index >= 0 && index < linesAfterUndo.Count)
+                _selected.Add(linesAfterUndo[index]);
+        }
+        _selectionCarriedFromSplit = state.SelectionCarriedFromSplit;
 
         if (state.Kind == UndoActionKind.Split)
         {
@@ -3099,7 +3127,13 @@ public partial class LineEditorWindow : Window
                     guide.Applied,
                     guide.AppliedSequence,
                     guide.AppliedCutPoints.ToList())),
-            _cutPoints.ToList());
+            _cutPoints.ToList(),
+            _workingDocument.Descendants(KmlNs + "LineString")
+                .Select((line, index) => (line, index))
+                .Where(item => _selected.Contains(item.line))
+                .Select(item => item.index)
+                .ToList(),
+            _selectionCarriedFromSplit);
     }
 
     private IReadOnlyList<Point> ProjectGuide(
@@ -3694,7 +3728,9 @@ public partial class LineEditorWindow : Window
         XDocument Document,
         bool HasPerformedCut,
         Dictionary<Guid, GuideUndoState> GuideStates,
-        IReadOnlyList<Point> CutPoints);
+        IReadOnlyList<Point> CutPoints,
+        IReadOnlyList<int> SelectedLineIndexes,
+        bool SelectionCarriedFromSplit);
 
     private sealed record PendingGuideSnapshot(
         string Name,
