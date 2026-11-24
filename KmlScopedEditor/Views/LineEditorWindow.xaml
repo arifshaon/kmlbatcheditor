@@ -181,15 +181,6 @@
                                   Checked="OnShowPreviousSplitsChanged"
                                   Unchecked="OnShowPreviousSplitsChanged" />
 
-                        <CheckBox x:Name="ShowLineWeightsCheckBox"
-                                  Content="Show line weights"
-                                  IsChecked="True"
-                                  VerticalAlignment="Center"
-                                  Margin="0,0,12,0"
-                                  ToolTip="Display each contour with its effective KML line width. Untick for uniform grey lines."
-                                  Checked="OnShowLineWeightsChanged"
-                                  Unchecked="OnShowLineWeightsChanged" />
-
                         <Button x:Name="UndoButton"
                                 Focusable="False"
                                 Content="↶ Undo"
@@ -770,6 +761,15 @@
                 <StackPanel HorizontalAlignment="Right"
                             VerticalAlignment="Bottom"
                             Margin="12">
+                    <CheckBox x:Name="ShowLineWeightsCheckBox"
+                              Content="Show line weights"
+                              IsChecked="True"
+                              Background="White"
+                              Padding="4,4"
+                              Margin="0,0,0,7"
+                              ToolTip="Show effective KML contour widths, or untick for uniform grey lines."
+                              Checked="OnShowLineWeightsChanged"
+                              Unchecked="OnShowLineWeightsChanged" />
                     <Button Focusable="False"
                             Content="+  Zoom in"
                             Width="112"
