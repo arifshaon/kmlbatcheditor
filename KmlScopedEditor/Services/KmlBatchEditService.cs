@@ -168,13 +168,23 @@ public sealed class KmlBatchEditService
                 "The current selection does not contain any placemarks.");
         }
 
-        var operation = new ApplyOperation(context, changes);
         var distinctPlacemarks = placemarks.Distinct().ToList();
+        var resolver = context.StyleResolver;
 
-        for (var index = 0; index < distinctPlacemarks.Count; index++)
+        // Resolve everything against one immutable pre-edit snapshot. Clones
+        // added during Apply must never change which original styles resolve.
+        var plans = distinctPlacemarks
+            .Select(placemark => (
+                Placemark: placemark,
+                Resolution: ResolvePlacemarkReference(placemark, resolver)))
+            .ToList();
+
+        var operation = new ApplyOperation(context, changes, resolver);
+        for (var index = 0; index < plans.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            operation.ApplyToPlacemark(distinctPlacemarks[index]);
+            var plan = plans[index];
+            operation.ApplyToPlacemark(plan.Placemark, plan.Resolution);
 
             if ((index + 1) % 250 == 0 || index + 1 == distinctPlacemarks.Count)
             {
@@ -449,26 +459,6 @@ public sealed class KmlBatchEditService
         return string.Join(Environment.NewLine, lines);
     }
 
-    private static string? ExtractLocalId(string? styleUrl)
-    {
-        if (string.IsNullOrWhiteSpace(styleUrl))
-            return null;
-
-        var value = styleUrl.Trim();
-        var hashPosition = value.LastIndexOf('#');
-
-        if (hashPosition >= 0 && hashPosition < value.Length - 1)
-            return value[(hashPosition + 1)..];
-
-        if (!value.Contains("://", StringComparison.Ordinal) &&
-            !value.Contains('/'))
-        {
-            return value.TrimStart('#');
-        }
-
-        return null;
-    }
-
     private static string? CleanValue(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
@@ -497,57 +487,67 @@ public sealed class KmlBatchEditService
     {
         private readonly KmlDocumentContext _context;
         private readonly StyleChangeSet _changes;
-        private readonly Dictionary<string, string> _styleCloneIds =
-            new(StringComparer.Ordinal);
-        private readonly Dictionary<string, string> _styleMapCloneIds =
-            new(StringComparer.Ordinal);
+        private readonly KmlStyleReferenceResolver _resolver;
+        // The element, not its ID, is the identity: merged KML may contain
+        // two different style elements with the same invalid duplicate ID.
+        private readonly Dictionary<XElement, string> _styleCloneIds = new();
+        private readonly Dictionary<XElement, string> _styleMapCloneIds = new();
         private readonly HashSet<string> _usedIds;
 
         private int _placemarksChanged;
+        private int _skippedPlacemarks;
         private int _inlineStylesUpdated;
         private int _sharedStylesCloned;
         private int _styleMapsCloned;
         private int _inlineStylesCreated;
-        private int _unresolvedStyleOverrides;
 
         public ApplyOperation(
             KmlDocumentContext context,
-            StyleChangeSet changes)
+            StyleChangeSet changes,
+            KmlStyleReferenceResolver resolver)
         {
             _context = context;
             _changes = changes;
-            _usedIds = new HashSet<string>(
-                context.StylesById.Keys.Concat(context.StyleMapsById.Keys),
-                StringComparer.Ordinal);
+            _resolver = resolver;
+            // All KML object IDs must be unique, not just Style/StyleMap IDs.
+            _usedIds = context.Document.Descendants()
+                .Select(element => element.Attribute("id")?.Value)
+                .Where(value => !string.IsNullOrEmpty(value))
+                .Select(value => value!)
+                .ToHashSet(StringComparer.Ordinal);
         }
 
-        public void ApplyToPlacemark(XElement placemark)
+        public void ApplyToPlacemark(
+            XElement placemark,
+            StyleReferenceResult resolution)
         {
-            var inlineStyle = placemark.Element(KmlNs + "Style");
+            if (resolution.MustSkip)
+            {
+                _skippedPlacemarks++;
+                return;
+            }
 
+            var inlineStyle = placemark.Element(KmlNs + "Style");
             if (inlineStyle is not null)
             {
                 ApplyChangesToStyle(inlineStyle, _changes);
                 _inlineStylesUpdated++;
-                _placemarksChanged++;
-                return;
             }
-
-            var styleUrlElement = placemark.Element(KmlNs + "styleUrl");
-            var styleId = ExtractLocalId(styleUrlElement?.Value);
-
-            if (styleId is not null && _context.StylesById.ContainsKey(styleId))
-                styleUrlElement!.Value = $"#{CloneSharedStyle(styleId)}";
-            else if (styleId is not null && _context.StyleMapsById.ContainsKey(styleId))
-                styleUrlElement!.Value = $"#{CloneStyleMap(styleId)}";
+            else if (resolution.Status == StyleReferenceStatus.Style)
+            {
+                var url = placemark.Element(KmlNs + "styleUrl")!;
+                url.Value = $"#{CloneSharedStyle(resolution.Selector!)}";
+            }
+            else if (resolution.Status == StyleReferenceStatus.StyleMap)
+            {
+                var url = placemark.Element(KmlNs + "styleUrl")!;
+                url.Value = $"#{CloneStyleMap(resolution.Selector!)}";
+            }
             else
             {
-                var createdStyle = CreateInlineStyle(placemark);
-                ApplyChangesToStyle(createdStyle, _changes);
+                var newStyle = CreateInlineStyle(placemark);
+                ApplyChangesToStyle(newStyle, _changes);
                 _inlineStylesCreated++;
-
-                if (styleUrlElement is not null)
-                    _unresolvedStyleOverrides++;
             }
 
             _placemarksChanged++;
@@ -556,86 +556,86 @@ public sealed class KmlBatchEditService
         public KmlBatchEditResult CreateResult() => new()
         {
             PlacemarksChanged = _placemarksChanged,
+            SkippedPlacemarkCount = _skippedPlacemarks,
             InlineStylesUpdated = _inlineStylesUpdated,
             SharedStylesCloned = _sharedStylesCloned,
             StyleMapsCloned = _styleMapsCloned,
-            InlineStylesCreated = _inlineStylesCreated,
-            UnresolvedStyleOverrides = _unresolvedStyleOverrides
+            InlineStylesCreated = _inlineStylesCreated
         };
 
-        private string CloneSharedStyle(string originalId)
+        private string CloneSharedStyle(XElement original)
         {
-            if (_styleCloneIds.TryGetValue(originalId, out var existingCloneId))
-                return existingCloneId;
+            if (_styleCloneIds.TryGetValue(original, out var existingId))
+                return existingId;
 
-            var original = _context.StylesById[originalId];
+            var id = (string?)original.Attribute("id") ?? "style";
             var clone = new XElement(original);
-            var newId = CreateUniqueId($"{originalId}_edited");
-
-            clone.SetAttributeValue("id", newId);
+            var cloneId = CreateUniqueId($"{id}_edited");
+            clone.SetAttributeValue("id", cloneId);
+            ReidentifyDescendantIds(clone);
             ApplyChangesToStyle(clone, _changes);
             original.AddAfterSelf(clone);
 
-            _styleCloneIds.Add(originalId, newId);
-            _context.StylesById[newId] = clone;
+            _styleCloneIds.Add(original, cloneId);
+            _context.StylesById[cloneId] = clone;
             _sharedStylesCloned++;
-            return newId;
+            return cloneId;
         }
 
-        private string CloneStyleMap(string originalId)
+        private string CloneStyleMap(XElement original)
         {
-            if (_styleMapCloneIds.TryGetValue(originalId, out var existingCloneId))
-                return existingCloneId;
+            if (_styleMapCloneIds.TryGetValue(original, out var existingId))
+                return existingId;
 
-            var original = _context.StyleMapsById[originalId];
+            var id = (string?)original.Attribute("id") ?? "stylemap";
             var clone = new XElement(original);
-            var newId = CreateUniqueId($"{originalId}_edited");
+            var cloneId = CreateUniqueId($"{id}_edited");
+            clone.SetAttributeValue("id", cloneId);
+            ReidentifyDescendantIds(clone);
 
-            clone.SetAttributeValue("id", newId);
-            _styleMapCloneIds.Add(originalId, newId);
-            _context.StyleMapsById[newId] = clone;
+            // Cache before following Pair references to prevent any recursive
+            // duplicate work. Cycles have already been rejected by validation.
+            _styleMapCloneIds.Add(original, cloneId);
+            _context.StyleMapsById[cloneId] = clone;
             original.AddAfterSelf(clone);
             _styleMapsCloned++;
 
             foreach (var pair in clone.Elements(KmlNs + "Pair"))
                 ApplyChangesToPair(pair);
 
-            return newId;
+            return cloneId;
         }
 
         private void ApplyChangesToPair(XElement pair)
         {
             var inlineStyle = pair.Element(KmlNs + "Style");
-
             if (inlineStyle is not null)
             {
                 ApplyChangesToStyle(inlineStyle, _changes);
                 return;
             }
 
-            var styleUrlElement = pair.Element(KmlNs + "styleUrl");
-            var styleId = ExtractLocalId(styleUrlElement?.Value);
-
-            if (styleId is not null && _context.StylesById.ContainsKey(styleId))
-            {
-                styleUrlElement!.Value = $"#{CloneSharedStyle(styleId)}";
-                return;
-            }
-
-            if (styleId is not null && _context.StyleMapsById.ContainsKey(styleId))
-            {
-                styleUrlElement!.Value = $"#{CloneStyleMap(styleId)}";
-                return;
-            }
-
-            var createdStyle = new XElement(KmlNs + "Style");
-
-            if (styleUrlElement is not null)
-                styleUrlElement.AddAfterSelf(createdStyle);
+            var styleUrl = pair.Element(KmlNs + "styleUrl");
+            var resolution = _resolver.Resolve(pair, styleUrl?.Value);
+            // This is prevalidated against every StyleMap pair; never
+            // manufacture a local replacement for an external/ambiguous pair.
+            if (resolution.Status == StyleReferenceStatus.Style)
+                styleUrl!.Value = $"#{CloneSharedStyle(resolution.Selector!)}";
+            else if (resolution.Status == StyleReferenceStatus.StyleMap)
+                styleUrl!.Value = $"#{CloneStyleMap(resolution.Selector!)}";
             else
-                pair.Add(createdStyle);
+                throw new InvalidOperationException(
+                    "StyleMap changed during Apply; no unsafe style rewrite was committed.");
+        }
 
-            ApplyChangesToStyle(createdStyle, _changes);
+        private void ReidentifyDescendantIds(XElement clone)
+        {
+            foreach (var element in clone.Descendants())
+            {
+                var id = element.Attribute("id");
+                if (id is not null)
+                    id.Value = CreateUniqueId($"{id.Value}_edited");
+            }
         }
 
         private string CreateUniqueId(string baseId)
