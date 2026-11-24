@@ -1689,13 +1689,15 @@ public partial class LineEditorWindow : Window
             .Select(feature => feature.LineStringElement)
             .ToHashSet();
 
+        // The same source-line set applies to every pending/drawn guide.
+        // Constructing it once avoids repeated scans of large contour files.
+        var targets = _geometry.Features
+            .Select(feature => feature.LineStringElement)
+            .Where(line => !helpers.Contains(line))
+            .ToHashSet();
+
         foreach (var guide in _guides.Where(guide => !guide.Applied))
         {
-            var targets = _geometry.Features
-                .Select(feature => feature.LineStringElement)
-                .Where(line => !helpers.Contains(line))
-                .ToHashSet();
-
             var preview = _geometry.PreviewSplitWithStroke(
                 ProjectGuide(guide.Guide), targets);
             crossed.UnionWith(preview.AffectedLines);
@@ -1703,18 +1705,23 @@ public partial class LineEditorWindow : Window
 
         if (_draftCutPoints.Count >= 2)
         {
-            var targets = _geometry.Features
-                .Select(feature => feature.LineStringElement)
-                .Where(line => !helpers.Contains(line))
-                .ToHashSet();
-
             var preview = _geometry.PreviewSplitWithStroke(
                 _draftCutPoints, targets);
             crossed.UnionWith(preview.AffectedLines);
         }
 
+        if (crossed.Count == 0)
+        {
+            UpdateStatus(
+                "The split line did not split any lines in the current split target. " +
+                "It remains ready so you can adjust it or try again.");
+            return false;
+        }
+
+        var selectedCrossedCount = selected.Count(crossed.Contains);
         var dialog = new SplitScopeConfirmationWindow(
             OnlySplitSelectedCheckBox.IsChecked == true ? 0 : selected.Count,
+            selectedCrossedCount,
             crossed.Count)
         {
             Owner = this
