@@ -2972,14 +2972,16 @@ public partial class LineEditorWindow : Window
     private List<XElement>
         GetValidSelectedLines()
     {
+        // Selection can include thousands of inherited split pieces.
+        // Avoid quadratic selected × features scans on large contour maps.
+        var featureElements = _geometry.Features
+            .Select(feature => feature.LineStringElement)
+            .ToHashSet();
+
         return _selected
             .Where(line =>
                 line.Document == _workingDocument &&
-                _geometry.Features.Any(
-                    feature =>
-                        ReferenceEquals(
-                            feature.LineStringElement,
-                            line)))
+                featureElements.Contains(line))
             .ToList();
     }
 
