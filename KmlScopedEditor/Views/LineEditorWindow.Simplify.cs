@@ -46,6 +46,7 @@ public partial class LineEditorWindow
             // otherwise can report its previous Text during SelectionChanged.
             SimplifyToleranceComboBox.SelectedIndex = 3;
             SimplifyToleranceComboBox.Text = "2";
+            SimplifySmoothCheckBox.IsChecked = false;
 
             SimplifyPanel.Visibility =
                 Visibility.Visible;
