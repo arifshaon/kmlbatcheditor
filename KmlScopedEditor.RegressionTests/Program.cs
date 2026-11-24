@@ -48,6 +48,9 @@ internal static class Program
         Run(nameof(ReferencedEmbeddedInlineStyleIsSafelySkipped), ReferencedEmbeddedInlineStyleIsSafelySkipped);
         Run(nameof(InlineStyleWithLocalStyleUrlPreservesUntickedValues), InlineStyleWithLocalStyleUrlPreservesUntickedValues);
         Run(nameof(FolderSharedStyleRemainsEditable), FolderSharedStyleRemainsEditable);
+        Run(nameof(SplitReportsExactReplacementLineage), SplitReportsExactReplacementLineage);
+        Run(nameof(ConsecutiveSelectedOnlySplitsUseInheritedPieces), ConsecutiveSelectedOnlySplitsUseInheritedPieces);
+        Run(nameof(LineWidthResolverMatchesStylesAndDoesNotEditXml), LineWidthResolverMatchesStylesAndDoesNotEditXml);
         Console.WriteLine($"PASS: {_passed} regression checks.");
     }
 
@@ -428,6 +431,116 @@ internal static class Program
         Require(result.PlacemarksChanged == 1 &&
             new KmlStyleInspector().Inspect(target, ctx).LineWidth == "4.75",
             "Folder style resolution lost line width after the clone.");
+    }
+
+    private static void SplitReportsExactReplacementLineage()
+    {
+        var geometry = Geometry(
+            ("selected", new[] { (-0.002, 0d), (0.002, 0d) }),
+            ("unselected", new[] { (-0.002, 0.001), (0.002, 0.001) }));
+        var first = geometry.Features.Single(f => f.Name == "selected")
+            .LineStringElement;
+        var second = geometry.Features.Single(f => f.Name == "unselected")
+            .LineStringElement;
+        var marker = XName.Get("selected-only", "urn:line-editor-tests");
+        first.SetAttributeValue(marker, "true");
+
+        var stroke = new[]
+        {
+            geometry.Project(new KmlCoordinate(0, -0.001, null)),
+            geometry.Project(new KmlCoordinate(0, 0.002, null))
+        };
+        var result = geometry.SplitWithStroke(stroke, marker);
+        Require(result.LinesSplit == 1 &&
+            result.Replacements is not null &&
+            result.Replacements.TryGetValue(first, out var pieces) &&
+            pieces.Count == 2 &&
+            first.Document is null &&
+            second.Document is not null,
+            "Split must report replacements of the selected line only.");
+        Require(pieces.All(piece => piece.Document is not null &&
+            geometry.Features.Any(f => ReferenceEquals(f.LineStringElement, piece))),
+            "Every reported replacement must be a live current line.");
+    }
+
+    private static void ConsecutiveSelectedOnlySplitsUseInheritedPieces()
+    {
+        var geometry = Geometry(
+            ("selected", new[] { (-0.002, 0d), (0.002, 0d) }),
+            ("untouched", new[] { (-0.002, 0.001), (0.002, 0.001) }));
+        var marker = XName.Get("selected-only", "urn:line-editor-tests");
+        var selected = geometry.Features.Single(f => f.Name == "selected")
+            .LineStringElement;
+        selected.SetAttributeValue(marker, "true");
+
+        var first = geometry.SplitWithStroke(new[]
+        {
+            geometry.Project(new KmlCoordinate(0, -0.001, null)),
+            geometry.Project(new KmlCoordinate(0, 0.002, null))
+        }, marker);
+        Require(first.LinesSplit == 1 && first.Replacements is not null &&
+            first.Replacements.TryGetValue(selected, out var firstPieces) &&
+            firstPieces.Count == 2,
+            "First selected split should create two selected pieces.");
+
+        var second = geometry.SplitWithStroke(new[]
+        {
+            geometry.Project(new KmlCoordinate(0.001, -0.001, null)),
+            geometry.Project(new KmlCoordinate(0.001, 0.002, null))
+        }, marker);
+        Require(second.LinesSplit == 1 && second.Replacements is not null &&
+            second.Replacements.Count == 1,
+            "Second selected-only split must target an inherited piece.");
+        var selectedAfter = geometry.Features.Count(f =>
+            f.LineStringElement.Attribute(marker)?.Value == "true");
+        Require(selectedAfter == 3 &&
+            geometry.Features.Count(f => f.Name == "untouched") == 1,
+            "Selected scope must propagate through both splits; unselected line must survive.");
+    }
+
+    private static void LineWidthResolverMatchesStylesAndDoesNotEditXml()
+    {
+        var first = StyledPlacemark("first", "#inline");
+        var second = StyledPlacemark("second", "#inline");
+        var mapTarget = StyledPlacemark("map-target", "#map");
+        var defaultTarget = StyledPlacemark("default", "#no-width");
+        var inlineTarget = StyledPlacemark("inline", "#normal");
+        inlineTarget.Add(new XElement(Kml + "Style",
+            new XElement(Kml + "LineStyle",
+                new XElement(Kml + "width", "3"))));
+
+        var document = new XDocument(new XElement(Kml + "kml",
+            new XElement(Kml + "Document",
+                SharedStyle("normal", "1.5"),
+                new XElement(Kml + "Style", new XAttribute("id", "no-width")),
+                StyleMap("map", "#normal", "#normal"),
+                new XElement(Kml + "Document", SharedStyle("inline", "1"), first),
+                new XElement(Kml + "Document", SharedStyle("inline", "2"), second),
+                mapTarget, defaultTarget, inlineTarget)));
+        var before = document.ToString(SaveOptions.DisableFormatting);
+        var resolver = new KmlLineWidthResolver(document);
+        double GetWidth(XElement placemark) =>
+            resolver.ResolveWidth(placemark.Descendants(Kml + "LineString").Single());
+
+        Require(GetWidth(first) == 1d && GetWidth(second) == 2d,
+            "Duplicate Document-scoped style widths must not be confused.");
+        Require(GetWidth(mapTarget) == 1.5d,
+            "StyleMap width must come from its normal-state style.");
+        Require(GetWidth(defaultTarget) == 1.1d,
+            "No explicit width must fall back to original editor thickness.");
+        Require(GetWidth(inlineTarget) == 3d,
+            "Placemark inline width must override referenced StyleMap/shared values.");
+
+        var exaggerated = StyledPlacemark("oversized", "#normal");
+        exaggerated.Add(new XElement(Kml + "Style",
+            new XElement(Kml + "LineStyle",
+                new XElement(Kml + "width", "30"))));
+        document.Root!.Element(Kml + "Document")!.Add(exaggerated);
+        Require(GetWidth(exaggerated) == 6d, "Displayed widths must clamp to 6 pixels.");
+        exaggerated.Remove();
+
+        Require(document.ToString(SaveOptions.DisableFormatting) == before,
+            "Reading styles for Line Editor must not modify KML XML.");
     }
 
     private static void Require(bool value, string message)
