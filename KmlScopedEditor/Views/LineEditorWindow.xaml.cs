@@ -3006,7 +3006,7 @@ public partial class LineEditorWindow : Window
                 ? "No lines selected — Apply split will ask before splitting all crossed lines."
                 : OnlySplitSelectedCheckBox.IsChecked == true
                     ? $"{validSelected.Count:N0} selected — split limited to selection"
-                    : $"{validSelected.Count:N0} lines selected — the split will still cross all lines. Tick to limit it.";
+                    : $"{validSelected.Count:N0} lines selected — Apply split will ask whether to limit it.";
 
         EditorSurface.SetSelectionSoft(
             _workflowStep == 2 &&
