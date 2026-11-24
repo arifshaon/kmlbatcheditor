@@ -9,14 +9,18 @@
   Diagnostics). **Show line weights** is on by default; turning it off
   restores uniform grey lines. Values are clamped to 1–6 screen pixels,
   and width/zoom-specific frozen pens are cached without changing KML styles.
+  Explicit 1 px and unspecified widths share the original thin display pen.
 - **REQ-3:** Apply split now requests a clear scope decision whenever it
   would otherwise split all lines. With selected lines and an unticked box,
-  the selected-only choice is the default; with no selection, Cancel is
-  the default. Cancel preserves pending and drawn guides without changes.
+  the selected-only choice is the default and includes the actual crossed
+  selection count; with no selection, Cancel is the default. A guide crossing
+  zero lines leaves the guide untouched without an all-0-lines prompt.
+  Cancel preserves pending and drawn guides without changes.
 - **REQ-4:** Selected source lines transfer selection to **all split pieces**,
   while selected uncut lines persist and unselected lines stay unselected.
   Selection survives consecutive splits and is restored by Undo. Deleting
-  an automatically carried Step 3 selection requires explicit confirmation.
+  an automatically carried selection from **Step 1 or Step 3** requires explicit
+  confirmation; replacing the group with one Step 2 selection clears that warning.
 - New real-engine regression checks cover split-piece lineage, consecutive
   selected-only splits, and effective KML line widths.
 - Manual acceptance procedure: [LINE_EDITOR_ACCEPTANCE_TESTS.md](LINE_EDITOR_ACCEPTANCE_TESTS.md).
