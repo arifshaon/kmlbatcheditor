@@ -10,6 +10,7 @@ using ModifierKeys = System.Windows.Input.ModifierKeys;
 using Keyboard = System.Windows.Input.Keyboard;
 using MediaColor = System.Windows.Media.Color;
 using MediaBrush = System.Windows.Media.SolidColorBrush;
+using MessageBox = System.Windows.MessageBox;
 using ComboBoxItem = System.Windows.Controls.ComboBoxItem;
 
 namespace KmlScopedEditor.Views;
