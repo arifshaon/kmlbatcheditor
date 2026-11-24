@@ -54,6 +54,11 @@ public sealed class LineEditorSurface : FrameworkElement
     private bool _editableGuideIsClosed;
     private int _dragGuideVertexIndex = -1;
     private readonly Dictionary<XElement, StreamGeometry> _featureGeometry = new();
+    private IReadOnlyDictionary<XElement, double> _lineWidths =
+        new Dictionary<XElement, double>();
+    private readonly Dictionary<double, Pen> _weightPens = new();
+    private readonly Dictionary<(int Kind, double Width), Pen> _emphasisPens = new();
+    private bool _showLineWeights = true;
     private readonly List<(LineEditorGuideVisual Guide, StreamGeometry Geometry)> _guideGeometry = new();
 
     private DrawingGroup? _baseLayer;
@@ -173,11 +178,13 @@ public sealed class LineEditorSurface : FrameworkElement
         Rect worldBounds,
         IReadOnlyList<LineEditorGuideVisual>? guides = null,
         IReadOnlyList<Point>? cutPoints = null,
-        bool fitView = false)
+        bool fitView = false,
+        IReadOnlyDictionary<XElement, double>? lineWidths = null)
     {
         var previousFeatures = _features;
 
         _features = features ?? Array.Empty<KmlLineFeature>();
+        _lineWidths = lineWidths ?? new Dictionary<XElement, double>();
         _selected = selected?.ToHashSet() ?? new HashSet<XElement>();
         _worldBounds = worldBounds;
         _guides = guides ?? Array.Empty<LineEditorGuideVisual>();
@@ -219,6 +226,18 @@ public sealed class LineEditorSurface : FrameworkElement
         // already painted the "No KML LineStrings" message. Always invalidate
         // the FrameworkElement itself so that stale background text is cleared.
         InvalidateVisual();
+    }
+
+    public void SetShowLineWeights(bool show)
+    {
+        if (_showLineWeights == show)
+            return;
+
+        _showLineWeights = show;
+        EnsureRenderCache();
+        // Keep the geometry cache intact: this changes pens, not contours.
+        RebuildBaseLayerFromCachedGeometry();
+        RedrawSelectionLayer();
     }
 
     public void SetSelection(IEnumerable<XElement> selected)
@@ -1301,7 +1320,7 @@ public sealed class LineEditorSurface : FrameworkElement
                 {
                     context.DrawGeometry(
                         null,
-                        _normalPen,
+                        GetLinePen(feature.LineStringElement),
                         geometry);
                 }
             }
@@ -1357,6 +1376,8 @@ public sealed class LineEditorSurface : FrameworkElement
         _normalPen = CreatePen(
             Color.FromRgb(84, 92, 102),
             1.1d / safeScale);
+        _weightPens.Clear();
+        _emphasisPens.Clear();
 
         _selectedPen = CreatePen(
             Color.FromRgb(190, 45, 45),
@@ -1476,7 +1497,7 @@ public sealed class LineEditorSurface : FrameworkElement
 
                 context.DrawGeometry(
                     null,
-                    _normalPen,
+                    GetLinePen(feature.LineStringElement),
                     geometry);
             }
         }
