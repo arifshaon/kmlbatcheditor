@@ -1640,18 +1640,88 @@ public partial class LineEditorWindow : Window
             return;
         }
 
-        if (_draftCutPoints.Count >= 2)
-            CommitDraftCutAsPendingGuide();
-
-        if (_guides.Any(
-                guide => !guide.Applied))
+        if (_draftCutPoints.Count < 2 &&
+            !_guides.Any(guide => !guide.Applied))
         {
-            ApplyPendingGuides();
+            UpdateStatus(
+                "There is no pending split line. Import one or draw one first.");
             return;
         }
 
-        UpdateStatus(
-            "There is no pending split line. Import one or draw one first.");
+        // Confirm before committing the draft, marking targets, removing
+        // helpers, or changing geometry. Cancel leaves everything untouched.
+        if (!ConfirmSplitScopeBeforeApply())
+            return;
+
+        if (_draftCutPoints.Count >= 2)
+            CommitDraftCutAsPendingGuide();
+
+        if (_guides.Any(guide => !guide.Applied))
+            ApplyPendingGuides();
+    }
+
+    private bool ConfirmSplitScopeBeforeApply()
+    {
+        var selected = GetValidSelectedLines();
+        if (OnlySplitSelectedCheckBox.IsChecked == true &&
+            selected.Count > 0)
+        {
+            return true;
+        }
+
+        // The count is a union of currently crossed source lines; with
+        // multiple guides, later splits can create additional pieces.
+        var crossed = new HashSet<XElement>();
+        var helpers = _guides
+            .Where(guide => !guide.Applied &&
+                            guide.RemoveMatchingSourceBeforeCut)
+            .SelectMany(FindSourceGuideFeatures)
+            .Select(feature => feature.LineStringElement)
+            .ToHashSet();
+
+        foreach (var guide in _guides.Where(guide => !guide.Applied))
+        {
+            var targets = _geometry.Features
+                .Select(feature => feature.LineStringElement)
+                .Where(line => !helpers.Contains(line))
+                .ToHashSet();
+
+            var preview = _geometry.PreviewSplitWithStroke(
+                ProjectGuide(guide.Guide), targets);
+            crossed.UnionWith(preview.AffectedLines);
+        }
+
+        if (_draftCutPoints.Count >= 2)
+        {
+            var targets = _geometry.Features
+                .Select(feature => feature.LineStringElement)
+                .Where(line => !helpers.Contains(line))
+                .ToHashSet();
+
+            var preview = _geometry.PreviewSplitWithStroke(
+                _draftCutPoints, targets);
+            crossed.UnionWith(preview.AffectedLines);
+        }
+
+        var dialog = new SplitScopeConfirmationWindow(
+            OnlySplitSelectedCheckBox.IsChecked == true ? 0 : selected.Count,
+            crossed.Count)
+        {
+            Owner = this
+        };
+
+        dialog.ShowDialog();
+        if (dialog.Decision == SplitScopeDecision.Cancel)
+        {
+            UpdateStatus(
+                "Split cancelled. Your pending and drawn split lines were kept. Select lines or change the split scope, then press Apply split again.");
+            return false;
+        }
+
+        if (dialog.Decision == SplitScopeDecision.SelectedOnly)
+            OnlySplitSelectedCheckBox.IsChecked = true;
+
+        return true;
     }
 
     private void ApplyPendingGuides()
