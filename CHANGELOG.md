@@ -1,5 +1,58 @@
 # Changelog
 
+## Unreleased — Line Editor improvements (24 November 2026)
+
+- **REQ-1:** Simplify / smooth now resets to **2 m** every time its panel
+  opens. The first preview uses 2 m; Smooth curves stays off.
+- **REQ-2:** Show effective normal-state KML line widths in the Line Editor
+  (inline overrides, shared Style and StyleMap resolution agree with Style
+  Diagnostics). **Show line weights** is on by default; turning it off
+  restores uniform grey lines. Values are clamped to 1–6 screen pixels,
+  and width/zoom-specific frozen pens are cached without changing KML styles.
+  Explicit 1 px and unspecified widths share the original thin display pen.
+- **REQ-3:** Apply split now requests a clear scope decision whenever it
+  would otherwise split all lines. With selected lines and an unticked box,
+  the selected-only choice is the default and includes the actual crossed
+  selection count; with no selection, Cancel is the default. A guide crossing
+  zero lines leaves the guide untouched without an all-0-lines prompt.
+  Cancel preserves pending and drawn guides without changes.
+- **REQ-4:** Selected source lines transfer selection to **all split pieces**,
+  while selected uncut lines persist and unselected lines stay unselected.
+  Selection survives consecutive splits and is restored by Undo. Deleting
+  an automatically carried selection from **Step 1 or Step 3** requires explicit
+  confirmation; replacing the group with one Step 2 selection clears that warning.
+- New real-engine regression checks cover split-piece lineage, consecutive
+  selected-only splits, and effective KML line widths.
+- Manual acceptance procedure: [LINE_EDITOR_ACCEPTANCE_TESTS.md](LINE_EDITOR_ACCEPTANCE_TESTS.md).
+- **Status:** changes live only in `fix/scoped-kml-style-resolution` / PR #6.
+  They have not been merged into `main`.
+
+## Unreleased — safe KML style resolution (test candidate)
+
+- Resolve local `#style` references through one shared resolver in the editor,
+  Style Diagnostics, and icon inventories.
+- Valid globally unique style IDs resolve normally. For invalid merged KML with
+  duplicate IDs, use the nearest enclosing Document only when it provides
+  exactly one candidate; otherwise skip the ambiguous placemark.
+- Do not reinterpret `styles.kml#id`, URL fragments or other external
+  style references as local IDs. Skip the affected placemark and report it
+  in Preview instead of silently redirecting its style.
+- Check every StyleMap pair, including nested maps. Cyclic, missing, ambiguous
+  and external pair references block edits to the affected placemark.
+- Clone caches now use the actual XML Style/StyleMap element, not its ID string.
+  New clone IDs are reserved against **every** existing KML object ID,
+  including Folder and Placemark IDs and inline-style IDs.
+- Preview reports editable/skipped placemark counts, duplicate ID warnings,
+  document-local recovery counts, and examples of skipped placemarks. Apply
+  independently rechecks references and leaves unsafe items untouched.
+- Preserve unticked Line, Icon and Label values, and keep out-of-scope
+  placemarks unchanged.
+- Added real-engine style regression tests for normal and nested Styles/
+  StyleMaps, external references, duplicate and cyclic IDs, collision-safe
+  clones, and icon inventory consistency.
+- Manual tester procedure: [STYLE_RESOLUTION_TESTS.md](STYLE_RESOLUTION_TESTS.md).
+- **Status:** testing branch / draft PR #6; not yet merged into `main`.
+
 ## 1.3.0 — validation update (2026-11-04)
 
 ### Fixed

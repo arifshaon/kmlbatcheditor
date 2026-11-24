@@ -573,14 +573,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 _ => MovePreviewPlacemark(-1),
                 _ => !IsBusy &&
                      HasPlacemarkVisualPreview &&
-                     _previewPlacemarkIndex > 0);
+                     FindNextEditablePreviewIndex(-1) >= 0);
 
         NextPreviewPlacemarkCommand =
             new RelayCommand(
                 _ => MovePreviewPlacemark(1),
                 _ => !IsBusy &&
                      HasPlacemarkVisualPreview &&
-                     _previewPlacemarkIndex < _currentSelection.Count - 1);
+                     FindNextEditablePreviewIndex(1) >= 0);
 
         OpenPreviewInGoogleEarthCommand =
             new AsyncRelayCommand(
@@ -684,14 +684,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         StatusText = preview.CanApply
-            ? $"Preview ready for {preview.PlacemarkCount:N0} placemarks in {FormatElapsed(stopwatch.Elapsed)}."
+            ? $"Preview ready for {preview.EditablePlacemarkCount:N0} editable placemarks in {FormatElapsed(stopwatch.Elapsed)}."
             : preview.ValidationMessage;
 
         ShowNotification(
             preview.CanApply
-                ? $"Preview ready for {preview.PlacemarkCount:N0} placemarks."
+                ? $"Preview ready for {preview.EditablePlacemarkCount:N0} editable placemarks; {preview.SkippedPlacemarkCount:N0} skipped."
                 : preview.ValidationMessage,
-            preview.CanApply
+            preview.CanApply && preview.SkippedPlacemarkCount == 0
                 ? NotificationKind.Success
                 : NotificationKind.Warning);
     }
@@ -780,13 +780,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         _iconVariantInventory = iconVariants;
         RefreshVisibleIconOptions();
 
-        HasUnsavedChanges = true;
+        HasUnsavedChanges |= result.PlacemarksChanged > 0;
         UpdateSelectedStyle();
         ResetCalculatedSelection();
 
         BatchEditMessage = result.Summary;
         StatusText =
-            $"Changed {result.PlacemarksChanged:N0} placemarks in " +
+            $"Changed {result.PlacemarksChanged:N0} placemarks; " +
+            $"{result.SkippedPlacemarkCount:N0} skipped in " +
             $"{FormatElapsed(stopwatch.Elapsed)}. Use Save As to create the output file.";
 
         var iconMessage = EditSettings.ChangeIconImage && _documentContext.IsKmz
@@ -794,8 +795,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
             : string.Empty;
 
         ShowNotification(
-            $"{result.PlacemarksChanged:N0} placemarks updated successfully.{iconMessage}",
-            NotificationKind.Success);
+            $"{result.PlacemarksChanged:N0} placemarks updated; " +
+            $"{result.SkippedPlacemarkCount:N0} unsafe references skipped.{iconMessage}",
+            result.SkippedPlacemarkCount > 0
+                ? NotificationKind.Warning
+                : NotificationKind.Success);
     }
 
     private void BrowseForIconFile()
@@ -1091,9 +1095,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
 
         EditPreview = preview;
-        BatchEditMessage = preview.CanApply
-            ? preview.Summary
-            : preview.ValidationMessage;
+        BatchEditMessage = preview.Summary;
 
         if (preview.CanApply)
         {
@@ -1157,6 +1159,20 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(PreviewPlacemarkPosition));
     }
 
+    private bool CanPreviewStyleFor(XElement placemark)
+    {
+        if (_documentContext is null)
+            return false;
+
+        var resolver = _documentContext.StyleResolver;
+        var resolved = resolver.Resolve(
+            placemark, placemark.Element(KmlNs + "styleUrl")?.Value);
+
+        return !resolved.MustSkip &&
+            (resolved.Status != StyleReferenceStatus.StyleMap ||
+             resolver.ValidateStyleMap(resolved.Selector!).IsResolved);
+    }
+
     private void BuildPlacemarkVisualPreview()
     {
         if (_documentContext is null ||
@@ -1166,6 +1182,22 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         {
             ClearPlacemarkVisualPreview();
             return;
+        }
+
+        // Do not show a fictitious proposed appearance for a placemark that
+        // Apply will skip. Navigate only through safely editable entries.
+        if (!CanPreviewStyleFor(_currentSelection[_previewPlacemarkIndex]))
+        {
+            var eligibleIndex = Enumerable.Range(0, _currentSelection.Count)
+                .FirstOrDefault(index =>
+                    CanPreviewStyleFor(_currentSelection[index]), -1);
+            if (eligibleIndex < 0)
+            {
+                ClearPlacemarkVisualPreview();
+                return;
+            }
+
+            _previewPlacemarkIndex = eligibleIndex;
         }
 
         try
@@ -1189,17 +1221,30 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
     }
 
+    private int FindNextEditablePreviewIndex(int offset)
+    {
+        if (offset == 0)
+            return -1;
+
+        var nextIndex = _previewPlacemarkIndex + offset;
+        while (nextIndex >= 0 && nextIndex < _currentSelection.Count)
+        {
+            if (CanPreviewStyleFor(_currentSelection[nextIndex]))
+                return nextIndex;
+
+            nextIndex += offset;
+        }
+
+        return -1;
+    }
+
     private void MovePreviewPlacemark(int offset)
     {
         if (!HasPlacemarkVisualPreview || _currentSelection.Count == 0)
             return;
 
-        var nextIndex = Math.Clamp(
-            _previewPlacemarkIndex + offset,
-            0,
-            _currentSelection.Count - 1);
-
-        if (nextIndex == _previewPlacemarkIndex)
+        var nextIndex = FindNextEditablePreviewIndex(offset);
+        if (nextIndex < 0)
             return;
 
         _previewPlacemarkIndex = nextIndex;

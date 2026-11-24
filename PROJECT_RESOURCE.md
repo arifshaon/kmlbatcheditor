@@ -1,6 +1,6 @@
 # Simple KML Editor — Project Resource
 
-_Last updated: 4 November 2026_
+_Last updated: 24 November 2026 (testing branch only)_
 
 This file is the canonical project handover/resource for the **Simple KML Editor** project. It records the important product decisions, implemented behavior, packaging choices, and known constraints so future changes do not accidentally undo deliberate decisions.
 
@@ -8,7 +8,7 @@ This file is the canonical project handover/resource for the **Simple KML Editor
 
 - Visible product name: **Simple KML Editor**.
 - Internal project/repository names remain **KmlScopedEditor** / `kmlbatcheditor`.
-- Current source/application version in **main**: **1.3.0** (a separate formal GitHub Release/tag has not been published).
+- Application version is **1.3.0**. This testing branch has additional unreleased Line Editor and style-resolution changes; **main** remains unchanged until PR #6 is accepted.
 - Developer/publisher: **Arif Shaon**.
 - Repository: **https://github.com/arifshaon/kmlbatcheditor**.
 - Licensing of the current source: **PolyForm Noncommercial License 1.0.0**,
@@ -181,6 +181,27 @@ Users may uncheck it to split all lines even when some are selected.
 The scope preference is preserved across editor sessions for the same
 document, including when the editor closes without keeping geometry changes.
 
+**24 November testing branch safety update:** before an all-lines split,
+the editor prompts whenever the checkbox is unticked or no lines are selected.
+With selected lines and an unticked checkbox, the default is to split only
+those selected lines and retick the box. Without a selection, Cancel is the
+default. The prompt uses distinct currently crossed source lines rather than
+total document lines. Cancelling leaves both draft and pending guides intact.
+
+Selection now follows split lineage: selected uncut lines remain selected,
+selected lines replaced by split pieces transfer selection to **every** piece,
+and unselected lines stay unselected. Undo restores the selected source
+lines against its saved document snapshot. In Step 3, attempting to delete
+an inherited selection first asks for confirmation, defaulting to No.
+The status text explicitly reminds users to clear or adjust the retained
+selection before deleting unwanted pieces. The inherited-selection deletion
+confirmation applies in **both Step 1 and Step 3**. Replacing the carried
+selection with a single Step 2 click clears the inherited warning; Invert
+also clears it because the user deliberately changed the selection.
+Split confirmation includes how many selected lines the pending guides
+actually cross. A zero-crossing guide produces a no-op status rather than
+an all-0-lines confirmation, and the pending/drawn guide remains unchanged.
+
 ### Step 3: select a side, then delete if desired
 
 - After applying a split, click **Select side** in Step 3.
@@ -244,8 +265,8 @@ Panel includes:
 - Simplify:
   - Off
   - 0.5 m
-  - 1 m (default)
-  - 2 m
+  - 1 m
+  - 2 m (default on every panel open, before first preview)
   - 5 m
   - 10 m
   - custom value
@@ -354,8 +375,26 @@ Do not revert to separate stack behavior that can undo an older document action 
 - Shift adds; Alt removes where applicable.
 - Lasso supports explicit Add/Remove behavior.
 - Step 1 deletion removes selected source lines.
-- Step 3 deletion removes selected resulting pieces.
+- Step 3 deletion removes selected resulting pieces, but inherited selections
+  from a split require explicit confirmation before deleting them.
 - Step 2 Delete/Backspace must never delete underlying KML geometry.
+
+### Line-weight display (24 November testing branch)
+
+The Line Editor offers **Show line weights**, enabled by default. It reads
+normal-state effective `LineStyle/width` using the shared style resolver,
+including placemark inline overrides and normal StyleMap pairs. Undefined or
+invalid widths use the historic 1.1 px editor display; explicit widths are
+clamped to 1–6 px, with explicit widths of 1 px (or smaller) drawn using
+the same thin 1.1 px legacy pen as lines without a width. Frozen pens are
+cached per distinct width and zoom
+bucket, while geometries are retained. Selected and hovered lines use
+thicker emphasis pens so bold contours do not hide them. Unchecking the
+toggle restores uniform grey. Display rendering does **not** edit KML
+styles or geometry.
+
+The local test plan is
+[LINE_EDITOR_ACCEPTANCE_TESTS.md](LINE_EDITOR_ACCEPTANCE_TESTS.md).
 
 ## 11. Geometry and document preservation
 

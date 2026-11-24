@@ -446,6 +446,7 @@ public sealed class KmlLineGeometryService
         var intersectionCount = 0;
         var outputSegments = 0;
         var splitPoints = new List<Point>();
+        var replacementsByOriginal = new Dictionary<XElement, IReadOnlyList<XElement>>();
         var updatedFeatures = Features.ToList();
 
         foreach (var feature in Features.ToList())
@@ -470,6 +471,8 @@ public sealed class KmlLineGeometryService
                 ReplaceLineStringWithParts(
                     feature.LineStringElement,
                     parts);
+            replacementsByOriginal[feature.LineStringElement] =
+                replacementElements;
 
             var featureIndex =
                 updatedFeatures.FindIndex(item =>
@@ -518,7 +521,8 @@ public sealed class KmlLineGeometryService
             linesSplit,
             intersectionCount,
             outputSegments,
-            splitPoints);
+            splitPoints,
+            replacementsByOriginal);
     }
 
     public int ApplyCoordinateReplacements(
@@ -1899,4 +1903,5 @@ public readonly record struct LineSplitResult(
     int LinesSplit,
     int IntersectionCount,
     int OutputSegments,
-    IReadOnlyList<Point> CutPoints);
+    IReadOnlyList<Point> CutPoints,
+    IReadOnlyDictionary<XElement, IReadOnlyList<XElement>>? Replacements = null);

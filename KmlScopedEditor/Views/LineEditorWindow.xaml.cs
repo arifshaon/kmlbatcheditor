@@ -10,6 +10,7 @@ using ModifierKeys = System.Windows.Input.ModifierKeys;
 using Keyboard = System.Windows.Input.Keyboard;
 using MediaColor = System.Windows.Media.Color;
 using MediaBrush = System.Windows.Media.SolidColorBrush;
+using MessageBox = System.Windows.MessageBox;
 using ComboBoxItem = System.Windows.Controls.ComboBoxItem;
 
 namespace KmlScopedEditor.Views;
@@ -34,6 +35,7 @@ public partial class LineEditorWindow : Window
     private readonly XDocument _originalDocument;
     private XDocument _workingDocument;
     private KmlLineGeometryService _geometry;
+    private KmlLineWidthResolver _lineWidthResolver;
     private readonly double _projectionScale;
 
     private readonly KmlCutGuideService _cutGuideLoader = new();
@@ -51,6 +53,9 @@ public partial class LineEditorWindow : Window
     private int _activeStrokePreviewProcessedPoints;
 
     private readonly HashSet<XElement> _selected = new();
+    // A split can inherit selected parents onto their new pieces. Keep the
+    // deletion warning active until the selection is explicitly cleared.
+    private bool _selectionCarriedFromSplit;
     private readonly Stack<UndoState> _undo = new();
     private readonly Stack<PendingGuideEditState> _pendingEditUndo = new();
     private PendingGuideEditState? _pendingGuideDragUndoState;
@@ -84,6 +89,7 @@ public partial class LineEditorWindow : Window
 
         _geometry = new KmlLineGeometryService(
             _workingDocument);
+        _lineWidthResolver = new KmlLineWidthResolver(_workingDocument);
 
         _projectionScale = _geometry.LongitudeScale;
 
@@ -981,6 +987,9 @@ public partial class LineEditorWindow : Window
         {
             _selected.Clear();
             _selected.Add(element);
+            // Replacing the selection is an explicit user choice; the old
+            // carried-over group is no longer at risk of accidental deletion.
+            _selectionCarriedFromSplit = false;
             UpdateStatus(
                 "Selected one line for the Step 2 scope.");
         }
@@ -1498,6 +1507,7 @@ public partial class LineEditorWindow : Window
         // This selection identified the helper line. Clearing it prevents the
         // helper from also becoming the split target scope.
         _selected.Clear();
+        _selectionCarriedFromSplit = false;
         EditorSurface.SetSelection(_selected);
 
         RefreshSurface();
@@ -1628,7 +1638,7 @@ public partial class LineEditorWindow : Window
             OnlySplitSelectedCheckBox.IsChecked == true &&
             selectedCount > 0
                 ? $"Split scope limited to {selectedCount:N0} selected line(s)."
-                : "No active selection limit; the split will cross all lines.");
+                : "An all-lines split will require confirmation before Apply.");
     }
 
     private void ApplyCurrentSplit()
@@ -1640,18 +1650,95 @@ public partial class LineEditorWindow : Window
             return;
         }
 
-        if (_draftCutPoints.Count >= 2)
-            CommitDraftCutAsPendingGuide();
-
-        if (_guides.Any(
-                guide => !guide.Applied))
+        if (_draftCutPoints.Count < 2 &&
+            !_guides.Any(guide => !guide.Applied))
         {
-            ApplyPendingGuides();
+            UpdateStatus(
+                "There is no pending split line. Import one or draw one first.");
             return;
         }
 
-        UpdateStatus(
-            "There is no pending split line. Import one or draw one first.");
+        // Confirm before committing the draft, marking targets, removing
+        // helpers, or changing geometry. Cancel leaves everything untouched.
+        if (!ConfirmSplitScopeBeforeApply())
+            return;
+
+        if (_draftCutPoints.Count >= 2)
+            CommitDraftCutAsPendingGuide();
+
+        if (_guides.Any(guide => !guide.Applied))
+            ApplyPendingGuides();
+    }
+
+    private bool ConfirmSplitScopeBeforeApply()
+    {
+        var selected = GetValidSelectedLines();
+        if (OnlySplitSelectedCheckBox.IsChecked == true &&
+            selected.Count > 0)
+        {
+            return true;
+        }
+
+        // The count is a union of currently crossed source lines; with
+        // multiple guides, later splits can create additional pieces.
+        var crossed = new HashSet<XElement>();
+        var helpers = _guides
+            .Where(guide => !guide.Applied &&
+                            guide.RemoveMatchingSourceBeforeCut)
+            .SelectMany(FindSourceGuideFeatures)
+            .Select(feature => feature.LineStringElement)
+            .ToHashSet();
+
+        // The same source-line set applies to every pending/drawn guide.
+        // Constructing it once avoids repeated scans of large contour files.
+        var targets = _geometry.Features
+            .Select(feature => feature.LineStringElement)
+            .Where(line => !helpers.Contains(line))
+            .ToHashSet();
+
+        foreach (var guide in _guides.Where(guide => !guide.Applied))
+        {
+            var preview = _geometry.PreviewSplitWithStroke(
+                ProjectGuide(guide.Guide), targets);
+            crossed.UnionWith(preview.AffectedLines);
+        }
+
+        if (_draftCutPoints.Count >= 2)
+        {
+            var preview = _geometry.PreviewSplitWithStroke(
+                _draftCutPoints, targets);
+            crossed.UnionWith(preview.AffectedLines);
+        }
+
+        if (crossed.Count == 0)
+        {
+            UpdateStatus(
+                "The split line did not split any lines in the current split target. " +
+                "It remains ready so you can adjust it or try again.");
+            return false;
+        }
+
+        var selectedCrossedCount = selected.Count(crossed.Contains);
+        var dialog = new SplitScopeConfirmationWindow(
+            OnlySplitSelectedCheckBox.IsChecked == true ? 0 : selected.Count,
+            selectedCrossedCount,
+            crossed.Count)
+        {
+            Owner = this
+        };
+
+        dialog.ShowDialog();
+        if (dialog.Decision == SplitScopeDecision.Cancel)
+        {
+            UpdateStatus(
+                "Split cancelled. Your pending and drawn split lines were kept. Select lines or change the split scope, then press Apply split again.");
+            return false;
+        }
+
+        if (dialog.Decision == SplitScopeDecision.SelectedOnly)
+            OnlySplitSelectedCheckBox.IsChecked = true;
+
+        return true;
     }
 
     private void ApplyPendingGuides()
@@ -1684,6 +1771,7 @@ public partial class LineEditorWindow : Window
             return;
 
         var selectedTargets = GetValidSelectedLines();
+        var carriedSelection = _selected.ToHashSet();
         var limitToSelection =
             OnlySplitSelectedCheckBox.IsChecked == true;
 
@@ -1749,6 +1837,8 @@ public partial class LineEditorWindow : Window
             allHelperElements.Count(element =>
                 element.Document !=
                 _workingDocument);
+        carriedSelection.RemoveWhere(line =>
+            line.Document != _workingDocument);
 
         var helperConsumedGuideIds =
             helperElementsByGuide
@@ -1803,6 +1893,20 @@ public partial class LineEditorWindow : Window
                     result.IntersectionCount;
                 totalPieces += result.OutputSegments;
 
+                // A selected source element is replaced by every piece it
+                // produced; uncut selected elements retain their identity.
+                if (result.Replacements is not null)
+                {
+                    foreach (var (original, pieces) in result.Replacements)
+                    {
+                        if (!carriedSelection.Remove(original))
+                            continue;
+
+                        foreach (var piece in pieces)
+                            carriedSelection.Add(piece);
+                    }
+                }
+
                 var guideWasUsed =
                     result.LinesSplit > 0 ||
                     helperConsumedGuideIds.Contains(
@@ -1839,7 +1943,22 @@ public partial class LineEditorWindow : Window
             ClearCutTargetMarkers();
         }
 
-        _selected.Clear();
+        if (changed)
+        {
+            var presentLines = _geometry.Features
+                .Select(feature => feature.LineStringElement)
+                .ToHashSet();
+
+            _selected.Clear();
+            foreach (var line in carriedSelection)
+            {
+                if (presentLines.Contains(line))
+                    _selected.Add(line);
+            }
+
+            _selectionCarriedFromSplit = _selected.Count > 0;
+        }
+
         _cutPoints.Clear();
 
         if (totalLines > 0)
@@ -1870,6 +1989,9 @@ public partial class LineEditorWindow : Window
             $"{totalPieces:N0} piece(s)." +
             (helperLinesRemoved > 0
                 ? $" Removed {helperLinesRemoved:N0} helper line(s) before splitting."
+                : string.Empty) +
+            (_selected.Count > 0
+                ? $" {_selected.Count:N0} selected line/piece(s) carried over. Clear selection before deleting unrelated pieces."
                 : string.Empty));
 
         var remainingPending =
@@ -1886,8 +2008,9 @@ public partial class LineEditorWindow : Window
             return;
         }
 
-        _step3InstructionOverride =
-            $"Split applied: {totalLines:N0} line(s) split at {totalIntersections:N0} point(s). Select the pieces you want to remove.";
+        _step3InstructionOverride = _selected.Count > 0
+            ? $"Split applied: {_selected.Count:N0} selected line/piece(s) kept. Clear or adjust this selection before choosing pieces to delete. Deleting inherited selections requires confirmation."
+            : $"Split applied: {totalLines:N0} line(s) split at {totalIntersections:N0} point(s). Select the pieces you want to remove.";
         SetWorkflowStep(3);
         RefreshSurface();
     }
@@ -1912,6 +2035,24 @@ public partial class LineEditorWindow : Window
             return;
         }
 
+        if (_selectionCarriedFromSplit)
+        {
+            var confirmation = MessageBox.Show(
+                this,
+                $"Delete all {_selected.Count:N0} selected line/piece(s)? " +
+                "This selection includes lines or pieces carried over from the split. " +
+                "Choose No to clear or adjust the selection first.",
+                "Confirm deletion of inherited selection",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
+            if (confirmation != MessageBoxResult.Yes)
+            {
+                UpdateStatus("Deletion cancelled. The inherited selection is still present.");
+                return;
+            }
+        }
+
         var snapshot =
             CaptureUndoState(
                 UndoActionKind.Deletion);
@@ -1929,6 +2070,7 @@ public partial class LineEditorWindow : Window
         PushDocumentUndo(snapshot);
         MarkGeometryChanged();
         _selected.Clear();
+        _selectionCarriedFromSplit = false;
 
         RefreshSurface();
         UpdateCutScopeDisplay();
@@ -1943,6 +2085,7 @@ public partial class LineEditorWindow : Window
         RoutedEventArgs e)
     {
         _selected.Clear();
+        _selectionCarriedFromSplit = false;
         EditorSurface.SetSelection(_selected);
 
         if (_draftCutPoints.Count > 0)
@@ -1957,6 +2100,7 @@ public partial class LineEditorWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        _selectionCarriedFromSplit = false;
         var inverted = _geometry.Features
             .Where(feature =>
                 !_selected.Contains(
@@ -2029,6 +2173,7 @@ public partial class LineEditorWindow : Window
             new KmlLineGeometryService(
                 _workingDocument,
                 _projectionScale);
+        _lineWidthResolver = new KmlLineWidthResolver(_workingDocument);
 
         MarkGeometryChanged();
 
@@ -2068,6 +2213,13 @@ public partial class LineEditorWindow : Window
         }
 
         _selected.Clear();
+        var linesAfterUndo = _workingDocument.Descendants(KmlNs + "LineString").ToList();
+        foreach (var index in state.SelectedLineIndexes)
+        {
+            if (index >= 0 && index < linesAfterUndo.Count)
+                _selected.Add(linesAfterUndo[index]);
+        }
+        _selectionCarriedFromSplit = state.SelectionCarriedFromSplit;
 
         if (state.Kind == UndoActionKind.Split)
         {
@@ -2831,14 +2983,16 @@ public partial class LineEditorWindow : Window
     private List<XElement>
         GetValidSelectedLines()
     {
+        // Selection can include thousands of inherited split pieces.
+        // Avoid quadratic selected × features scans on large contour maps.
+        var featureElements = _geometry.Features
+            .Select(feature => feature.LineStringElement)
+            .ToHashSet();
+
         return _selected
             .Where(line =>
                 line.Document == _workingDocument &&
-                _geometry.Features.Any(
-                    feature =>
-                        ReferenceEquals(
-                            feature.LineStringElement,
-                            line)))
+                featureElements.Contains(line))
             .ToList();
     }
 
@@ -2859,10 +3013,10 @@ public partial class LineEditorWindow : Window
 
         SelectedSplitScopeText.Text =
             validSelected.Count == 0
-                ? "No lines selected — Apply split will split all eligible lines."
+                ? "No lines selected — Apply split will ask before splitting all crossed lines."
                 : OnlySplitSelectedCheckBox.IsChecked == true
                     ? $"{validSelected.Count:N0} selected — split limited to selection"
-                    : $"{validSelected.Count:N0} lines selected — the split will still cross all lines. Tick to limit it.";
+                    : $"{validSelected.Count:N0} lines selected — Apply split will ask whether to limit it.";
 
         EditorSurface.SetSelectionSoft(
             _workflowStep == 2 &&
@@ -2990,7 +3144,13 @@ public partial class LineEditorWindow : Window
                     guide.Applied,
                     guide.AppliedSequence,
                     guide.AppliedCutPoints.ToList())),
-            _cutPoints.ToList());
+            _cutPoints.ToList(),
+            _workingDocument.Descendants(KmlNs + "LineString")
+                .Select((line, index) => (line, index))
+                .Where(item => _selected.Contains(item.line))
+                .Select(item => item.index)
+                .ToList(),
+            _selectionCarriedFromSplit);
     }
 
     private IReadOnlyList<Point> ProjectGuide(
@@ -3079,6 +3239,17 @@ public partial class LineEditorWindow : Window
         return true;
     }
 
+    private void OnShowLineWeightsChanged(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (!IsLoaded)
+            return;
+
+        EditorSurface.SetShowLineWeights(
+            ShowLineWeightsCheckBox.IsChecked == true);
+    }
+
     private void RefreshSurface(
         bool fitView = false)
     {
@@ -3132,7 +3303,11 @@ public partial class LineEditorWindow : Window
             _workflowStep == 2
                 ? _cutPoints
                 : Array.Empty<Point>(),
-            fitView);
+            fitView,
+            _geometry.Features.ToDictionary(
+                feature => feature.LineStringElement,
+                feature => _lineWidthResolver.ResolveWidth(
+                    feature.LineStringElement)));
 
         var appliedCutPoints =
             appliedGuides
@@ -3585,7 +3760,9 @@ public partial class LineEditorWindow : Window
         XDocument Document,
         bool HasPerformedCut,
         Dictionary<Guid, GuideUndoState> GuideStates,
-        IReadOnlyList<Point> CutPoints);
+        IReadOnlyList<Point> CutPoints,
+        IReadOnlyList<int> SelectedLineIndexes,
+        bool SelectionCarriedFromSplit);
 
     private sealed record PendingGuideSnapshot(
         string Name,

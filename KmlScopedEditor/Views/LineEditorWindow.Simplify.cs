@@ -42,6 +42,12 @@ public partial class LineEditorWindow
 
         try
         {
+            // Reset before scheduling any preview. The editable ComboBox
+            // otherwise can report its previous Text during SelectionChanged.
+            SimplifyToleranceComboBox.SelectedIndex = 3;
+            SimplifyToleranceComboBox.Text = "2";
+            SimplifySmoothCheckBox.IsChecked = false;
+
             SimplifyPanel.Visibility =
                 Visibility.Visible;
 

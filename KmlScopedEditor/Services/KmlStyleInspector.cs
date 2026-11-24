@@ -25,36 +25,43 @@ public sealed class KmlStyleInspector
 
         if (!string.IsNullOrWhiteSpace(styleUrl))
         {
-            var styleId = ExtractLocalId(styleUrl);
+            var resolver = context.StyleResolver;
+            var resolved = resolver.Resolve(placemark, styleUrl);
 
-            if (styleId is not null &&
-                context.StylesById.TryGetValue(
-                    styleId,
-                    out var sharedStyle))
+            if (resolved.Status == StyleReferenceStatus.Style)
             {
-                referencedStyle = sharedStyle;
-                styleSource = "Shared Style";
+                referencedStyle = resolved.Selector;
+                styleSource = resolved.RecoveredDuplicate
+                    ? "Shared Style (duplicate ID recovered by Document)"
+                    : "Shared Style";
             }
-            else if (styleId is not null &&
-                     context.StyleMapsById.TryGetValue(
-                         styleId,
-                         out var styleMap))
+            else if (resolved.Status == StyleReferenceStatus.StyleMap)
             {
-                styleSource = "StyleMap";
+                var map = resolved.Selector!;
+                var valid = resolver.ValidateStyleMap(map);
+                if (valid.IsResolved)
+                {
+                    styleSource = resolved.RecoveredDuplicate
+                        ? "StyleMap (duplicate ID recovered by Document)"
+                        : "StyleMap";
 
-                var normalPair = FindPair(styleMap, "normal");
-                var highlightPair = FindPair(styleMap, "highlight");
-
-                normalStyleUrl = GetPairStyleUrl(normalPair);
-                highlightStyleUrl = GetPairStyleUrl(highlightPair);
-
-                referencedStyle = ResolvePairStyle(
-                    normalPair,
-                    context);
+                    var normalPair = FindPair(map, "normal");
+                    var highlightPair = FindPair(map, "highlight");
+                    normalStyleUrl = GetPairStyleUrl(normalPair);
+                    highlightStyleUrl = GetPairStyleUrl(highlightPair);
+                    referencedStyle = ResolvePairStyle(
+                        normalPair, resolver, new HashSet<XElement> { map });
+                }
+                else
+                {
+                    styleSource = $"Unresolved StyleMap ({valid.Status})";
+                }
             }
             else
             {
-                styleSource = "Unresolved style reference";
+                styleSource = resolved.Status == StyleReferenceStatus.External
+                    ? "External style reference (not resolved locally)"
+                    : $"Unresolved style reference ({resolved.Status})";
             }
         }
 
@@ -128,44 +135,26 @@ public sealed class KmlStyleInspector
 
     private static XElement? ResolvePairStyle(
         XElement? pair,
-        KmlDocumentContext context)
+        KmlStyleReferenceResolver resolver,
+        HashSet<XElement> visitedMaps)
     {
         if (pair is null)
             return null;
 
-        // A StyleMap Pair can contain an inline Style.
         var inlineStyle = pair.Element(KmlNs + "Style");
-
         if (inlineStyle is not null)
             return inlineStyle;
 
-        var pairStyleUrl = GetPairStyleUrl(pair);
-        var styleId = ExtractLocalId(pairStyleUrl);
+        var result = resolver.Resolve(pair, GetPairStyleUrl(pair));
+        if (result.Status == StyleReferenceStatus.Style)
+            return result.Selector;
 
-        if (styleId is null)
+        if (result.Status != StyleReferenceStatus.StyleMap ||
+            !visitedMaps.Add(result.Selector!))
             return null;
 
-        if (context.StylesById.TryGetValue(
-            styleId,
-            out var sharedStyle))
-        {
-            return sharedStyle;
-        }
-
-        // Support a StyleMap pointing to another StyleMap.
-        if (context.StyleMapsById.TryGetValue(
-            styleId,
-            out var nestedStyleMap))
-        {
-            var nestedNormalPair =
-                FindPair(nestedStyleMap, "normal");
-
-            return ResolvePairStyle(
-                nestedNormalPair,
-                context);
-        }
-
-        return null;
+        var nestedPair = FindPair(result.Selector!, "normal");
+        return ResolvePairStyle(nestedPair, resolver, visitedMaps);
     }
 
     private static StyleValues ReadStyleValues(
@@ -221,31 +210,6 @@ public sealed class KmlStyleInspector
                     .Element(KmlNs + "width")?
                     .Value)
         };
-    }
-
-    private static string? ExtractLocalId(
-        string? styleUrl)
-    {
-        if (string.IsNullOrWhiteSpace(styleUrl))
-            return null;
-
-        var value = styleUrl.Trim();
-        var hashPosition = value.LastIndexOf('#');
-
-        if (hashPosition >= 0 &&
-            hashPosition < value.Length - 1)
-        {
-            return value[(hashPosition + 1)..];
-        }
-
-        // Also tolerate plain local IDs.
-        if (!value.Contains("://") &&
-            !value.Contains('/'))
-        {
-            return value.TrimStart('#');
-        }
-
-        return null;
     }
 
     private static string? CleanValue(string? value)

@@ -54,6 +54,11 @@ public sealed class LineEditorSurface : FrameworkElement
     private bool _editableGuideIsClosed;
     private int _dragGuideVertexIndex = -1;
     private readonly Dictionary<XElement, StreamGeometry> _featureGeometry = new();
+    private IReadOnlyDictionary<XElement, double> _lineWidths =
+        new Dictionary<XElement, double>();
+    private readonly Dictionary<double, Pen> _weightPens = new();
+    private readonly Dictionary<(int Kind, double Width), Pen> _emphasisPens = new();
+    private bool _showLineWeights = true;
     private readonly List<(LineEditorGuideVisual Guide, StreamGeometry Geometry)> _guideGeometry = new();
 
     private DrawingGroup? _baseLayer;
@@ -173,11 +178,13 @@ public sealed class LineEditorSurface : FrameworkElement
         Rect worldBounds,
         IReadOnlyList<LineEditorGuideVisual>? guides = null,
         IReadOnlyList<Point>? cutPoints = null,
-        bool fitView = false)
+        bool fitView = false,
+        IReadOnlyDictionary<XElement, double>? lineWidths = null)
     {
         var previousFeatures = _features;
 
         _features = features ?? Array.Empty<KmlLineFeature>();
+        _lineWidths = lineWidths ?? new Dictionary<XElement, double>();
         _selected = selected?.ToHashSet() ?? new HashSet<XElement>();
         _worldBounds = worldBounds;
         _guides = guides ?? Array.Empty<LineEditorGuideVisual>();
@@ -219,6 +226,18 @@ public sealed class LineEditorSurface : FrameworkElement
         // already painted the "No KML LineStrings" message. Always invalidate
         // the FrameworkElement itself so that stale background text is cleared.
         InvalidateVisual();
+    }
+
+    public void SetShowLineWeights(bool show)
+    {
+        if (_showLineWeights == show)
+            return;
+
+        _showLineWeights = show;
+        EnsureRenderCache();
+        // Keep the geometry cache intact: this changes pens, not contours.
+        RebuildBaseLayerFromCachedGeometry();
+        RedrawSelectionLayer();
     }
 
     public void SetSelection(IEnumerable<XElement> selected)
@@ -925,7 +944,8 @@ public sealed class LineEditorSurface : FrameworkElement
                 {
                     context.DrawGeometry(
                         null,
-                        selectionPen,
+                        GetEmphasisPen(element, _selectionIsSoft ? 1 : 0)
+                            ?? selectionPen,
                         geometry);
                 }
             }
@@ -940,7 +960,7 @@ public sealed class LineEditorSurface : FrameworkElement
         {
             context.DrawGeometry(
                 null,
-                _hoverPen,
+                GetEmphasisPen(_hovered, 2) ?? _hoverPen,
                 hoveredGeometry);
         }
     }
@@ -1301,7 +1321,7 @@ public sealed class LineEditorSurface : FrameworkElement
                 {
                     context.DrawGeometry(
                         null,
-                        _normalPen,
+                        GetLinePen(feature.LineStringElement),
                         geometry);
                 }
             }
@@ -1357,6 +1377,8 @@ public sealed class LineEditorSurface : FrameworkElement
         _normalPen = CreatePen(
             Color.FromRgb(84, 92, 102),
             1.1d / safeScale);
+        _weightPens.Clear();
+        _emphasisPens.Clear();
 
         _selectedPen = CreatePen(
             Color.FromRgb(190, 45, 45),
@@ -1476,7 +1498,7 @@ public sealed class LineEditorSurface : FrameworkElement
 
                 context.DrawGeometry(
                     null,
-                    _normalPen,
+                    GetLinePen(feature.LineStringElement),
                     geometry);
             }
         }
@@ -1791,6 +1813,75 @@ public sealed class LineEditorSurface : FrameworkElement
         var brush = new SolidColorBrush(color);
         brush.Freeze();
         return brush;
+    }
+
+    private double GetLineScreenWidth(XElement element)
+    {
+        if (!_showLineWeights ||
+            !_lineWidths.TryGetValue(element, out var width) ||
+            !double.IsFinite(width))
+        {
+            return 1.1d;
+        }
+
+        return Math.Clamp(width, 1d, 6d);
+    }
+
+    private Pen? GetLinePen(XElement element)
+    {
+        if (!_showLineWeights)
+            return _normalPen;
+
+        var width = GetLineScreenWidth(element);
+        // Visually equate KML width 1 (the standard thin contour) with
+        // the legacy 1.1 px fallback when width is unspecified.
+        if (width <= 1.1d)
+            return _normalPen;
+
+        if (_weightPens.TryGetValue(width, out var pen))
+            return pen;
+
+        pen = CreatePen(
+            Color.FromRgb(84, 92, 102),
+            width / Math.Max(_renderScaleBucket, 0.000001d));
+        _weightPens.Add(width, pen);
+        return pen;
+    }
+
+    private Pen? GetEmphasisPen(XElement element, int kind)
+    {
+        var width = GetLineScreenWidth(element);
+        if (width <= 1.1d)
+        {
+            return kind switch
+            {
+                0 => _selectedPen,
+                1 => _softSelectedPen,
+                _ => _hoverPen
+            };
+        }
+
+        var thickness = kind switch
+        {
+            0 => Math.Max(2.6d, width + 1.8d),
+            1 => Math.Max(1.8d, width + 1.0d),
+            _ => Math.Max(2.2d, width + 1.4d)
+        };
+        var key = (kind, thickness);
+        if (_emphasisPens.TryGetValue(key, out var pen))
+            return pen;
+
+        var color = kind switch
+        {
+            0 => Color.FromRgb(190, 45, 45),
+            1 => Color.FromArgb(105, 190, 45, 45),
+            _ => Color.FromRgb(0, 120, 190)
+        };
+
+        pen = CreatePen(color,
+            thickness / Math.Max(_renderScaleBucket, 0.000001d));
+        _emphasisPens.Add(key, pen);
+        return pen;
     }
 
     private static Pen CreatePen(
