@@ -221,6 +221,9 @@ public partial class LineEditorWindow
             }
         }
 
+        // This is an explicit new piece selection, not merely the selection
+        // inherited from an earlier split.
+        _selectionCarriedFromSplit = false;
         EditorSurface.SetSelection(_selected);
         UpdateCutScopeDisplay();
         UpdatePendingGuidePreview();
@@ -312,6 +315,7 @@ public partial class LineEditorWindow
             PushDocumentUndo(snapshot);
             MarkGeometryChanged();
             _selected.Clear();
+            _selectionCarriedFromSplit = false;
             RefreshSurface();
             UpdateCutScopeDisplay();
             UpdateStatus($"Split {totalSplits:N0} crossing line(s). Selection updated.");
@@ -322,7 +326,9 @@ public partial class LineEditorWindow
             _workingDocument = new XDocument(snapshot.Document);
             _geometry = new KmlLineGeometryService(
                 _workingDocument, _projectionScale);
+            _lineWidthResolver = new KmlLineWidthResolver(_workingDocument);
             _selected.Clear();
+            _selectionCarriedFromSplit = false;
             RefreshSurface();
             UpdateCutScopeDisplay();
             UpdateStatus($"Extra split failed and was rolled back: {exception.Message}");
