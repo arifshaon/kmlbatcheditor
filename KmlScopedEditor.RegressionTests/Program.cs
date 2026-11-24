@@ -45,6 +45,7 @@ internal static class Program
         Run(nameof(IconInventoriesMatchScopedStyleResolution), IconInventoriesMatchScopedStyleResolution);
         Run(nameof(MixedValidAndExternalReferencesArePartiallyAppliedSafely), MixedValidAndExternalReferencesArePartiallyAppliedSafely);
         Run(nameof(ClonedInlineMapIdsRemainUnique), ClonedInlineMapIdsRemainUnique);
+        Run(nameof(ReferencedEmbeddedInlineStyleIsSafelySkipped), ReferencedEmbeddedInlineStyleIsSafelySkipped);
         Console.WriteLine($"PASS: {_passed} regression checks.");
     }
 
@@ -366,6 +367,24 @@ internal static class Program
             .Select(attribute => attribute.Value).ToList();
         Require(ids.Count == ids.Distinct(StringComparer.Ordinal).Count(),
             "Cloning StyleMaps must reassign IDs of copied inline pair styles.");
+    }
+
+    private static void ReferencedEmbeddedInlineStyleIsSafelySkipped()
+    {
+        var target = StyledPlacemark("target", "#embedded");
+        var owner = new XElement(Kml + "Placemark",
+            new XElement(Kml + "name", "owner"),
+            SharedStyle("embedded", "3.5"));
+        using var ctx = StyleContext(new XDocument(new XElement(Kml + "kml",
+            new XElement(Kml + "Document", owner, target))));
+        var edit = new KmlBatchEditService();
+        var preview = edit.Preview(new[] { target }, ctx, ColorOnly());
+        Require(!preview.CanApply && preview.AmbiguousStyleReferenceCount == 1,
+            "Reference to an embedded inline Style must be excluded rather than cloned as a sibling.");
+        var before = target.ToString();
+        var result = edit.Apply(new[] { target }, ctx, ColorOnly());
+        Require(result.PlacemarksChanged == 0 && target.ToString() == before,
+            "Embedded style references must not cause invalid sibling Style insertion.");
     }
 
     private static void Require(bool value, string message)
