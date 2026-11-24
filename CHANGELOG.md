@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased — Line Editor improvements (24 November 2026)
+
+- **REQ-1:** Simplify / smooth now resets to **2 m** every time its panel
+  opens. The first preview uses 2 m; Smooth curves stays off.
+- **REQ-2:** Show effective normal-state KML line widths in the Line Editor
+  (inline overrides, shared Style and StyleMap resolution agree with Style
+  Diagnostics). **Show line weights** is on by default; turning it off
+  restores uniform grey lines. Values are clamped to 1–6 screen pixels,
+  and width/zoom-specific frozen pens are cached without changing KML styles.
+- **REQ-3:** Apply split now requests a clear scope decision whenever it
+  would otherwise split all lines. With selected lines and an unticked box,
+  the selected-only choice is the default; with no selection, Cancel is
+  the default. Cancel preserves pending and drawn guides without changes.
+- **REQ-4:** Selected source lines transfer selection to **all split pieces**,
+  while selected uncut lines persist and unselected lines stay unselected.
+  Selection survives consecutive splits and is restored by Undo. Deleting
+  an automatically carried Step 3 selection requires explicit confirmation.
+- New real-engine regression checks cover split-piece lineage, consecutive
+  selected-only splits, and effective KML line widths.
+- Manual acceptance procedure: [LINE_EDITOR_ACCEPTANCE_TESTS.md](LINE_EDITOR_ACCEPTANCE_TESTS.md).
+- **Status:** changes live only in `fix/scoped-kml-style-resolution` / PR #6.
+  They have not been merged into `main`.
+
 ## Unreleased — safe KML style resolution (test candidate)
 
 - Resolve local `#style` references through one shared resolver in the editor,
