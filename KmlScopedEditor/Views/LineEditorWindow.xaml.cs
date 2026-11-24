@@ -34,6 +34,7 @@ public partial class LineEditorWindow : Window
     private readonly XDocument _originalDocument;
     private XDocument _workingDocument;
     private KmlLineGeometryService _geometry;
+    private KmlLineWidthResolver _lineWidthResolver;
     private readonly double _projectionScale;
 
     private readonly KmlCutGuideService _cutGuideLoader = new();
@@ -87,6 +88,7 @@ public partial class LineEditorWindow : Window
 
         _geometry = new KmlLineGeometryService(
             _workingDocument);
+        _lineWidthResolver = new KmlLineWidthResolver(_workingDocument);
 
         _projectionScale = _geometry.LongitudeScale;
 
@@ -2159,6 +2161,7 @@ public partial class LineEditorWindow : Window
             new KmlLineGeometryService(
                 _workingDocument,
                 _projectionScale);
+        _lineWidthResolver = new KmlLineWidthResolver(_workingDocument);
 
         MarkGeometryChanged();
 
@@ -3222,6 +3225,17 @@ public partial class LineEditorWindow : Window
         return true;
     }
 
+    private void OnShowLineWeightsChanged(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (!IsLoaded)
+            return;
+
+        EditorSurface.SetShowLineWeights(
+            ShowLineWeightsCheckBox.IsChecked == true);
+    }
+
     private void RefreshSurface(
         bool fitView = false)
     {
@@ -3275,7 +3289,11 @@ public partial class LineEditorWindow : Window
             _workflowStep == 2
                 ? _cutPoints
                 : Array.Empty<Point>(),
-            fitView);
+            fitView,
+            _geometry.Features.ToDictionary(
+                feature => feature.LineStringElement,
+                feature => _lineWidthResolver.ResolveWidth(
+                    feature.LineStringElement)));
 
         var appliedCutPoints =
             appliedGuides
