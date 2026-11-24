@@ -41,6 +41,10 @@ internal static class Program
         Run(nameof(StyleMapCyclesAreSkipped), StyleMapCyclesAreSkipped);
         Run(nameof(CloneIdsAvoidEveryExistingObjectId), CloneIdsAvoidEveryExistingObjectId);
         Run(nameof(InlineIdCollisionIsNotSilentlyResolved), InlineIdCollisionIsNotSilentlyResolved);
+        Run(nameof(NormalStyleMapPreservesUntickedPairSettings), NormalStyleMapPreservesUntickedPairSettings);
+        Run(nameof(IconInventoriesMatchScopedStyleResolution), IconInventoriesMatchScopedStyleResolution);
+        Run(nameof(MixedValidAndExternalReferencesArePartiallyAppliedSafely), MixedValidAndExternalReferencesArePartiallyAppliedSafely);
+        Run(nameof(ClonedInlineMapIdsRemainUnique), ClonedInlineMapIdsRemainUnique);
         Console.WriteLine($"PASS: {_passed} regression checks.");
     }
 
@@ -270,6 +274,98 @@ internal static class Program
             new[] { target }, ctx, ColorOnly());
         Require(!preview.CanApply && preview.AmbiguousStyleReferenceCount == 1,
             "ID-bearing inline Style must not silently shadow a shared style.");
+    }
+
+    private static void NormalStyleMapPreservesUntickedPairSettings()
+    {
+        var selected = StyledPlacemark("selected", "#map");
+        var untouched = StyledPlacemark("untouched", "#map");
+        using var ctx = StyleContext(new XDocument(new XElement(Kml + "kml",
+            new XElement(Kml + "Document",
+                SharedStyle("normal", "2.5"),
+                SharedStyle("highlight", "3.5"),
+                StyleMap("map", "#normal", "#highlight"),
+                selected, untouched))));
+        var edit = new KmlBatchEditService();
+        var preview = edit.Preview(new[] { selected }, ctx, ColorOnly());
+        Require(preview.CanApply && preview.SkippedPlacemarkCount == 0,
+            "Ordinary StyleMap should be safely editable.");
+        var result = edit.Apply(new[] { selected }, ctx, ColorOnly());
+        Require(result.StyleMapsCloned == 1 && result.SharedStylesCloned == 2,
+            "Both StyleMap pair styles should be independently cloned.");
+        var inspector = new KmlStyleInspector();
+        var after = inspector.Inspect(selected, ctx);
+        Require(after.LineWidth == "2.5" && after.IconScale == "0.3" &&
+            after.LabelScale == "0.6", "StyleMap edit dropped unticked attributes.");
+        Require(inspector.Inspect(untouched, ctx).LineColor == "ff000000",
+            "Unselected StyleMap target should remain unchanged.");
+    }
+
+    private static void IconInventoriesMatchScopedStyleResolution()
+    {
+        var p1 = StyledPlacemark("first", "#inline");
+        var p2 = StyledPlacemark("second", "#inline");
+        using var ctx = StyleContext(new XDocument(new XElement(Kml + "kml",
+            new XElement(Kml + "Document",
+                new XElement(Kml + "Document",
+                    SharedStyle("inline", "2.5", href: "http://example.org/a.png"), p1),
+                new XElement(Kml + "Document",
+                    SharedStyle("inline", "4.5", href: "http://example.org/b.png"), p2)))));
+        var inspector = new KmlStyleInspector();
+        var images = new KmlSelectionService()
+            .BuildIconImageInventory(ctx, inspector);
+        Require(images.Count == 2 &&
+            images.Any(item => item.IconHref == "http://example.org/a.png") &&
+            images.Any(item => item.IconHref == "http://example.org/b.png"),
+            "Icon inventory must use the same scoped style resolution as diagnostics.");
+    }
+
+    private static void MixedValidAndExternalReferencesArePartiallyAppliedSafely()
+    {
+        var good = StyledPlacemark("good", "#style");
+        var bad = StyledPlacemark("external", "styles.kml#style");
+        using var ctx = StyleContext(new XDocument(new XElement(Kml + "kml",
+            new XElement(Kml + "Document",
+                SharedStyle("style", "2.5"), good, bad))));
+        var edit = new KmlBatchEditService();
+        var preview = edit.Preview(new[] { good, bad }, ctx, ColorOnly());
+        Require(preview.CanApply && preview.EditablePlacemarkCount == 1 &&
+            preview.SkippedPlacemarkCount == 1 &&
+            preview.ExternalStyleReferenceCount == 1 &&
+            preview.Summary.Contains("external"),
+            "Preview should expose partial edits and external exclusions.");
+        var originalExternal = bad.ToString();
+        var applied = edit.Apply(new[] { good, bad }, ctx, ColorOnly());
+        Require(applied.PlacemarksChanged == 1 &&
+            applied.SkippedPlacemarkCount == 1 &&
+            bad.ToString() == originalExternal &&
+            (string?)good.Element(Kml + "styleUrl") != "#style",
+            "Apply must change only safely resolved placemarks.");
+    }
+
+    private static void ClonedInlineMapIdsRemainUnique()
+    {
+        var target = StyledPlacemark("selected", "#map");
+        var map = new XElement(Kml + "StyleMap",
+            new XAttribute("id", "map"),
+            new XElement(Kml + "Pair",
+                new XElement(Kml + "key", "normal"),
+                SharedStyle("inside", "2.5")),
+            new XElement(Kml + "Pair",
+                new XElement(Kml + "key", "highlight"),
+                SharedStyle("inside2", "3.5")));
+        using var ctx = StyleContext(new XDocument(new XElement(Kml + "kml",
+            new XElement(Kml + "Document", map, target))));
+        var edit = new KmlBatchEditService();
+        Require(edit.Preview(new[] { target }, ctx, ColorOnly()).CanApply,
+            "StyleMap with inline pair styles must remain supported.");
+        var result = edit.Apply(new[] { target }, ctx, ColorOnly());
+        Require(result.PlacemarksChanged == 1,
+            "StyleMap with inline pair styles failed Apply.");
+        var ids = ctx.Document.Descendants().Attributes("id")
+            .Select(attribute => attribute.Value).ToList();
+        Require(ids.Count == ids.Distinct(StringComparer.Ordinal).Count(),
+            "Cloning StyleMaps must reassign IDs of copied inline pair styles.");
     }
 
     private static void Require(bool value, string message)
