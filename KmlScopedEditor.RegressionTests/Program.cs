@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Windows;
 using System.Xml.Linq;
 using KmlScopedEditor.Services;
+using KmlScopedEditor.Models;
 using KmlScopedEditor.Views;
 
 using Point = System.Windows.Point;
@@ -32,6 +33,14 @@ internal static class Program
         Run(nameof(SelectedScopeDoesNotTouchOthers), SelectedScopeDoesNotTouchOthers);
         Run(nameof(SplitDefaultsToSelectedButUsesAllIfNoneSelected), SplitDefaultsToSelectedButUsesAllIfNoneSelected);
         Run(nameof(PointsAndPolygonsSurviveLineDeletion), PointsAndPolygonsSurviveLineDeletion);
+        Run(nameof(StyleEditPreservesUntickedSettingsAndScope), StyleEditPreservesUntickedSettingsAndScope);
+        Run(nameof(DuplicateStylesInSeparateDocumentsResolveLocally), DuplicateStylesInSeparateDocumentsResolveLocally);
+        Run(nameof(DuplicateStyleMapsUseElementCloneCache), DuplicateStyleMapsUseElementCloneCache);
+        Run(nameof(AmbiguousSameDocumentStylesAreSkipped), AmbiguousSameDocumentStylesAreSkipped);
+        Run(nameof(ExternalStyleAndExternalMapPairAreSkipped), ExternalStyleAndExternalMapPairAreSkipped);
+        Run(nameof(StyleMapCyclesAreSkipped), StyleMapCyclesAreSkipped);
+        Run(nameof(CloneIdsAvoidEveryExistingObjectId), CloneIdsAvoidEveryExistingObjectId);
+        Run(nameof(InlineIdCollisionIsNotSilentlyResolved), InlineIdCollisionIsNotSilentlyResolved);
         Console.WriteLine($"PASS: {_passed} regression checks.");
     }
 
@@ -40,6 +49,227 @@ internal static class Program
         test();
         _passed++;
         Console.WriteLine($"PASS {name}");
+    }
+
+    // End-to-end style tests use the real batch editing service, resolver and
+    // inspector. They prevent unselected style properties from being lost.
+    private static XElement SharedStyle(
+        string id, string width, string iconScale = "0.3",
+        string labelScale = "0.6", string? href = null) =>
+        new(Kml + "Style",
+            new XAttribute("id", id),
+            new XElement(Kml + "LineStyle",
+                new XElement(Kml + "color", "ff000000"),
+                new XElement(Kml + "width", width)),
+            new XElement(Kml + "IconStyle",
+                new XElement(Kml + "scale", iconScale),
+                new XElement(Kml + "Icon",
+                    new XElement(Kml + "href", href ?? "http://example.org/icon.png"))),
+            new XElement(Kml + "LabelStyle",
+                new XElement(Kml + "scale", labelScale)));
+
+    private static XElement StyledPlacemark(string name, string styleUrl) =>
+        new(Kml + "Placemark",
+            new XElement(Kml + "name", name),
+            new XElement(Kml + "styleUrl", styleUrl),
+            new XElement(Kml + "LineString",
+                new XElement(Kml + "coordinates", "0,0 1,1")));
+
+    private static XElement StyleMap(string id, string normal, string highlight) =>
+        new(Kml + "StyleMap", new XAttribute("id", id),
+            new XElement(Kml + "Pair",
+                new XElement(Kml + "key", "normal"),
+                new XElement(Kml + "styleUrl", normal)),
+            new XElement(Kml + "Pair",
+                new XElement(Kml + "key", "highlight"),
+                new XElement(Kml + "styleUrl", highlight)));
+
+    private static KmlDocumentContext StyleContext(XDocument document)
+    {
+        var context = new KmlDocumentContext
+        {
+            SourcePath = "test.kml",
+            LoadedKmlPath = "test.kml",
+            Document = document,
+            RootNode = new KmlTreeNode
+            {
+                Name = "Test", NodeType = KmlNodeType.Document,
+                SourceElement = document.Root
+            },
+            Placemarks = document.Descendants(Kml + "Placemark").ToList()
+        };
+        context.RebuildStyleIndexes();
+        return context;
+    }
+
+    private static KmlBatchEditSettings ColorOnly() => new()
+    {
+        ChangeLineColor = true,
+        LineColorText = "#FF0000"
+    };
+
+    private static void StyleEditPreservesUntickedSettingsAndScope()
+    {
+        var selected = StyledPlacemark("selected", "#contour");
+        var untouched = StyledPlacemark("untouched", "#contour");
+        using var ctx = StyleContext(new XDocument(new XElement(Kml + "kml",
+            new XElement(Kml + "Document",
+                SharedStyle("contour", "2.5"), selected, untouched))));
+        var edit = new KmlBatchEditService();
+        Require(edit.Preview(new[] { selected }, ctx, ColorOnly()).CanApply,
+            "Normal shared style should be safely editable.");
+        var result = edit.Apply(new[] { selected }, ctx, ColorOnly());
+        Require(result.PlacemarksChanged == 1, "Exactly one selected placemark must change.");
+        Require((string?)untouched.Element(Kml + "styleUrl") == "#contour",
+            "Unselected placemark's style URL changed.");
+        var inspector = new KmlStyleInspector();
+        var selectedStyle = inspector.Inspect(selected, ctx);
+        var untouchedStyle = inspector.Inspect(untouched, ctx);
+        Require(selectedStyle.LineWidth == "2.5" && selectedStyle.IconScale == "0.3" &&
+            selectedStyle.LabelScale == "0.6", "Unselected settings were lost.");
+        Require(untouchedStyle.LineWidth == "2.5" &&
+            untouchedStyle.LineColor == "ff000000", "Unselected style was mutated.");
+        Require(selectedStyle.LineColor != untouchedStyle.LineColor,
+            "Selected line color was not changed.");
+    }
+
+    private static void DuplicateStylesInSeparateDocumentsResolveLocally()
+    {
+        var first = StyledPlacemark("first", "#inline");
+        var second = StyledPlacemark("second", "#inline");
+        var untouched = StyledPlacemark("untouched", "#inline");
+        using var ctx = StyleContext(new XDocument(new XElement(Kml + "kml",
+            new XElement(Kml + "Document",
+                SharedStyle("inline", "1"),
+                new XElement(Kml + "Document",
+                    SharedStyle("inline", "2.5"), first, untouched),
+                new XElement(Kml + "Document",
+                    SharedStyle("inline", "4.5"), second)))));
+        var edit = new KmlBatchEditService();
+        var preview = edit.Preview(new[] { first, second }, ctx, ColorOnly());
+        Require(preview.CanApply && preview.RecoveredDuplicateReferenceCount == 2,
+            "Nearest Document recovery should select two distinct styles.");
+        var result = edit.Apply(new[] { first, second }, ctx, ColorOnly());
+        Require(result.SharedStylesCloned == 2 && result.PlacemarksChanged == 2,
+            "Two original style elements should produce separate clones.");
+        var inspect = new KmlStyleInspector();
+        Require(inspect.Inspect(first, ctx).LineWidth == "2.5" &&
+            inspect.Inspect(second, ctx).LineWidth == "4.5",
+            "Clones crossed Document style boundaries.");
+        Require(inspect.Inspect(untouched, ctx).LineColor == "ff000000",
+            "Unselected placemark must retain original color.");
+        Require((string?)first.Element(Kml + "styleUrl") !=
+            (string?)second.Element(Kml + "styleUrl"),
+            "Different source elements incorrectly reused the same clone.");
+    }
+
+    private static void DuplicateStyleMapsUseElementCloneCache()
+    {
+        var first = StyledPlacemark("first", "#map");
+        var second = StyledPlacemark("second", "#map");
+        using var ctx = StyleContext(new XDocument(new XElement(Kml + "kml",
+            new XElement(Kml + "Document",
+                new XElement(Kml + "Document",
+                    SharedStyle("s", "2.5"), StyleMap("map", "#s", "#s"), first),
+                new XElement(Kml + "Document",
+                    SharedStyle("s", "4.5"), StyleMap("map", "#s", "#s"), second)))));
+        var edit = new KmlBatchEditService();
+        var preview = edit.Preview(new[] { first, second }, ctx, ColorOnly());
+        Require(preview.CanApply && preview.SkippedPlacemarkCount == 0,
+            "Document-local StyleMap pairs should resolve safely.");
+        var result = edit.Apply(new[] { first, second }, ctx, ColorOnly());
+        Require(result.StyleMapsCloned == 2 && result.SharedStylesCloned == 2,
+            "StyleMaps and referenced styles must be cloned by element identity.");
+        var inspector = new KmlStyleInspector();
+        Require(inspector.Inspect(first, ctx).LineWidth == "2.5" &&
+            inspector.Inspect(second, ctx).LineWidth == "4.5",
+            "Duplicate StyleMap resolution lost original widths.");
+    }
+
+    private static void AmbiguousSameDocumentStylesAreSkipped()
+    {
+        var target = StyledPlacemark("ambiguous", "#duplicate");
+        using var ctx = StyleContext(new XDocument(new XElement(Kml + "kml",
+            new XElement(Kml + "Document",
+                SharedStyle("duplicate", "2"),
+                SharedStyle("duplicate", "5"), target))));
+        var edit = new KmlBatchEditService();
+        var preview = edit.Preview(new[] { target }, ctx, ColorOnly());
+        Require(!preview.CanApply && preview.AmbiguousStyleReferenceCount == 1 &&
+            preview.DuplicateIdCount > 0, "Ambiguous references need a preview warning.");
+        var before = target.ToString();
+        var result = edit.Apply(new[] { target }, ctx, ColorOnly());
+        Require(result.PlacemarksChanged == 0 && result.SkippedPlacemarkCount == 1 &&
+            target.ToString() == before, "Ambiguous placemarks must remain unchanged.");
+    }
+
+    private static void ExternalStyleAndExternalMapPairAreSkipped()
+    {
+        var external = StyledPlacemark("external", "styles.kml#contour");
+        var mapTarget = StyledPlacemark("map-target", "#map");
+        using var ctx = StyleContext(new XDocument(new XElement(Kml + "kml",
+            new XElement(Kml + "Document",
+                SharedStyle("contour", "2.5"),
+                StyleMap("map", "#contour", "styles.kml#highlight"),
+                external, mapTarget))));
+        var edit = new KmlBatchEditService();
+        var preview = edit.Preview(new[] { external, mapTarget }, ctx, ColorOnly());
+        Require(!preview.CanApply && preview.ExternalStyleReferenceCount == 2,
+            "External references, including StyleMap pairs, must be reported.");
+        var before = external.ToString() + mapTarget.ToString();
+        var result = edit.Apply(new[] { external, mapTarget }, ctx, ColorOnly());
+        Require(result.SkippedPlacemarkCount == 2 && result.PlacemarksChanged == 0,
+            "External references must be left alone.");
+        Require(before == external.ToString() + mapTarget.ToString(),
+            "External or StyleMap references were rewritten.");
+    }
+
+    private static void StyleMapCyclesAreSkipped()
+    {
+        var target = StyledPlacemark("cycle", "#cycle");
+        using var ctx = StyleContext(new XDocument(new XElement(Kml + "kml",
+            new XElement(Kml + "Document",
+                StyleMap("cycle", "#cycle", "#cycle"), target))));
+        var edit = new KmlBatchEditService();
+        var preview = edit.Preview(new[] { target }, ctx, ColorOnly());
+        Require(!preview.CanApply && preview.CyclicStyleReferenceCount == 1,
+            "StyleMap cycle should be reported and skipped.");
+        var result = edit.Apply(new[] { target }, ctx, ColorOnly());
+        Require(result.PlacemarksChanged == 0, "StyleMap cycle should not be edited.");
+    }
+
+    private static void CloneIdsAvoidEveryExistingObjectId()
+    {
+        var target = StyledPlacemark("target", "#contour");
+        using var ctx = StyleContext(new XDocument(new XElement(Kml + "kml",
+            new XElement(Kml + "Document",
+                SharedStyle("contour", "2.5"),
+                new XElement(Kml + "Folder", new XAttribute("id", "contour_edited")),
+                target))));
+        var result = new KmlBatchEditService().Apply(
+            new[] { target }, ctx, ColorOnly());
+        Require(result.PlacemarksChanged == 1 &&
+            (string?)target.Element(Kml + "styleUrl") == "#contour_edited_2",
+            "Clone must not collide with Folder ID.");
+        var ids = ctx.Document.Descendants()
+            .Attributes("id").Select(attribute => attribute.Value).ToList();
+        Require(ids.Distinct(StringComparer.Ordinal).Count() == ids.Count,
+            "Generated clone ID must be unique throughout KML.");
+    }
+
+    private static void InlineIdCollisionIsNotSilentlyResolved()
+    {
+        var target = StyledPlacemark("target", "#same");
+        var shadow = new XElement(Kml + "Placemark",
+            new XElement(Kml + "name", "inline-style-owner"),
+            SharedStyle("same", "4.5"));
+        using var ctx = StyleContext(new XDocument(new XElement(Kml + "kml",
+            new XElement(Kml + "Document",
+                SharedStyle("same", "2.5"), shadow, target))));
+        var preview = new KmlBatchEditService().Preview(
+            new[] { target }, ctx, ColorOnly());
+        Require(!preview.CanApply && preview.AmbiguousStyleReferenceCount == 1,
+            "ID-bearing inline Style must not silently shadow a shared style.");
     }
 
     private static void Require(bool value, string message)
