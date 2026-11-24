@@ -4,6 +4,8 @@ public sealed class KmlBatchEditResult
 {
     public int PlacemarksChanged { get; init; }
 
+    public int SkippedPlacemarkCount { get; init; }
+
     public int InlineStylesUpdated { get; init; }
 
     public int SharedStylesCloned { get; init; }
@@ -21,6 +23,7 @@ public sealed class KmlBatchEditResult
             var lines = new List<string>
             {
                 $"Changed {PlacemarksChanged:N0} placemarks.",
+                $"Skipped {SkippedPlacemarkCount:N0} unsafe/ambiguous references (unchanged).",
                 $"Inline styles updated: {InlineStylesUpdated:N0}",
                 $"Shared styles cloned: {SharedStylesCloned:N0}",
                 $"Style maps cloned: {StyleMapsCloned:N0}",
