@@ -987,6 +987,9 @@ public partial class LineEditorWindow : Window
         {
             _selected.Clear();
             _selected.Add(element);
+            // Replacing the selection is an explicit user choice; the old
+            // carried-over group is no longer at risk of accidental deletion.
+            _selectionCarriedFromSplit = false;
             UpdateStatus(
                 "Selected one line for the Step 2 scope.");
         }
@@ -2025,7 +2028,7 @@ public partial class LineEditorWindow : Window
             return;
         }
 
-        if (_workflowStep == 3 && _selectionCarriedFromSplit)
+        if (_selectionCarriedFromSplit)
         {
             var confirmation = MessageBox.Show(
                 this,
