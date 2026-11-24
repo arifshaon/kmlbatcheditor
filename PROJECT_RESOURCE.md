@@ -194,7 +194,13 @@ and unselected lines stay unselected. Undo restores the selected source
 lines against its saved document snapshot. In Step 3, attempting to delete
 an inherited selection first asks for confirmation, defaulting to No.
 The status text explicitly reminds users to clear or adjust the retained
-selection before deleting unwanted pieces.
+selection before deleting unwanted pieces. The inherited-selection deletion
+confirmation applies in **both Step 1 and Step 3**. Replacing the carried
+selection with a single Step 2 click clears the inherited warning; Invert
+also clears it because the user deliberately changed the selection.
+Split confirmation includes how many selected lines the pending guides
+actually cross. A zero-crossing guide produces a no-op status rather than
+an all-0-lines confirmation, and the pending/drawn guide remains unchanged.
 
 ### Step 3: select a side, then delete if desired
 
@@ -379,7 +385,9 @@ The Line Editor offers **Show line weights**, enabled by default. It reads
 normal-state effective `LineStyle/width` using the shared style resolver,
 including placemark inline overrides and normal StyleMap pairs. Undefined or
 invalid widths use the historic 1.1 px editor display; explicit widths are
-clamped to 1–6 px. Frozen pens are cached per distinct width and zoom
+clamped to 1–6 px, with explicit widths of 1 px (or smaller) drawn using
+the same thin 1.1 px legacy pen as lines without a width. Frozen pens are
+cached per distinct width and zoom
 bucket, while geometries are retained. Selected and hovered lines use
 thicker emphasis pens so bold contours do not hide them. Unchecking the
 toggle restores uniform grey. Display rendering does **not** edit KML
