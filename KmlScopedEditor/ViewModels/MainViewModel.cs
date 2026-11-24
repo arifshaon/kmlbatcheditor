@@ -573,14 +573,14 @@ public partial class MainViewModel : ViewModelBase, IDisposable
                 _ => MovePreviewPlacemark(-1),
                 _ => !IsBusy &&
                      HasPlacemarkVisualPreview &&
-                     _previewPlacemarkIndex > 0);
+                     FindNextEditablePreviewIndex(-1) >= 0);
 
         NextPreviewPlacemarkCommand =
             new RelayCommand(
                 _ => MovePreviewPlacemark(1),
                 _ => !IsBusy &&
                      HasPlacemarkVisualPreview &&
-                     _previewPlacemarkIndex < _currentSelection.Count - 1);
+                     FindNextEditablePreviewIndex(1) >= 0);
 
         OpenPreviewInGoogleEarthCommand =
             new AsyncRelayCommand(
@@ -1221,20 +1221,30 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         }
     }
 
+    private int FindNextEditablePreviewIndex(int offset)
+    {
+        if (offset == 0)
+            return -1;
+
+        var nextIndex = _previewPlacemarkIndex + offset;
+        while (nextIndex >= 0 && nextIndex < _currentSelection.Count)
+        {
+            if (CanPreviewStyleFor(_currentSelection[nextIndex]))
+                return nextIndex;
+
+            nextIndex += offset;
+        }
+
+        return -1;
+    }
+
     private void MovePreviewPlacemark(int offset)
     {
         if (!HasPlacemarkVisualPreview || _currentSelection.Count == 0)
             return;
 
-        var nextIndex = _previewPlacemarkIndex + offset;
-        while (nextIndex >= 0 &&
-               nextIndex < _currentSelection.Count &&
-               !CanPreviewStyleFor(_currentSelection[nextIndex]))
-        {
-            nextIndex += offset;
-        }
-
-        if (nextIndex < 0 || nextIndex >= _currentSelection.Count)
+        var nextIndex = FindNextEditablePreviewIndex(offset);
+        if (nextIndex < 0)
             return;
 
         _previewPlacemarkIndex = nextIndex;
