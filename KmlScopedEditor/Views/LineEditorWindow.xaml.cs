@@ -51,6 +51,9 @@ public partial class LineEditorWindow : Window
     private int _activeStrokePreviewProcessedPoints;
 
     private readonly HashSet<XElement> _selected = new();
+    // A split can inherit selected parents onto their new pieces. Keep the
+    // deletion warning active until the selection is explicitly cleared.
+    private bool _selectionCarriedFromSplit;
     private readonly Stack<UndoState> _undo = new();
     private readonly Stack<PendingGuideEditState> _pendingEditUndo = new();
     private PendingGuideEditState? _pendingGuideDragUndoState;
@@ -1754,6 +1757,7 @@ public partial class LineEditorWindow : Window
             return;
 
         var selectedTargets = GetValidSelectedLines();
+        var carriedSelection = _selected.ToHashSet();
         var limitToSelection =
             OnlySplitSelectedCheckBox.IsChecked == true;
 
@@ -1819,6 +1823,8 @@ public partial class LineEditorWindow : Window
             allHelperElements.Count(element =>
                 element.Document !=
                 _workingDocument);
+        carriedSelection.RemoveWhere(line =>
+            line.Document != _workingDocument);
 
         var helperConsumedGuideIds =
             helperElementsByGuide
@@ -1873,6 +1879,20 @@ public partial class LineEditorWindow : Window
                     result.IntersectionCount;
                 totalPieces += result.OutputSegments;
 
+                // A selected source element is replaced by every piece it
+                // produced; uncut selected elements retain their identity.
+                if (result.Replacements is not null)
+                {
+                    foreach (var (original, pieces) in result.Replacements)
+                    {
+                        if (!carriedSelection.Remove(original))
+                            continue;
+
+                        foreach (var piece in pieces)
+                            carriedSelection.Add(piece);
+                    }
+                }
+
                 var guideWasUsed =
                     result.LinesSplit > 0 ||
                     helperConsumedGuideIds.Contains(
@@ -1909,7 +1929,22 @@ public partial class LineEditorWindow : Window
             ClearCutTargetMarkers();
         }
 
-        _selected.Clear();
+        if (changed)
+        {
+            var presentLines = _geometry.Features
+                .Select(feature => feature.LineStringElement)
+                .ToHashSet();
+
+            _selected.Clear();
+            foreach (var line in carriedSelection)
+            {
+                if (presentLines.Contains(line))
+                    _selected.Add(line);
+            }
+
+            _selectionCarriedFromSplit = _selected.Count > 0;
+        }
+
         _cutPoints.Clear();
 
         if (totalLines > 0)
@@ -1940,6 +1975,9 @@ public partial class LineEditorWindow : Window
             $"{totalPieces:N0} piece(s)." +
             (helperLinesRemoved > 0
                 ? $" Removed {helperLinesRemoved:N0} helper line(s) before splitting."
+                : string.Empty) +
+            (_selected.Count > 0
+                ? $" {_selected.Count:N0} selected line/piece(s) carried over. Clear selection before deleting unrelated pieces."
                 : string.Empty));
 
         var remainingPending =
@@ -1956,8 +1994,9 @@ public partial class LineEditorWindow : Window
             return;
         }
 
-        _step3InstructionOverride =
-            $"Split applied: {totalLines:N0} line(s) split at {totalIntersections:N0} point(s). Select the pieces you want to remove.";
+        _step3InstructionOverride = _selected.Count > 0
+            ? $"Split applied: {_selected.Count:N0} selected line/piece(s) kept. Clear or adjust this selection before choosing pieces to delete. Deleting inherited selections requires confirmation."
+            : $"Split applied: {totalLines:N0} line(s) split at {totalIntersections:N0} point(s). Select the pieces you want to remove.";
         SetWorkflowStep(3);
         RefreshSurface();
     }
