@@ -944,7 +944,8 @@ public sealed class LineEditorSurface : FrameworkElement
                 {
                     context.DrawGeometry(
                         null,
-                        selectionPen,
+                        GetEmphasisPen(element, _selectionIsSoft ? 1 : 0)
+                            ?? selectionPen,
                         geometry);
                 }
             }
@@ -959,7 +960,7 @@ public sealed class LineEditorSurface : FrameworkElement
         {
             context.DrawGeometry(
                 null,
-                _hoverPen,
+                GetEmphasisPen(_hovered, 2) ?? _hoverPen,
                 hoveredGeometry);
         }
     }
@@ -1812,6 +1813,73 @@ public sealed class LineEditorSurface : FrameworkElement
         var brush = new SolidColorBrush(color);
         brush.Freeze();
         return brush;
+    }
+
+    private double GetLineScreenWidth(XElement element)
+    {
+        if (!_showLineWeights ||
+            !_lineWidths.TryGetValue(element, out var width) ||
+            !double.IsFinite(width))
+        {
+            return 1.1d;
+        }
+
+        return Math.Clamp(width, 1d, 6d);
+    }
+
+    private Pen? GetLinePen(XElement element)
+    {
+        if (!_showLineWeights)
+            return _normalPen;
+
+        var width = GetLineScreenWidth(element);
+        if (Math.Abs(width - 1.1d) < 0.00001d)
+            return _normalPen;
+
+        if (_weightPens.TryGetValue(width, out var pen))
+            return pen;
+
+        pen = CreatePen(
+            Color.FromRgb(84, 92, 102),
+            width / Math.Max(_renderScaleBucket, 0.000001d));
+        _weightPens.Add(width, pen);
+        return pen;
+    }
+
+    private Pen? GetEmphasisPen(XElement element, int kind)
+    {
+        var width = GetLineScreenWidth(element);
+        if (width <= 1.1d)
+        {
+            return kind switch
+            {
+                0 => _selectedPen,
+                1 => _softSelectedPen,
+                _ => _hoverPen
+            };
+        }
+
+        var thickness = kind switch
+        {
+            0 => Math.Max(2.6d, width + 1.8d),
+            1 => Math.Max(1.8d, width + 1.0d),
+            _ => Math.Max(2.2d, width + 1.4d)
+        };
+        var key = (kind, thickness);
+        if (_emphasisPens.TryGetValue(key, out var pen))
+            return pen;
+
+        var color = kind switch
+        {
+            0 => Color.FromRgb(190, 45, 45),
+            1 => Color.FromArgb(105, 190, 45, 45),
+            _ => Color.FromRgb(0, 120, 190)
+        };
+
+        pen = CreatePen(color,
+            thickness / Math.Max(_renderScaleBucket, 0.000001d));
+        _emphasisPens.Add(key, pen);
+        return pen;
     }
 
     private static Pen CreatePen(
